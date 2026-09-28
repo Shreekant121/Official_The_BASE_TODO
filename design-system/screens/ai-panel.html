@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — The AI panel</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* The subject of an open panel is marked by a brighter rim only.
+     Never emerald — emerald means running, and nothing here is. */
+  .subj { box-shadow: var(--glass-rim-3), var(--glass-cast-2), 0 0 0 1px var(--line-strong) !important; }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="AI panel — spec">
+<div id="root">
+  <div style="display:grid;place-items:center;height:100vh">
+    <div style="width:min(420px,60vmin);height:220px;border-radius:var(--r-card-lg);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/data/ScoreDial.jsx',
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/overlay/AIPanel.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, StatusPill, ScoreDial, AIPanel } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  /* ---------------------------------------------------------------
+     FRAME — one artboard at its real pixel size, scaled to fit the
+     column. Everything inside is laid out at 820 or 1440 for real.
+     --------------------------------------------------------------- */
+  function Frame({ w, h, id, label, note, children }) {
+    const wrap = React.useRef(null);
+    const [s, setS] = React.useState(1);
+    React.useEffect(function () {
+      const on = function () {
+        if (!wrap.current) return;
+        setS(Math.min(1, wrap.current.clientWidth / w));
+      };
+      on();
+      window.addEventListener('resize', on);
+      return function () { window.removeEventListener('resize', on); };
+    }, [w]);
+
+    return (
+      <figure style={{ margin: 0, display: 'grid', gap: 'var(--sp-5)', minWidth: 0 }}>
+        <figcaption style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+          <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--accent)' }}>{id}</span>
+          <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>{label}</span>
+          <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--fg-4)' }}>{w}×{h}</span>
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>{note}</span>
+        </figcaption>
+        <div ref={wrap} style={{ width: '100%', minWidth: 0 }}>
+          <div style={{ width: w * s, height: h * s, maxWidth: '100%' }}>
+            <div className="ag-page ag-page--calm" style={{
+              width: w, height: h, transform: 'scale(' + s + ')', transformOrigin: 'top left',
+              borderRadius: 18, overflow: 'hidden', position: 'relative', boxSizing: 'border-box',
+              boxShadow: 'var(--glass-cast-3), 0 0 0 1px var(--line-soft)',
+            }}>
+              {children}
+            </div>
+          </div>
+        </div>
+      </figure>
+    );
+  }
+
+  /* ---------------------------------------------------------------
+     THE DOCK. The panel never covers its subject: on a narrow screen
+     the host keeps the top half and the panel takes the bottom; on a
+     wide one the host column shrinks and the panel takes the right.
+     --------------------------------------------------------------- */
+  function Dock({ dock, host, panel }) {
+    const bottom = dock === 'bottom';
+    return (
+      <div style={{
+        position: 'absolute', inset: 0, display: 'grid',
+        gridTemplateRows: bottom ? 'minmax(0,1fr) 56%' : '100%',
+        gridTemplateColumns: bottom ? '100%' : 'minmax(0,1fr) auto',
+      }}>
+        <div className="ag-scroll" style={{ minWidth: 0, minHeight: 0, overflow: 'hidden', position: 'relative' }}>{host}</div>
+        {panel}
+      </div>
+    );
+  }
+
+  /* ---------------- host chrome (simplified, on-system) ----------- */
+
+  const Mono = ({ children, color = 'var(--fg-3)', size = 'var(--text-2xs)' }) => (
+    <span style={{ font: 'var(--type-numeric)', fontSize: size, color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{children}</span>
+  );
+
+  const Kicker = ({ children, color = 'var(--fg-4)' }) => (
+    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color, whiteSpace: 'nowrap' }}>{children}</span>
+  );
+
+  /* The trigger. One pill, one word, on the object it will talk about.
+     44px so a thumb can hit it. */
+  function AskPill({ label = 'Ask', on }) {
+    return (
+      <span style={{ display: 'flex', flex: '0 0 auto' }}>
+        <Button variant={on ? 'tint' : 'glass'} size="sm" iconLeft={<Icon name="sparkles" size={15} />} style={{ minHeight: 44 }}>
+          {label}
+        </Button>
+      </span>
+    );
+  }
+
+  function TopBar({ title }) {
+    return (
+      <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', padding: 'var(--sp-7) var(--sp-9) var(--sp-6)' }}>
+        <IconButton label="Back" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+        <img src="../assets/mark-white.png" alt="" width="24" height="24" style={{ opacity: 0.95, display: 'block' }} />
+        <span style={{ font: 'var(--type-label)', color: 'var(--fg-3)' }}>Projects</span>
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>/</span>
+        <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>{title}</span>
+        <span style={{ flex: 1 }} />
+        <IconButton label="Search" variant="ghost"><Icon name="search" size={18} /></IconButton>
+        <IconButton label="Project actions" variant="ghost"><Icon name="ellipsis" size={18} /></IconButton>
+      </header>
+    );
+  }
+
+  /* Opener 2 — the project header. */
+  function Masthead({ subject }) {
+    return (
+      <section className={subject ? 'subj' : ''} style={{
+        display: 'grid', gap: 'var(--sp-6)', padding: 'var(--sp-8)',
+        borderRadius: 'var(--r-card-lg)',
+        backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--hue-violet)' }} />
+          <Kicker>Project</Kicker>
+          <Mono color="var(--fg-4)">3 lists</Mono>
+          <span style={{ flex: 1 }} />
+          <AskPill label="Ask about this project" on={subject} />
+        </div>
+        <h1 style={{ margin: 0, font: 'var(--type-metric)', letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)' }}>
+          Shreekant Empire
+        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-7)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--line-faint)' }}>
+          <span style={{ display: 'grid', gap: 2 }}><Mono size="var(--text-sm)" color="var(--fg-1)">1 of 5</Mono><span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>tasks done</span></span>
+          <span style={{ width: 1, height: 30, background: 'var(--line-faint)' }} />
+          <span style={{ display: 'grid', gap: 2 }}><Mono size="var(--text-sm)" color="var(--fg-1)">465 min</Mono><span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>work left</span></span>
+          <span style={{ width: 1, height: 30, background: 'var(--line-faint)' }} />
+          <span style={{ display: 'grid', gap: 2 }}><Mono size="var(--text-sm)" color="var(--fg-1)">₹1.6L</Mono><span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>value</span></span>
+        </div>
+      </section>
+    );
+  }
+
+  /* Opener 1 — a task row. */
+  function TaskCard({ t, subject }) {
+    return (
+      <article className={subject ? 'subj' : ''} style={{
+        display: 'grid', gridTemplateColumns: '24px 1fr', columnGap: 'var(--sp-5)', rowGap: 'var(--sp-4)',
+        padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-md)',
+        backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+      }}>
+        <span style={{
+          width: 24, height: 24, borderRadius: 'var(--r-xs)',
+          backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
+        }} />
+        <div style={{ minWidth: 0, display: 'grid', gap: 'var(--sp-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' }}>
+            <h3 style={{ margin: 0, flex: 1, minWidth: 0, font: 'var(--type-body)', color: 'var(--fg-1)', letterSpacing: 'var(--tracking-ui)' }}>{t.title}</h3>
+            <ScoreDial value={t.score} size="sm" />
+            {subject
+              ? <AskPill on />
+              : <IconButton label="Actions" size="sm" variant="ghost"><Icon name="ellipsis" size={16} /></IconButton>}
+          </div>
+          <p style={{ margin: 0, font: 'var(--type-caption)', color: 'var(--fg-3)', lineHeight: 'var(--leading-normal)' }}>{t.note}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+            {t.urgent ? <StatusPill status="review" size="sm">{t.due}</StatusPill>
+              : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--fg-3)' }}><Icon name="calendar" size={13} /><Mono>{t.due}</Mono></span>}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--fg-3)' }}><Icon name="clock" size={13} /><Mono>{t.alloc} min</Mono></span>
+            {t.sub && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--fg-3)' }}><Icon name="corner-down-right" size={13} /><Mono>{t.sub}</Mono></span>}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  /* Opener 3 — a list header. */
+  function ListPanel({ name, tasks, subject, subjectTask }) {
+    return (
+      <section style={{
+        display: 'grid', alignContent: 'start', gap: 'var(--sp-3)', minWidth: 0,
+        borderRadius: 'var(--r-card)', padding: '0 var(--sp-5) var(--sp-5)',
+        backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-shadow-pane)',
+      }}>
+        <header className={subject ? 'subj' : ''} style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+          margin: subject ? 'var(--sp-3) calc(var(--sp-3) * -1) 0' : 0,
+          padding: 'var(--sp-5) var(--sp-4) var(--sp-4)',
+          borderRadius: subject ? 'var(--r-lg)' : 0,
+          backgroundImage: subject ? 'var(--glass-fill-2)' : 'none',
+        }}>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--hue-violet)', flex: '0 0 auto' }} />
+          <h2 style={{ margin: 0, font: 'var(--type-title)', fontSize: 'var(--text-md)', color: 'var(--fg-1)', letterSpacing: 'var(--tracking-ui)' }}>{name}</h2>
+          <Mono color="var(--fg-4)">0/{tasks.length}</Mono>
+          <span style={{ flex: 1 }} />
+          {subject
+            ? <AskPill label="Ask about this list" on />
+            : <IconButton label="Add task" size="sm" variant="ghost"><Icon name="plus" size={16} /></IconButton>}
+        </header>
+        {tasks.map((t) => <TaskCard key={t.title} t={t} subject={subjectTask === t.title} />)}
+      </section>
+    );
+  }
+
+  const TASKS = [
+    { title: 'File the incorporation paperwork', note: 'Form INC-32 plus the MOA and AOA. The CA has the drafts; they need signing and uploading.', due: '1d left', urgent: true, alloc: 90, score: 11.5 },
+    { title: 'Quarterly compliance review', note: 'Registers, minutes and the statutory file, checked against the register.', due: '23 Aug', alloc: 60, score: 7.0 },
+  ];
+
+  const MONEY = [
+    { title: 'Open the current account', note: 'Needs the certificate of incorporation, so it cannot start until the filing clears.', due: '23 Sep', alloc: 120, score: 7.0 },
+    { title: 'Chase the outstanding invoices', note: 'Two are past thirty days. Polite first note, then a call.', due: '26 Aug', alloc: 45, score: 9.0, sub: '2/4' },
+  ];
+
+  function BoardHost({ wide, subject, subjectTask }) {
+    return (
+      <div className="ag-scroll" style={{ height: '100%', overflow: 'hidden' }}>
+        <TopBar title="Shreekant Empire" />
+        <div style={{ display: 'grid', gap: 'var(--sp-7)', padding: '0 var(--sp-9) var(--sp-9)' }}>
+          <Masthead subject={subject === 'project'} />
+          <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(2, minmax(0,1fr))' : '1fr', gap: 'var(--sp-6)', alignItems: 'start' }}>
+            <ListPanel name="Operations" tasks={TASKS} subject={subject === 'list'} subjectTask={subjectTask} />
+            {wide && <ListPanel name="Money" tasks={MONEY} />}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------- the Score host ------------------------------- */
+
+  function Field({ label, value, hint, filled, flash }) {
+    return (
+      <div style={{
+        display: 'grid', gap: 'var(--sp-3)', padding: 'var(--sp-5) var(--sp-6)',
+        borderRadius: 'var(--r-lg)',
+        backgroundImage: flash ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+        boxShadow: flash ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+        transition: 'background-image var(--dur-slow) var(--ease-glass), box-shadow var(--dur-slow) var(--ease-glass)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <Kicker color={filled ? 'var(--fg-3)' : 'var(--fg-4)'}>{label}</Kicker>
+          <span style={{ flex: 1 }} />
+          {!filled && <Kicker color="var(--status-review)">needed</Kicker>}
+        </div>
+        <span style={{
+          font: value ? 'var(--type-body)' : 'var(--type-body)',
+          color: filled ? 'var(--fg-1)' : 'var(--fg-4)', textWrap: 'pretty',
+        }}>{value || hint}</span>
+      </div>
+    );
+  }
+
+  function ScoreHost({ wide, filled }) {
+    const f = filled || {};
+    const total = f.total || '—';
+    return (
+      <div className="ag-scroll" style={{ height: '100%', overflow: 'hidden' }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', padding: 'var(--sp-7) var(--sp-9) var(--sp-6)' }}>
+          <IconButton label="Back" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+          <img src="../assets/mark-white.png" alt="" width="24" height="24" style={{ opacity: 0.95, display: 'block' }} />
+          <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Score</span>
+          <Mono color="var(--fg-4)">3 / 6 unscored</Mono>
+          <span style={{ flex: 1 }} />
+          <AskPill label="Let the AI ask" on />
+        </header>
+
+        <div style={{ display: 'grid', gap: 'var(--sp-7)', padding: '0 var(--sp-9) var(--sp-9)' }}>
+          <section style={{
+            display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--sp-7)',
+            padding: 'var(--sp-8)', borderRadius: 'var(--r-card-lg)',
+            backgroundImage: 'var(--glass-fill-2)',
+            backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+            boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+          }}>
+            <div style={{ display: 'grid', gap: 'var(--sp-4)', minWidth: 0 }}>
+              <Kicker>Scoring · Studio Launch · The space</Kicker>
+              <h1 style={{ margin: 0, font: 'var(--type-title)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                Countersign the studio lease
+              </h1>
+              <p style={{ margin: 0, maxWidth: '46ch', font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                The landlord signs first; this is the return leg.
+              </p>
+            </div>
+            <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-3)' }}>
+              <span style={{
+                font: 'var(--font-mono)', fontWeight: 'var(--weight-light)', fontSize: 'var(--text-4xl)',
+                letterSpacing: 'var(--tracking-display)', color: total === '—' ? 'var(--fg-4)' : 'var(--fg-1)',
+                fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+              }}>{total}</span>
+              <Kicker>priority score</Kicker>
+            </div>
+          </section>
+
+          <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(2, minmax(0,1fr))' : '1fr', gap: 'var(--sp-5)' }}>
+            <Field label="Eisenhower" value={f.eis} hint="Urgent, important, both or neither" filled={!!f.eis} flash={f.flash === 'eis'} />
+            <Field label="Importance" value={f.imp} hint="1 is nothing, 5 is your week" filled={!!f.imp} flash={f.flash === 'imp'} />
+            <Field label="Deadline" value={f.dl} hint="The date it stops being useful" filled={!!f.dl} flash={f.flash === 'dl'} />
+            <Field label="Estimate" value={f.est} hint="Minutes of real work" filled={!!f.est} flash={f.flash === 'est'} />
+            {wide && <Field label="Description" value={f.desc} hint="What done looks like" filled={!!f.desc} />}
+            {wide && <Field label="Quasi-need" value={f.quasi} hint="Does something else wait on it" filled={!!f.quasi} />}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------- transcripts ---------------------------------- */
+
+  const TASK_SUBJECT = { kicker: 'Task · Operations · Shreekant Empire', title: 'File the incorporation paperwork', meta: '90 min · 1d left', icon: 'circle-dot' };
+  const LIST_SUBJECT = { kicker: 'List · Shreekant Empire', title: 'Operations', meta: '2 tasks · 150 min', icon: 'list' };
+  const PROJ_SUBJECT = { kicker: 'Project · 3 lists', title: 'Shreekant Empire', meta: '5 tasks · 465 min', icon: 'folder' };
+  const SCORE_SUBJECT = { kicker: 'Scoring · 3 of 6 left', title: 'Countersign the studio lease', meta: '5d left', icon: 'award' };
+
+  const MID = [
+    { kind: 'you', text: 'Break this into steps.' },
+    {
+      kind: 'did', tool: 'create_subtasks', icon: 'list-plus', count: '3 added',
+      rows: [
+        { label: 'Upload INC-32', meta: '25 min' },
+        { label: 'Pay the filing fee', meta: '10 min' },
+        { label: 'File the receipt', meta: '15 min' },
+      ],
+      undo: true, applied: 'Added to the task. Estimate unchanged.',
+    },
+    { kind: 'ai', text: 'Fifty of the ninety minutes are now accounted for. The fee needs the signed MOA, so it runs after the upload.' },
+  ];
+
+  const PROJ = [
+    { kind: 'you', text: 'Everything slipped a week. Fix the dates.' },
+    {
+      kind: 'did', tool: 'shift_deadlines', icon: 'calendar-clock', count: '4 moved',
+      rows: [
+        { label: 'File the incorporation paperwork', meta: '22 → 29 Aug' },
+        { label: 'Quarterly compliance review', meta: '23 → 30 Aug' },
+        { label: 'Open the current account', meta: '23 → 30 Sep' },
+        { label: 'Rewrite the landing page copy', meta: '19 → 26 Sep' },
+      ],
+      undo: true, applied: 'Four deadlines moved seven days.',
+    },
+    { kind: 'ai', text: 'Two of them now land after the filing window closes on 27 Aug. They cannot be completed as written.' },
+    {
+      kind: 'approve', hard: true,
+      title: 'Delete the 2 tasks the window closed on',
+      rows: [
+        { label: 'Quarterly compliance review', meta: 'Operations' },
+        { label: 'Open the current account', meta: 'Money' },
+      ],
+      note: 'Deletion is permanent. Their subtasks and logged time go with them.',
+      yes: 'Delete 2 tasks', no: 'Keep them',
+      done: 'Deleted. 2 tasks and 7 subtasks removed.',
+    },
+  ];
+
+  const LIST_WORK = [
+    { kind: 'you', text: 'What should I do first in here?' },
+  ];
+
+  const SCORE_NARROW = [
+    { kind: 'ai', text: 'Urgent and important, or important only? The return leg is due in 5 days and the landlord has already signed.', chips: ['Do first', 'Schedule'] },
+    { kind: 'you', text: 'Do first — he is waiting on me.' },
+    { kind: 'filled', field: 'Eisenhower', value: 'Do first · important and urgent', delta: '+4' },
+    { kind: 'ai', text: 'How much of your week does it cost? 1 is nothing, 5 is the week.', chips: ['1', '2', '3', '4', '5'] },
+  ];
+
+  const SCORE_WIDE = [
+    { kind: 'ai', text: 'Six tasks have no score. Starting with the one whose deadline is nearest.' },
+    { kind: 'you', text: 'Go.' },
+    { kind: 'filled', field: 'Eisenhower', value: 'Do first · important and urgent', delta: '+4' },
+    { kind: 'filled', field: 'Deadline', value: '24 Aug, 17:00 · 5 days out', delta: '+3' },
+    {
+      kind: 'did', tool: 'set_estimate', icon: 'timer', count: '1 field',
+      rows: [{ label: 'Estimate', meta: '40 min' }],
+      undo: true, applied: 'Taken from your last two lease tasks.',
+    },
+    { kind: 'ai', text: 'Score is 9.0. One field left: what done looks like.' },
+  ];
+
+  /* ---------------------------------------------------------------- */
+
+  function Board() {
+    return (
+      <div style={{ minHeight: '100vh', padding: 'var(--sp-11) var(--gutter-page) var(--sp-13)' }}>
+        <GlassFilters />
+
+        <header style={{ display: 'grid', gap: 'var(--sp-5)', maxWidth: '62ch', marginBottom: 'var(--sp-11)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            <img src="../assets/mark-white.png" alt="" width="26" height="26" style={{ opacity: 0.95, display: 'block' }} />
+            <Kicker>Base component · overlay</Kicker>
+          </div>
+          <h1 style={{ margin: 0, font: 'var(--type-display)', letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)' }}>
+            The AI panel
+          </h1>
+          <p style={{ margin: 0, font: 'var(--type-body)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+            A short exchange about one object, docked to the screen that object lives on. It names its
+            subject, states what it did, and parks anything irreversible on one tap. Panels dock — they
+            never cover the thing they are talking about.
+          </p>
+          <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap', paddingTop: 'var(--sp-3)' }}>
+            {['Task row', 'Project header', 'List header', 'Score'].map(function (o) {
+              return (
+                <span key={o} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
+                  minHeight: 32, padding: '0 var(--sp-5)', borderRadius: 'var(--r-pill)',
+                  backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                  font: 'var(--type-caption)', color: 'var(--fg-2)',
+                }}>
+                  <Icon name="sparkles" size={13} />{o}
+                </span>
+              );
+            })}
+          </div>
+        </header>
+
+        <div style={{ display: 'grid', gap: 'var(--sp-13)' }}>
+          <Frame w={820} h={1180} id="01" label="Task row · empty and waiting" note="Opened from a card. Bottom half; the card it is about stays on screen above it.">
+            <Dock
+              dock="bottom"
+              host={<BoardHost subjectTask="File the incorporation paperwork" />}
+              panel={<AIPanel
+                dock="bottom"
+                subject={TASK_SUBJECT}
+                prompts={['Break this into steps', 'Is 90 minutes realistic?', 'What is blocking it?']}
+                placeholder="Ask about this task"
+              />}
+            />
+          </Frame>
+
+          <Frame w={820} h={1180} id="02" label="Task row · mid-conversation, tool result, applied with undo" note="The tool result is the chat screen's pattern, compacted. The way back sits on the change itself.">
+            <Dock
+              dock="bottom"
+              host={<BoardHost subjectTask="File the incorporation paperwork" />}
+              panel={<AIPanel dock="bottom" subject={TASK_SUBJECT} items={MID} placeholder="Ask about this task" />}
+            />
+          </Frame>
+
+          <Frame w={820} h={1180} id="03" label="List header · the AI working" note="One pill, one label, the tool named. Never a log.">
+            <Dock
+              dock="bottom"
+              host={<BoardHost subject="list" />}
+              panel={<AIPanel dock="bottom" subject={LIST_SUBJECT} items={LIST_WORK} working={{ label: 'Reading the list', tool: 'list_tasks' }} placeholder="Ask about this list" />}
+            />
+          </Frame>
+
+          <Frame w={820} h={1180} id="04" label="Score · it asks, I answer, the field fills" note="Here the panel drives. Every answer lands in a field and the field says so.">
+            <Dock
+              dock="bottom"
+              host={<ScoreHost filled={{ eis: 'Do first · important and urgent', dl: '24 Aug, 17:00', total: '7.0', flash: 'eis' }} />}
+              panel={<AIPanel dock="bottom" subject={SCORE_SUBJECT} items={SCORE_NARROW} placeholder="Answer, or type a number" />}
+            />
+          </Frame>
+
+          <Frame w={1440} h={900} id="05" label="Project header · a proposed change awaiting approval" note="Docked right; the board shrinks rather than disappearing. Irreversible carries amber and a frost affirmative.">
+            <Dock
+              dock="right"
+              host={<BoardHost wide subject="project" />}
+              panel={<AIPanel dock="right" subject={PROJ_SUBJECT} items={PROJ} placeholder="Ask about this project" />}
+            />
+          </Frame>
+
+          <Frame w={1440} h={900} id="06" label="Score · two fields filled, an estimate applied with undo" note="Same panel, same rules, a wider dock. The score updates behind it as answers land.">
+            <Dock
+              dock="right"
+              host={<ScoreHost wide filled={{
+                eis: 'Do first · important and urgent', dl: '24 Aug, 17:00', est: '40 min',
+                imp: '4 · most of a working day', total: '9.0', flash: 'est',
+              }} />}
+              panel={<AIPanel dock="right" subject={SCORE_SUBJECT} items={SCORE_WIDE} placeholder="Answer, or type a number" />}
+            />
+          </Frame>
+        </div>
+
+        <footer style={{ display: 'grid', gap: 'var(--sp-4)', maxWidth: '68ch', marginTop: 'var(--sp-13)', paddingTop: 'var(--sp-7)', borderTop: '1px solid var(--line-faint)' }}>
+          <Kicker>Rules</Kicker>
+          <ul style={{ margin: 0, paddingLeft: '1.1em', display: 'grid', gap: 'var(--sp-3)', font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>
+            <li>It docks. The host shrinks; the subject stays visible. Never a cover, never a modal.</li>
+            <li>The header names the subject, always — the panel has no meaning without one.</li>
+            <li>Out in one gesture: drag the handle down, tap the ✕, or press Escape.</li>
+            <li>No persona, no first person, no pleasantries. It states what it did, in the past tense.</li>
+            <li>Reversible acts apply and offer Undo. Irreversible acts wait for one tap.</li>
+            <li>Smaller and quieter than the chat screen: no markdown, no history, no avatars.</li>
+          </ul>
+          <p style={{ margin: 'var(--sp-3) 0 0', font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+            Component: <code style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--fg-3)' }}>components/overlay/AIPanel.jsx</code>
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Board />);
+});
+</script>
+</body>
+</html>

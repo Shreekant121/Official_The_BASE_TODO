@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Contacts</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="Contacts">
+<div id="root">
+  <div style="display:flex;height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:1140px;margin:0 auto;height:120px;border-radius:var(--r-card);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/forms/Input.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/MorphMenu.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, StatusPill, Toast, Input, Switch, MiniNav, MorphMenu } = AG;
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',     icon: 'layout-dashboard', href: 'home.html' },
+    { value: 'home',      label: 'Home',          icon: 'house',            href: 'home.html' },
+    { value: 'atlas',     label: 'Atlas',         icon: 'sparkles',         href: 'atlas.html' },
+    { value: 'skills',    label: 'Skills',        icon: 'wrench',           href: 'skills.html' },
+    { value: 'inbox',     label: 'Inbox triage',  icon: 'inbox',            href: 'inbox.html' },
+    { value: 'people',    label: 'Contacts',      icon: 'users' },
+    { value: 'catalog',   label: 'The catalog',   icon: 'book-open',        href: 'catalog.html' },
+    { value: 'trash',     label: 'Trash',         icon: 'trash-2',          href: 'trash.html' },
+    { value: 'log',       label: 'Action log',    icon: 'scroll-text',      href: 'log.html' },
+    { value: 'host',      label: 'Atlas host',    icon: 'server',           href: 'atlas-host.html' },
+  ];
+
+  /* Three sources, all of them. Google through the login the app already
+     uses, a file import, and typed by hand. Nothing else. */
+  const SOURCES = [
+    { id: 'google', label: 'Google Contacts', icon: 'circle-user', count: 214, state: 'connected', hint: 'One extra scope on a consent screen you have to reopen for Gmail anyway.' },
+    { id: 'file',   label: 'File import',     icon: 'file-up',     count: 61,  state: 'idle',      hint: 'CSV or vCard. Nothing is written until the merges are reviewed.' },
+    { id: 'typed',  label: 'Typed by hand',   icon: 'pencil',      count: 9,   state: 'idle',      hint: 'For the people who were never in a system.' },
+  ];
+
+  /* ---------------------------------------------------------------
+     THE PRINCIPLE, and the reason this screen looks the way it does:
+
+       Identity decides what Atlas KNOWS.
+       It never decides what Atlas may do IRREVERSIBLY.
+
+     A code in an email is a password on a postcard. So a code buys
+     recognition and the bounded, undoable set — never the front door,
+     and never the right to instruct Atlas about Shreekant's own data.
+     --------------------------------------------------------------- */
+  const UNLOCKS = [
+    ['plus', 'Create a task on their own business'],
+    ['upload', 'Submit work for your approval'],
+    ['calendar-clock', 'Book a slot you have opened'],
+    ['paperclip', 'Attach a file to their own thread'],
+  ];
+  const NEVER = [
+    ['mail-x', 'Make Atlas send mail to anyone'],
+    ['link-2-off', 'Publish a public share link'],
+    ['folder-lock', 'Read or change your projects'],
+    ['terminal', 'Reach any code-writing path'],
+  ];
+
+  const PEOPLE = [
+    {
+      id: 'p1', name: 'Rahul Mehta', org: 'Mehta Textiles, Surat', initials: 'RM',
+      emails: ['rahul@mehtatextiles.in'], phone: '+91 98xxx xxxxx',
+      sources: ['google', 'typed'], known: true, since: 'March 2026',
+      code: '4471-2290-1183-06', codeUsed: 14, codeLast: 'today, 13:41',
+      note: 'people/rahul-mehta.md',
+      history: [
+        ['mail', 'Chasing invoice #114', 'today, 13:41'],
+        ['plus', 'Created a task: "Confirm dispatch date"', '28 Aug · via his code'],
+        ['mail', 'Invoice #117 acknowledged', '30 Aug'],
+      ],
+    },
+    {
+      id: 'p2', name: 'Anita Sharma', org: 'Sharma & Co · Chartered Accountant', initials: 'AS',
+      emails: ['anita@sharmaco.in'], phone: '+91 99xxx xxxxx',
+      sources: ['google'], known: true, since: 'January 2026',
+      code: '8802-5514-7731-92', codeUsed: 3, codeLast: '1 Sep, 17:20',
+      note: 'people/anita-cs.md',
+      history: [
+        ['upload', 'Submitted the corrected GST line', '1 Sep · via her code'],
+        ['mail', 'Incorporation filing questions', '29 Aug'],
+      ],
+    },
+    {
+      id: 'p3', name: 'Vikram Rane', org: 'Studio landlord · Andheri West', initials: 'VR',
+      emails: ['vikram.rane@gmail.com'], phone: '+91 97xxx xxxxx',
+      sources: ['typed'], known: true, since: 'August 2026',
+      code: null, codeUsed: 0, codeLast: null,
+      note: 'people/studio-landlord.md',
+      history: [['mail', 'Deposit terms, again', '26 Aug']],
+    },
+    {
+      id: 'p4', name: 'Kabir Joshi', org: 'Freelance designer', initials: 'KJ',
+      emails: ['kabir@kjstudio.co'], phone: null,
+      sources: ['google', 'file'], known: true, since: 'July 2026',
+      code: '1190-6642-3308-71', codeUsed: 1, codeLast: '12 Aug',
+      note: 'people/kabir-freelance.md',
+      history: [['upload', 'Submitted the packaging artwork', '12 Aug · via his code']],
+    },
+    {
+      id: 'p5', name: 'billing@invoice-portal.co', org: 'Unknown sender', initials: '?',
+      emails: ['billing@invoice-portal.co'], phone: null,
+      sources: [], known: false, since: null, stranger: true,
+      code: null, codeUsed: 0, codeLast: null, note: null,
+      history: [['shield-alert', 'Flagged: tried to instruct Atlas', 'today, 11:04']],
+    },
+    {
+      id: 'p6', name: 'Priya Nair', org: 'Nair Logistics', initials: 'PN',
+      emails: ['priya@nairlogistics.in'], phone: '+91 90xxx xxxxx',
+      sources: ['file'], known: false, since: null,
+      code: null, codeUsed: 0, codeLast: null, note: null,
+      history: [['mail', 'Quote for the Surat run', '24 Aug']],
+    },
+  ];
+
+  /* Obvious duplicates are merged automatically AND the merge is shown.
+     Unclear ones are proposed and wait. Both halves matter: silent
+     merging is how a contact list quietly becomes wrong. */
+  const MERGED = [
+    { id: 'm1', name: 'Rahul Mehta', reason: 'Same address in both sources', from: ['Google Contacts', 'typed by hand'], when: 'today, 09:40' },
+    { id: 'm2', name: 'Anita Sharma', reason: 'Same address, same phone', from: ['Google Contacts', 'CSV import'], when: 'today, 09:40' },
+    { id: 'm3', name: 'Kabir Joshi', reason: 'Same address in both sources', from: ['Google Contacts', 'CSV import'], when: 'today, 09:40' },
+  ];
+
+  const PROPOSED = [
+    {
+      id: 'q1', why: 'Same phone number, different names and addresses.',
+      a: { label: 'Google Contacts', name: 'V. Rane', email: 'vrane.andheri@gmail.com', phone: '+91 97xxx xxxxx', org: '—' },
+      b: { label: 'Typed by hand', name: 'Vikram Rane', email: 'vikram.rane@gmail.com', phone: '+91 97xxx xxxxx', org: 'Studio landlord' },
+    },
+    {
+      id: 'q2', why: 'Names match closely, but nothing else does.',
+      a: { label: 'CSV import', name: 'Priya Nair', email: 'priya@nairlogistics.in', phone: '+91 90xxx xxxxx', org: 'Nair Logistics' },
+      b: { label: 'Google Contacts', name: 'Priya Nair', email: 'priya.nair88@gmail.com', phone: '—', org: '—' },
+    },
+  ];
+
+  const FILTERS = [
+    { value: 'all',      label: 'Everyone' },
+    { value: 'known',    label: 'Known' },
+    { value: 'stranger', label: 'Strangers' },
+  ];
+
+  const Kicker = ({ children, color = 'var(--fg-4)', style }) => (
+    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color, ...style }}>{children}</span>
+  );
+
+  const SRC = {};
+  SOURCES.forEach((s) => { SRC[s.id] = s; });
+
+  function Avatar({ person, size = 40 }) {
+    return (
+      <span aria-hidden="true" style={{
+        display: 'grid', placeItems: 'center', width: size, height: size, flex: '0 0 auto',
+        borderRadius: '50%',
+        backgroundImage: person.stranger ? 'var(--glass-fill-1)' : person.known ? 'var(--glass-fill-3)' : 'var(--glass-fill-2)',
+        boxShadow: person.stranger ? 'var(--glass-rim-1)' : 'var(--glass-rim-2)',
+        color: person.stranger ? 'var(--fg-4)' : 'var(--fg-1)',
+        font: 'var(--type-label)', fontSize: size > 48 ? 'var(--text-lg)' : 'var(--text-sm)',
+        letterSpacing: '0.02em',
+      }}>{person.initials}</span>
+    );
+  }
+
+  function SourceDots({ ids }) {
+    if (!ids.length) return <Kicker>no source</Kicker>;
+    return (
+      <span style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+        {ids.map((id) => (
+          <span key={id} title={SRC[id].label} style={{ display: 'flex', color: 'var(--fg-4)' }}>
+            <Icon name={SRC[id].icon} size={13} />
+          </span>
+        ))}
+      </span>
+    );
+  }
+
+  function PersonRow({ person, on, onPick }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <button type="button" onClick={onPick}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%', minHeight: 58,
+          padding: 'var(--sp-2) var(--sp-5)', border: 0, cursor: 'pointer', textAlign: 'left',
+          borderRadius: 'var(--r-pill)',
+          backgroundImage: on ? 'var(--glass-fill-2)' : hover ? 'var(--glass-fill-1)' : 'none',
+          boxShadow: on ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'none',
+          transition: 'var(--t-hover)',
+        }}>
+        <Avatar person={person} size={34} />
+        <span style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+          <span style={{
+            font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: on ? 'var(--fg-1)' : 'var(--fg-2)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{person.name}</span>
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {person.org}
+          </span>
+        </span>
+        {person.code
+          ? <span style={{ display: 'flex', color: 'var(--accent)', flex: '0 0 auto' }}><Icon name="key-round" size={14} /></span>
+          : <SourceDots ids={person.sources} />}
+      </button>
+    );
+  }
+
+  /* The code. Fourteen figures, masked until asked for, and directly
+     beneath it the two lists that say what it is and is not for. The
+     lists are the point of the whole component — a code that is shown
+     without its boundary is a code that gets misused. */
+  function CodePanel({ person, onIssue, onRevoke, onCopy }) {
+    const [shown, setShown] = React.useState(false);
+
+    if (!person.code) {
+      return (
+        <div style={{
+          display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-7)', borderRadius: 'var(--r-card)',
+          backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="key-round" size={16} /></span>
+            <Kicker color="var(--fg-3)" style={{ flex: 1 }}>No code issued</Kicker>
+          </div>
+          <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', margin: 0, maxWidth: '54ch', textWrap: 'pretty' }}>
+            A code lets Atlas recognise {person.name.split(' ')[0]} when they write, and act on their own
+            business without waiting for you. It grants nothing over your data.
+          </p>
+          <Button size="sm" variant="tint" iconLeft={<Icon name="key-round" size={14} />} onClick={onIssue}>
+            Issue a code
+          </Button>
+        </div>
+      );
+    }
+
+    const masked = '••••-••••-••••-' + person.code.slice(-2);
+
+    return (
+      <div style={{
+        display: 'grid', gap: 'var(--sp-6)', padding: 'var(--sp-7)', borderRadius: 'var(--r-card)',
+        backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', color: 'var(--accent)', flex: '0 0 auto' }}><Icon name="key-round" size={16} /></span>
+          <Kicker color="var(--fg-3)" style={{ flex: 1 }}>Their code</Kicker>
+          <Kicker>used {person.codeUsed}× · last {person.codeLast}</Kicker>
+        </div>
+
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap',
+          padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-sm)',
+          backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+        }}>
+          <span style={{
+            flex: 1, minWidth: 190, font: 'var(--type-numeric)', fontSize: 'var(--text-lg)',
+            letterSpacing: '0.06em', color: shown ? 'var(--fg-1)' : 'var(--fg-3)', fontVariantNumeric: 'tabular-nums',
+          }}>{shown ? person.code : masked}</span>
+          <div style={{ display: 'flex', gap: 'var(--sp-3)', flex: '0 0 auto' }}>
+            <IconButton label={shown ? 'Hide code' : 'Show code'} variant="ghost" size="sm" onClick={() => setShown(!shown)}>
+              <Icon name={shown ? 'eye-off' : 'eye'} size={15} />
+            </IconButton>
+            <IconButton label="Copy code" variant="ghost" size="sm" onClick={onCopy}><Icon name="copy" size={15} /></IconButton>
+          </div>
+        </div>
+
+        {/* What it buys, and what it never buys. Side by side on purpose:
+            read either column alone and you would get this wrong. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(232px, 1fr))', gap: 'var(--sp-4)' }}>
+          <div style={{
+            display: 'grid', gap: 'var(--sp-4)', padding: 'var(--sp-6)', borderRadius: 'var(--r-lg)',
+            backgroundImage: 'var(--glass-tint-accent)', boxShadow: 'var(--glass-rim-1)',
+          }}>
+            <Kicker color="var(--accent)">It unlocks</Kicker>
+            <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+              {UNLOCKS.map(([icon, label]) => (
+                <span key={label} style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' }}>
+                  <span style={{ display: 'flex', color: 'var(--accent)', flex: '0 0 auto', marginTop: 2 }}><Icon name={icon} size={14} /></span>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', textWrap: 'pretty' }}>{label}</span>
+                </span>
+              ))}
+            </div>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+              Handled autonomously, with their history in view. All of it undoable.
+            </span>
+          </div>
+
+          <div style={{
+            display: 'grid', gap: 'var(--sp-4)', padding: 'var(--sp-6)', borderRadius: 'var(--r-lg)',
+            backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+          }}>
+            <Kicker color="var(--status-overrun)">It never buys</Kicker>
+            <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+              {NEVER.map(([icon, label]) => (
+                <span key={label} style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' }}>
+                  <span style={{ display: 'flex', color: 'var(--status-overrun)', flex: '0 0 auto', marginTop: 2 }}><Icon name={icon} size={14} /></span>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', textWrap: 'pretty' }}>{label}</span>
+                </span>
+              ))}
+            </div>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+              A code identifies. It does not authorise. Email is a postcard.
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+          <Button size="sm" variant="ghost" iconLeft={<Icon name="refresh-cw" size={14} />} onClick={onIssue}>Reissue</Button>
+          <Button size="sm" variant="ghost" iconLeft={<Icon name="ban" size={14} />} onClick={onRevoke}>Revoke</Button>
+          <span style={{ flex: 1 }} />
+          <Kicker>every use is in the action log</Kicker>
+        </div>
+      </div>
+    );
+  }
+
+  /* The merge review. Two records side by side, the reason stated, and
+     two ways out. Nothing merges here without being looked at. */
+  function MergeDrawer({ open, proposed, merged, onClose, onMerge, onKeep }) {
+    function Side({ rec, tone }) {
+      return (
+        <div style={{
+          display: 'grid', gap: 'var(--sp-3)', padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+          backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+        }}>
+          <Kicker color={tone}>{rec.label}</Kicker>
+          {[['name', rec.name], ['email', rec.email], ['phone', rec.phone], ['org', rec.org]].map(([k, v]) => (
+            <span key={k} style={{ display: 'grid', gap: 1 }}>
+              <Kicker>{k}</Kicker>
+              <span style={{
+                font: 'var(--type-numeric)', fontSize: 'var(--text-xs)',
+                color: v === '—' ? 'var(--fg-4)' : 'var(--fg-1)', wordBreak: 'break-all',
+              }}>{v}</span>
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <aside aria-hidden={!open} style={{
+        position: 'fixed', top: 'var(--sp-7)', right: 'var(--sp-7)', bottom: 'var(--sp-7)', width: 420, zIndex: 70,
+        display: 'grid', gridTemplateRows: 'auto minmax(0,1fr)',
+        borderRadius: 'var(--r-sheet)',
+        backgroundColor: 'oklch(0.145 0.004 260 / 0.96)', backgroundImage: 'var(--glass-fill-1)',
+        border: '1px solid oklch(1 0 0 / 0.10)',
+        backdropFilter: 'var(--glass-bd-xl)', WebkitBackdropFilter: 'var(--glass-bd-xl)',
+        boxShadow: 'var(--glass-cast-3), var(--glass-inner-1)',
+        transform: open ? 'translateX(0)' : 'translateX(calc(100% + var(--sp-9)))',
+        opacity: open ? 1 : 0, visibility: open ? 'visible' : 'hidden', pointerEvents: open ? 'auto' : 'none',
+        transition: 'transform var(--dur-sheet) var(--ease-glass), opacity var(--dur-base) var(--ease-glass), visibility 0s linear ' + (open ? '0s' : 'var(--dur-sheet)'),
+      }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-7) var(--sp-6) var(--sp-5) var(--sp-8)' }}>
+          <div style={{ display: 'grid', gap: 2, flex: 1, minWidth: 0 }}>
+            <h2 style={{ font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>Merge review</h2>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Obvious duplicates merged themselves. These are not obvious.</span>
+          </div>
+          <IconButton label="Close review" variant="ghost" onClick={onClose}><Icon name="x" size={18} /></IconButton>
+        </header>
+
+        <div className="ag-scroll" style={{ overflowY: 'auto', overscrollBehavior: 'contain', padding: '0 var(--sp-7) var(--sp-7)', display: 'grid', gap: 'var(--sp-7)', alignContent: 'start' }}>
+          {proposed.length === 0 ? (
+            <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-11) 0', textAlign: 'center' }}>
+              <span style={{ display: 'grid', placeItems: 'center', width: 44, height: 44, borderRadius: '50%', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', color: 'var(--fg-4)' }}>
+                <Icon name="check" size={20} />
+              </span>
+              <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', maxWidth: '30ch', textWrap: 'pretty' }}>
+                Nothing left to decide.
+              </span>
+            </div>
+          ) : proposed.map((p) => (
+            <div key={p.id} style={{
+              display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)', borderRadius: 'var(--r-card)',
+              backgroundImage: 'var(--glass-tint-amber)', boxShadow: 'var(--glass-rim-2), var(--glass-cast-2)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' }}>
+                <span style={{ display: 'flex', color: 'var(--status-review)', flex: '0 0 auto', marginTop: 1 }}><Icon name="git-merge" size={16} /></span>
+                <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', textWrap: 'pretty' }}>{p.why}</span>
+              </div>
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                <Side rec={p.a} tone="var(--fg-3)" />
+                <Side rec={p.b} tone="var(--fg-3)" />
+              </div>
+              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                <Button size="sm" variant="frost" block iconLeft={<Icon name="git-merge" size={14} />} onClick={() => onMerge(p.id)}>Same person</Button>
+                <Button size="sm" variant="ghost" block onClick={() => onKeep(p.id)}>Keep separate</Button>
+              </div>
+            </div>
+          ))}
+
+          <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+            <Kicker color="var(--fg-3)">Merged automatically · {merged.length}</Kicker>
+            {merged.map((m) => (
+              <div key={m.id} style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 52,
+                padding: '0 var(--sp-6)', borderRadius: 'var(--r-lg)',
+                backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+              }}>
+                <span style={{ display: 'flex', color: 'var(--accent)', flex: '0 0 auto' }}><Icon name="git-merge" size={15} /></span>
+                <span style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {m.from.join(' + ')} · {m.reason}
+                  </span>
+                </span>
+                <Kicker style={{ flex: '0 0 auto' }}>reversible in the log</Kicker>
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  /* ================================================================ */
+
+  function Contacts() {
+    const [w, setW] = React.useState(window.innerWidth);
+    const [people, setPeople] = React.useState(PEOPLE);
+    const [current, setCurrent] = React.useState('p1');
+    const [query, setQuery] = React.useState('');
+    const [filter, setFilter] = React.useState('all');
+    const [proposed, setProposed] = React.useState(PROPOSED);
+    const [reviewOpen, setReviewOpen] = React.useState(false);
+    const [listOpen, setListOpen] = React.useState(false);
+    const [toast, setToast] = React.useState(null);
+
+    const wide = w >= 900;
+    const docked = w >= 1080;
+    const showList = docked || listOpen;
+    const person = people.find((p) => p.id === current) || people[0];
+
+    React.useEffect(() => {
+      const on = () => setW(window.innerWidth);
+      window.addEventListener('resize', on);
+      return () => window.removeEventListener('resize', on);
+    }, []);
+
+    React.useEffect(() => {
+      if (!toast) return;
+      const t = setTimeout(() => setToast(null), 3400);
+      return () => clearTimeout(t);
+    }, [toast]);
+
+    const q = query.trim().toLowerCase();
+    const visible = people.filter((p) =>
+      (filter === 'all' || (filter === 'known' ? p.known : !p.known)) &&
+      (q === '' || (p.name + ' ' + p.org + ' ' + p.emails.join(' ')).toLowerCase().includes(q))
+    );
+
+    function randomCode() {
+      const g = (n) => String(Math.floor(Math.random() * Math.pow(10, n))).padStart(n, '0');
+      return g(4) + '-' + g(4) + '-' + g(4) + '-' + g(2);
+    }
+    function issue() {
+      const code = randomCode();
+      setPeople((cur) => cur.map((p) => (p.id === person.id ? Object.assign({}, p, { code, codeUsed: 0, codeLast: 'never' }) : p)));
+      setToast({ icon: 'key-round', title: 'Code issued', detail: 'It identifies ' + person.name + '. It authorises nothing irreversible.' });
+    }
+    function revoke() {
+      setPeople((cur) => cur.map((p) => (p.id === person.id ? Object.assign({}, p, { code: null, codeUsed: 0, codeLast: null }) : p)));
+      setToast({ icon: 'ban', title: 'Code revoked', detail: person.name + ' will be treated as a stranger from now on.' });
+    }
+    function setKnown(v) {
+      setPeople((cur) => cur.map((p) => (p.id === person.id ? Object.assign({}, p, { known: v, stranger: !v && p.stranger }) : p)));
+    }
+
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+    function go(v) { const it = NAV.find((n) => n.value === v); if (it && it.href) location.href = it.href; }
+
+    const indexPanel = (
+      <div style={docked ? { display: 'grid', gridTemplateRows: 'auto auto auto minmax(0,1fr)', gap: 'var(--sp-5)', minHeight: 0 } : {
+        position: 'fixed', top: 'var(--sp-7)', left: 'var(--sp-7)', bottom: 'var(--sp-7)', width: 328, zIndex: 70,
+        display: 'grid', gridTemplateRows: 'auto auto auto minmax(0,1fr)', gap: 'var(--sp-5)', minHeight: 0,
+        padding: 'var(--sp-7)', boxSizing: 'border-box', borderRadius: 'var(--r-sheet)',
+        backgroundColor: 'oklch(0.145 0.004 260 / 0.96)', backgroundImage: 'var(--glass-fill-1)',
+        border: '1px solid oklch(1 0 0 / 0.10)',
+        backdropFilter: 'var(--glass-bd-xl)', WebkitBackdropFilter: 'var(--glass-bd-xl)',
+        boxShadow: 'var(--glass-cast-3), var(--glass-inner-1)',
+        animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <Kicker color="var(--fg-3)" style={{ flex: 1 }}>{people.length} people</Kicker>
+          <IconButton label="Add by hand" variant="ghost" onClick={() => setToast({ icon: 'pencil', title: 'Typed by hand', detail: 'For the people who were never in a system.' })}>
+            <Icon name="user-plus" size={18} />
+          </IconButton>
+          {!docked && <IconButton label="Close list" variant="ghost" onClick={() => setListOpen(false)}><Icon name="x" size={18} /></IconButton>}
+        </div>
+        <Input value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search people" aria-label="Search people" iconLeft={<Icon name="search" size={16} />} />
+        <SegmentedControl size="sm" options={FILTERS} value={filter} onChange={setFilter} style={{ width: '100%' }} />
+        <div className="ag-scroll" style={{ overflowY: 'auto', overscrollBehavior: 'contain', display: 'grid', gap: 'var(--sp-2)', alignContent: 'start' }}>
+          {visible.map((p) => (
+            <PersonRow key={p.id} person={p} on={p.id === current}
+              onPick={() => { setCurrent(p.id); if (!docked) setListOpen(false); }} />
+          ))}
+          {visible.length === 0 && (
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-5)' }}>Nobody matches that.</span>
+          )}
+        </div>
+      </div>
+    );
+
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'stretch' }}>
+        <GlassFilters />
+
+        {wide && (
+          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="people" onChange={go} />
+          </div>
+        )}
+
+        <div style={{
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-9)' : 'var(--sp-8) var(--gutter-page-sm) 116px',
+        }}>
+          <header style={{ width: '100%', maxWidth: 1140, margin: '0 auto', flex: '0 0 auto', display: 'grid', gap: 'var(--sp-6)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 240 }}>
+                <Kicker color="var(--fg-3)">Who Atlas recognises</Kicker>
+                <h1 style={{ font: 'var(--type-display)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                  Contacts
+                </h1>
+              </div>
+              <button type="button" onClick={() => setReviewOpen(true)} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 38, flex: '0 0 auto',
+                padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
+                backgroundImage: proposed.length ? 'var(--glass-tint-amber)' : 'var(--glass-fill-1)',
+                boxShadow: proposed.length ? 'var(--glass-rim-2), var(--glow-amber-md)' : 'var(--glass-rim-1)',
+                color: 'var(--fg-1)', font: 'var(--type-label)', transition: 'var(--t-hover)',
+              }}>
+                <Icon name="git-merge" size={15} />
+                {proposed.length ? proposed.length + ' merges to review' : 'Merges reviewed'}
+              </button>
+            </div>
+
+            {/* Three sources, all of them. Counts, state, and the cost
+                of connecting each one stated on the card. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--sp-4)' }}>
+              {SOURCES.map((s) => (
+                <div key={s.id} style={{
+                  display: 'grid', gap: 'var(--sp-4)', padding: 'var(--sp-6)', borderRadius: 'var(--r-card)',
+                  backgroundImage: s.state === 'connected' ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+                  boxShadow: s.state === 'connected' ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                    <span style={{
+                      display: 'grid', placeItems: 'center', width: 32, height: 32, flex: '0 0 auto',
+                      borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
+                      color: s.state === 'connected' ? 'var(--accent)' : 'var(--fg-3)',
+                    }}><Icon name={s.icon} size={15} /></span>
+                    <span style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+                      <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.label}</span>
+                      <Kicker>{s.count} records</Kicker>
+                    </span>
+                    {s.state === 'connected'
+                      ? <StatusPill status="running" size="sm">on</StatusPill>
+                      : <Button size="sm" variant="ghost" onClick={() => setToast({ icon: s.icon, title: s.label, detail: s.hint })}>Add</Button>}
+                  </div>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>{s.hint}</span>
+                </div>
+              ))}
+            </div>
+          </header>
+
+          <div style={{
+            width: '100%', maxWidth: 1140, margin: 'var(--sp-8) auto 0', flex: 1, minHeight: 0,
+            display: 'grid', gridTemplateColumns: docked ? '300px minmax(0,1fr)' : 'minmax(0,1fr)', gap: 'var(--sp-7)',
+          }}>
+            {showList && indexPanel}
+
+            {person ? (
+            <section className="ag-scroll" style={{
+              minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+              padding: 'var(--pad-card)', borderRadius: 'var(--r-card-lg)',
+              backgroundImage: 'var(--glass-fill-2)',
+              backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+              boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+            }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                  {!docked && (
+                    <IconButton label="All people" variant="ghost" onClick={() => setListOpen(true)}><Icon name="panel-left" size={18} /></IconButton>
+                  )}
+                  <Avatar person={person} size={54} />
+                  <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 200 }}>
+                    <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                      {person.name}
+                    </h2>
+                    <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>{person.org}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+                      {person.emails.map((e) => (
+                        <span key={e} style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-2)', wordBreak: 'break-all' }}>{e}</span>
+                      ))}
+                      {person.phone && <Kicker>{person.phone}</Kicker>}
+                      <SourceDots ids={person.sources} />
+                      {person.since && <Kicker>since {person.since}</Kicker>}
+                    </div>
+                  </div>
+
+                  <MorphMenu
+                    align="end" width={260}
+                    header={{ title: person.name, meta: person.org }}
+                    trigger={<IconButton label="Person actions" variant="ghost"><Icon name="ellipsis" size={18} /></IconButton>}
+                    items={[
+                      { section: 'This person' },
+                      { value: 'note', label: person.note ? 'Open their note' : 'Write them a note', icon: <Icon name="book-open" size={16} />, onSelect: () => { location.href = 'catalog.html'; } },
+                      { value: 'log', label: 'Everything about them', icon: <Icon name="scroll-text" size={16} />, onSelect: () => { location.href = 'log.html'; } },
+                      { divider: true },
+                      { section: 'Careful', tone: 'danger' },
+                      {
+                        value: 'del', label: 'Remove from contacts', icon: <Icon name="trash-2" size={16} />, tone: 'danger',
+                        confirm: {
+                          label: 'Remove ' + person.name + '?',
+                          hint: 'Their code stops working and Atlas treats them as a stranger.',
+                          action: 'Remove',
+                          onConfirm: () => {
+                            const rest = people.filter((p) => p.id !== person.id);
+                            setPeople(rest);
+                            setCurrent(rest.length ? rest[0].id : null);
+                            setToast({ icon: 'trash-2', title: 'Removed', detail: person.name + ' is a stranger to Atlas again.' });
+                          },
+                        },
+                      },
+                    ]}
+                  />
+                </div>
+
+                {/* What Atlas may do when they write. Known vs stranger is
+                    the only autonomy switch on this screen, and it is
+                    about KNOWLEDGE and the undoable set — never the door. */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
+                  padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                  backgroundImage: person.known ? 'var(--glass-fill-1)' : 'var(--glass-tint-amber)',
+                  boxShadow: 'var(--glass-rim-1)',
+                }}>
+                  <span style={{ display: 'flex', color: person.known ? 'var(--accent)' : 'var(--status-review)', flex: '0 0 auto' }}>
+                    <Icon name={person.known ? 'user-check' : 'user-x'} size={16} />
+                  </span>
+                  <span style={{ display: 'grid', gap: 2, flex: 1, minWidth: 200 }}>
+                    <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>
+                      {person.known ? 'Known sender' : 'Stranger'}
+                    </span>
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                      {person.known
+                        ? 'Atlas acts on their mail inside the undoable set, with their history in view.'
+                        : 'Their mail is read, summarised and turned into tasks. Never replied to, never acted on.'}
+                    </span>
+                  </span>
+                  <Switch checked={person.known} onChange={setKnown} size="sm" label={person.known ? 'Known' : 'Stranger'} />
+                </div>
+
+                {person.stranger && (
+                  <div style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)',
+                    padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                    backgroundImage: 'var(--glass-tint-rose)', boxShadow: 'var(--glass-rim-1)',
+                  }}>
+                    <span style={{ display: 'flex', color: 'var(--status-overrun)', flex: '0 0 auto', marginTop: 2 }}><Icon name="shield-alert" size={16} /></span>
+                    <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', textWrap: 'pretty' }}>
+                      This sender wrote text shaped like instructions to Atlas. It was quoted to you as
+                      data and no tool was called. Email is data, never instruction.
+                    </span>
+                  </div>
+                )}
+
+                <CodePanel person={person} onIssue={issue} onRevoke={revoke}
+                  onCopy={() => setToast({ icon: 'clipboard-check', title: 'Copied', detail: 'Give it to them once. Every use is logged.' })} />
+
+                <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                    <Kicker color="var(--fg-3)" style={{ flex: '0 0 auto' }}>Recent</Kicker>
+                    <span style={{ flex: 1, height: 1, background: 'var(--line-faint)' }} />
+                    {person.note && (
+                      <a href="catalog.html" style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', flex: '0 0 auto' }}>
+                        {person.note}
+                      </a>
+                    )}
+                  </div>
+                  {person.history.map(([icon, what, when]) => (
+                    <div key={what} style={{
+                      display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 48,
+                      padding: '0 var(--sp-6)', borderRadius: 'var(--r-lg)',
+                      backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                    }}>
+                      <span style={{ display: 'flex', color: icon === 'shield-alert' ? 'var(--status-overrun)' : 'var(--fg-3)', flex: '0 0 auto' }}>
+                        <Icon name={icon} size={15} />
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {what}
+                      </span>
+                      <Kicker style={{ flex: '0 0 auto' }}>{when}</Kicker>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+            ) : (
+              <section style={{
+                display: 'grid', placeItems: 'center', alignContent: 'center', gap: 'var(--sp-5)',
+                borderRadius: 'var(--r-card-lg)', padding: 'var(--pad-card-lg)',
+                backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+              }}>
+                <span style={{ display: 'grid', placeItems: 'center', width: 48, height: 48, borderRadius: '50%', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', color: 'var(--fg-4)' }}>
+                  <Icon name="users" size={22} />
+                </span>
+                <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', maxWidth: '38ch', textAlign: 'center', textWrap: 'pretty' }}>
+                  No contacts. Atlas treats every sender as a stranger — read, summarised, never acted on.
+                </span>
+                <Button size="sm" variant="tint" iconLeft={<Icon name="user-plus" size={14} />}
+                  onClick={() => setToast({ icon: 'pencil', title: 'Typed by hand', detail: 'For the people who were never in a system.' })}>
+                  Add the first person
+                </Button>
+              </section>
+            )}
+          </div>
+        </div>
+
+        {showList && !docked && (
+          <button type="button" aria-label="Close list" onClick={() => setListOpen(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 65, border: 0, cursor: 'default',
+            background: 'oklch(0.05 0 0 / 0.5)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)',
+          }} />
+        )}
+
+        <MergeDrawer
+          open={reviewOpen} proposed={proposed} merged={MERGED}
+          onClose={() => setReviewOpen(false)}
+          onMerge={(id) => { setProposed((cur) => cur.filter((p) => p.id !== id)); setToast({ icon: 'git-merge', title: 'Merged', detail: 'One record now. Undo it from the action log.' }); }}
+          onKeep={(id) => setProposed((cur) => cur.filter((p) => p.id !== id))}
+        />
+
+        {toast && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-13)', display: 'grid', placeItems: 'center', zIndex: 80, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <Toast icon={<Icon name={toast.icon} size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+            </span>
+          </div>
+        )}
+
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <MiniNav items={navItems} value="people" onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Contacts />);
+});
+</script>
+</body>
+</html>

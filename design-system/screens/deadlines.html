@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Deadlines</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+  .ag-field::-webkit-calendar-picker-indicator { filter: invert(1) brightness(0.72); opacity: 0.8; cursor: pointer; }
+  .ag-field::-webkit-inner-spin-button, .ag-field::-webkit-outer-spin-button { display: none; }
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page" data-screen-label="Deadlines">
+<div id="root">
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page);display:grid;gap:var(--sp-8)">
+      <div style="height:64px;border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+      <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:var(--sp-6)">
+        <div style="height:62vh;border-radius:var(--r-card-lg);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+        <div style="height:62vh;border-radius:var(--r-card-lg);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/MorphCluster.jsx',
+  '../components/data/ScoreDial.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/navigation/Stepper.jsx',
+  '../components/overlay/Dialog.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, MorphCluster, ScoreDial, Toast, MiniNav, Stepper, Dialog } = AG;
+
+  /* ------------------------------------------------------------------ *
+     THE SCREEN'S ONE JOB
+
+     The queue is already chosen. This screen answers the second half of
+     the product's question — *how long have I got?* — by turning a list
+     of committed tasks into a clock: every allocation lands the session
+     on a finish time, and that time is the loudest number on the page.
+
+     Three things the old screen got wrong, fixed here:
+
+       1. A total with nothing to compare it to. Minutes only mean
+          something against a window, so the window is a field and the
+          bar goes amber the second the plan outruns it.
+       2. Subtasks in a drawer that covered the task it described.
+          They expand INSIDE the card now, and a parent with subtasks
+          stops being typed at all — its allocation is the sum.
+       3. A PERT dialog that was three inputs and a number. It is a
+          distribution, so it draws one, and applying it stamps the row
+          so the estimate's provenance survives.
+   * ------------------------------------------------------------------ */
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',     icon: 'layout-dashboard', href: 'home.html' },
+    { value: 'home',      label: 'Home',          icon: 'house',            href: 'home.html' },
+    { value: 'assistant', label: 'Assistant',     icon: 'sparkles',         href: 'atlas.html' },
+    { value: 'session',   label: 'New Session',   icon: 'zap' },
+    { value: 'score',     label: 'Score',         icon: 'award', badge: 6,  href: 'scoring.html' },
+    { value: 'alerts',    label: 'Notifications', icon: 'bell',             href: 'home.html' },
+    { value: 'settings',  label: 'Settings',      icon: 'settings',         href: 'settings.html' },
+  ];
+
+  const LISTS = ['\u26a1 Action Steps', '\ud83e\uddca Backburner', '\ud83d\udcda Reference Materials', 'Build', 'Operations', 'Money'];
+
+  /* Carried over from the session queue. `due` is context only — it was
+     decided on the scoring screen and is never edited here. */
+  const START_TASKS = [
+    {
+      id: 'inc', title: 'File the incorporation paperwork', list: 'Operations', score: 11.0,
+      due: '2026-08-22T06:00', alloc: 90, pert: null,
+      subs: [
+        { id: 'moa', title: 'Sign the MOA', alloc: 15, kids: [] },
+        { id: 'aoa', title: 'Sign the AOA', alloc: 15, kids: [] },
+        { id: 'cert', title: 'Certify the signed set', alloc: 20, kids: [
+          { id: 'scan', title: 'Scan the signed pages', alloc: 10 },
+          { id: 'sig', title: 'Attach the digital signature', alloc: 10 },
+        ] },
+      ],
+    },
+    {
+      id: 'copy', title: 'Rewrite the landing page copy', list: 'Build', score: 7.5,
+      due: '2026-09-19T18:00', alloc: 150, pert: null, subs: [],
+    },
+    {
+      id: 'mca', title: 'Upload to the MCA portal', list: 'Operations', score: 4.0,
+      due: '2026-08-22T06:00', alloc: 30, pert: null, subs: [], after: 'File the incorporation paperwork',
+    },
+  ];
+
+  const NOW = new Date('2026-08-21T09:00');
+  const DAY = 86400000;
+  const pad = (n) => (n < 10 ? '0' + n : String(n));
+
+  const mins = (m) => {
+    m = Math.max(0, Math.round(m));
+    if (m < 60) return m + 'm';
+    const h = Math.floor(m / 60), r = m % 60;
+    return h + 'h' + (r ? ' ' + r + 'm' : '');
+  };
+
+  const clock = (total) => pad(Math.floor(total / 60) % 24) + ':' + pad(Math.round(total) % 60);
+  const parseClock = (s) => { const p = String(s).split(':'); return Number(p[0]) * 60 + Number(p[1] || 0); };
+
+  const dueText = (iso) => {
+    if (!iso) return null;
+    const days = (new Date(iso) - NOW) / DAY;
+    if (days < 0) return { text: 'Overdue', hot: true };
+    if (days <= 1) return { text: 'Due in ' + Math.max(1, Math.round(days * 24)) + 'h', hot: true };
+    if (days <= 7) return { text: 'Due in ' + Math.ceil(days) + 'd', hot: false };
+    return { text: 'Due in ' + Math.round(days / 7) + 'w', hot: false };
+  };
+
+  /* A parent's allocation is never typed — it is what its children add
+     up to. Same rule one level down. */
+  const subTotal = (s) => (s.kids && s.kids.length ? s.kids.reduce((n, k) => n + k.alloc, 0) : s.alloc);
+  const taskTotal = (t) => (t.subs.length ? t.subs.reduce((n, s) => n + subTotal(s), 0) : t.alloc);
+
+  /* ------------------------------------------------------------------ *
+     PRIMITIVES
+   * ------------------------------------------------------------------ */
+
+  function Kicker({ icon, children, tone = 'var(--fg-3)', style }) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
+        font: 'var(--type-kicker)', textTransform: 'uppercase',
+        letterSpacing: 'var(--tracking-kicker)', color: tone, whiteSpace: 'nowrap', ...style,
+      }}>
+        {icon && <Icon name={icon} size={13} />}
+        {children}
+      </span>
+    );
+  }
+
+  function Chip({ children, icon, tone, active, onClick }) {
+    const [hover, setHover] = React.useState(false);
+    const Tag = onClick ? 'button' : 'span';
+    const ink = tone === 'amber' ? 'oklch(0.95 0.07 82)'
+      : tone === 'cyan' ? 'oklch(0.93 0.07 210)'
+      : active ? 'var(--fg-1)' : 'var(--fg-2)';
+    return (
+      <Tag
+        type={onClick ? 'button' : undefined}
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto',
+          height: 28, padding: '0 var(--sp-4)', border: 0, borderRadius: 'var(--r-pill)',
+          cursor: onClick ? 'pointer' : 'default',
+          backgroundImage: tone === 'amber' ? 'var(--glass-tint-amber)'
+            : tone === 'cyan' ? 'var(--glass-tint-cyan)'
+            : active ? 'var(--glass-fill-3)' : hover && onClick ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          boxShadow: active ? 'var(--glass-rim-2)' : 'var(--glass-rim-1)',
+          color: ink, font: 'var(--type-label)', fontSize: 'var(--text-xs)', whiteSpace: 'nowrap',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        {icon && <Icon name={icon} size={13} />}
+        {children}
+      </Tag>
+    );
+  }
+
+  const fieldStyle = {
+    flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent',
+    color: 'var(--fg-1)', font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+    letterSpacing: 'var(--tracking-ui)', padding: 0,
+  };
+
+  function Well({ children, focus, pad = '0 var(--sp-5)', height = 44, radius = 'var(--r-control)', style }) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+        minHeight: height, padding: pad, borderRadius: radius,
+        backgroundImage: 'var(--glass-well)',
+        boxShadow: focus
+          ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+          : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+        transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+        ...style,
+      }}>
+        {children}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE ALLOCATION FIELD
+
+     Data goes IN, so it is a well. Two mono numerals, a unit each, and
+     a ±15 stepper that only appears when the pointer is over it — the
+     row stays a readout until you reach for it.
+   * ------------------------------------------------------------------ */
+
+  function TimeField({ value, onChange, label, size = 'md', locked, tone }) {
+    const [hover, setHover] = React.useState(false);
+    const [focus, setFocus] = React.useState(false);
+    const h = Math.floor(value / 60), m = value % 60;
+    const big = size === 'lg';
+    const num = big ? 'var(--text-xl)' : size === 'sm' ? 'var(--text-sm)' : 'var(--text-md)';
+
+    const set = (nh, nm) => onChange(Math.max(0, Math.min(23, nh) * 60 + Math.min(59, nm)));
+    const bump = (d) => onChange(Math.max(0, Math.min(1439, value + d)));
+
+    const digits = (raw, cap) => {
+      const n = Number(String(raw).replace(/[^0-9]/g, '').slice(-2) || 0);
+      return Math.min(cap, n);
+    };
+
+    const cell = {
+      width: big ? 40 : 26, padding: 0, border: 0, outline: 'none', background: 'transparent',
+      textAlign: 'right', font: 'var(--type-numeric)', fontSize: num, fontVariantNumeric: 'tabular-nums',
+      color: locked ? 'var(--fg-2)' : tone === 'amber' ? 'oklch(0.95 0.07 82)' : 'var(--fg-1)',
+    };
+    const unit = { font: 'var(--type-kicker)', fontSize: 'var(--text-2xs)', color: 'var(--fg-4)', marginLeft: 1 };
+
+    if (locked) {
+      return (
+        <span
+          title="Rolled up from the subtasks"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: big ? 52 : 40,
+            padding: '0 var(--sp-5)', borderRadius: 'var(--r-pill)',
+            backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+          }}
+        >
+          <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="sigma" size={13} /></span>
+          <span style={{ font: 'var(--type-numeric)', fontSize: num, color: 'var(--fg-2)', fontVariantNumeric: 'tabular-nums' }}>{pad(h)}</span>
+          <span style={unit}>h</span>
+          <span style={{ font: 'var(--type-numeric)', fontSize: num, color: 'var(--fg-2)', fontVariantNumeric: 'tabular-nums', marginLeft: 6 }}>{pad(m)}</span>
+          <span style={unit}>m</span>
+        </span>
+      );
+    }
+
+    return (
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-2)',
+          height: big ? 52 : 40, padding: big ? '0 var(--sp-3) 0 var(--sp-6)' : '0 var(--sp-2) 0 var(--sp-5)',
+          borderRadius: 'var(--r-pill)',
+          backgroundImage: 'var(--glass-well)',
+          boxShadow: focus
+            ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+            : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+          transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+        }}
+      >
+        <input
+          className="ag-field"
+          value={pad(h)}
+          inputMode="numeric"
+          aria-label={label + ' \u2014 hours'}
+          onFocus={(e) => { setFocus(true); e.target.select(); }}
+          onBlur={() => setFocus(false)}
+          onChange={(e) => set(digits(e.target.value, 23), m)}
+          onKeyDown={(e) => { if (e.key === 'ArrowUp') { e.preventDefault(); bump(60); } if (e.key === 'ArrowDown') { e.preventDefault(); bump(-60); } }}
+          style={cell}
+        />
+        <span style={unit}>h</span>
+        <input
+          className="ag-field"
+          value={pad(m)}
+          inputMode="numeric"
+          aria-label={label + ' \u2014 minutes'}
+          onFocus={(e) => { setFocus(true); e.target.select(); }}
+          onBlur={() => setFocus(false)}
+          onChange={(e) => set(h, digits(e.target.value, 59))}
+          onKeyDown={(e) => { if (e.key === 'ArrowUp') { e.preventDefault(); bump(5); } if (e.key === 'ArrowDown') { e.preventDefault(); bump(-5); } }}
+          style={Object.assign({}, cell, { marginLeft: 6 })}
+        />
+        <span style={unit}>m</span>
+
+        <span style={{
+          display: 'grid', gap: 1, marginLeft: 'var(--sp-3)',
+          opacity: hover || focus ? 1 : 0,
+          pointerEvents: hover || focus ? 'auto' : 'none',
+          transition: 'opacity var(--dur-fast) var(--ease-glass)',
+        }}>
+          <Nudge label={'Add 15 minutes to ' + label} onClick={() => bump(15)} icon="chevron-up" big={big} />
+          <Nudge label={'Take 15 minutes off ' + label} onClick={() => bump(-15)} icon="chevron-down" big={big} />
+        </span>
+      </div>
+    );
+  }
+
+  function Nudge({ label, onClick, icon, big }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'grid', placeItems: 'center', width: big ? 26 : 22, height: big ? 22 : 18,
+          padding: 0, border: 0, cursor: 'pointer', borderRadius: 'var(--r-2xs)',
+          backgroundImage: hover ? 'var(--glass-fill-3)' : 'var(--glass-fill-1)',
+          boxShadow: hover ? 'var(--glass-rim-2)' : 'none',
+          color: hover ? 'var(--fg-1)' : 'var(--fg-3)',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        <Icon name={icon} size={12} />
+      </button>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE TASK CARD
+   * ------------------------------------------------------------------ */
+
+  function TaskCard({ t, n, total, open, onToggle, onAlloc, onSubAlloc, onAddSub, onDropSub, onPert, onMove, startAt }) {
+    const [hover, setHover] = React.useState(false);
+    const [draft, setDraft] = React.useState('');
+    const [composing, setComposing] = React.useState(false);
+    const composeRef = React.useRef(null);
+    React.useEffect(() => { if (composing && composeRef.current) composeRef.current.focus(); }, [composing]);
+
+    const rolled = t.subs.length > 0;
+    const dur = taskTotal(t);
+    const due = dueText(t.due);
+
+    const commit = () => {
+      if (!draft.trim()) { setComposing(false); return; }
+      onAddSub(draft.trim());
+      setDraft('');
+    };
+
+    return (
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-5)',
+          padding: 'var(--sp-6)', borderRadius: 'var(--r-lg)',
+          backgroundImage: hover || open ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          backdropFilter: 'var(--glass-bd-sm)', WebkitBackdropFilter: 'var(--glass-bd-sm)',
+          boxShadow: hover || open ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-rim-1)',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
+          {/* Position in the run order, and where it lands on the clock. */}
+          <div style={{ display: 'grid', gap: 2, justifyItems: 'center', width: 46, flex: '0 0 auto' }}>
+            <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)', fontVariantNumeric: 'tabular-nums' }}>
+              {pad(n + 1)}
+            </span>
+            <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>
+              {clock(startAt)}
+            </span>
+          </div>
+
+          <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line-faint)', flex: '0 0 auto' }} />
+
+          <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 'var(--sp-2)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+              <span style={{
+                font: 'var(--type-title)', fontSize: 'var(--text-md)', color: 'var(--fg-1)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0,
+              }}>
+                {t.title}
+              </span>
+              <ScoreDial value={t.score} size="sm" />
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+              <Kicker tone="var(--fg-4)">{t.list}</Kicker>
+              {due && <Kicker icon="calendar-clock" tone={due.hot ? 'var(--hue-amber)' : 'var(--fg-4)'}>{due.text}</Kicker>}
+              {t.after && <Kicker icon="lock" tone="var(--fg-4)">After {t.after}</Kicker>}
+              {t.pert && <Kicker icon="calculator" tone="var(--hue-cyan)">{'PERT \u00b1' + t.pert.sd + 'm'}</Kicker>}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto' }}>
+            <span style={{
+              display: 'flex', gap: 'var(--sp-2)',
+              opacity: hover ? 1 : 0, pointerEvents: hover ? 'auto' : 'none',
+              transform: hover ? 'translateX(0)' : 'translateX(6px)',
+              transition: 'opacity var(--dur-fast) var(--ease-glass), transform var(--dur-base) var(--ease-glass)',
+            }}>
+              <IconButton label="Run earlier" size="sm" variant="ghost" disabled={n === 0} onClick={() => onMove(-1)}><Icon name="arrow-up" size={16} /></IconButton>
+              <IconButton label="Run later" size="sm" variant="ghost" disabled={n === total - 1} onClick={() => onMove(1)}><Icon name="arrow-down" size={16} /></IconButton>
+            </span>
+
+            <IconButton label={'Estimate ' + t.title + ' with PERT'} size="sm" variant={t.pert ? 'tint' : 'ghost'} tone="cyan" onClick={onPert}>
+              <Icon name="calculator" size={16} />
+            </IconButton>
+
+            <IconButton
+              label={(open ? 'Hide' : 'Show') + ' subtasks of ' + t.title}
+              size="sm"
+              variant="ghost"
+              active={open}
+              onClick={onToggle}
+            >
+              <Icon name="list-tree" size={16} />
+            </IconButton>
+            {t.subs.length > 0 && (
+              <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--fg-4)', width: 10, marginLeft: -6 }}>
+                {t.subs.length}
+              </span>
+            )}
+
+            <TimeField value={dur} onChange={onAlloc} label={t.title} locked={rolled} />
+          </div>
+        </div>
+
+        {/* Subtasks resolve inside the card that owns them — a drawer
+            here would cover the task it describes. */}
+        {open && (
+          <div style={{
+            display: 'grid', gap: 'var(--sp-3)', padding: 'var(--sp-5)',
+            borderRadius: 'var(--r-md)', backgroundImage: 'var(--glass-well)',
+            boxShadow: 'var(--glass-well-shadow)',
+            animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+              <Kicker icon="list-tree">Breakdown</Kicker>
+              <span style={{ flex: 1 }} />
+              {rolled && (
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+                  The parent is the sum. Type on the leaves.
+                </span>
+              )}
+            </div>
+
+            {t.subs.map((s) => (
+              <React.Fragment key={s.id}>
+                <SubRow
+                  title={s.title}
+                  depth={0}
+                  value={subTotal(s)}
+                  locked={s.kids.length > 0}
+                  onChange={(v) => onSubAlloc(s.id, v)}
+                  onDrop={() => onDropSub(s.id)}
+                />
+                {s.kids.map((k) => (
+                  <SubRow
+                    key={k.id}
+                    title={k.title}
+                    depth={1}
+                    value={k.alloc}
+                    onChange={(v) => onSubAlloc(k.id, v)}
+                    onDrop={() => onDropSub(k.id)}
+                  />
+                ))}
+              </React.Fragment>
+            ))}
+
+            {t.subs.length === 0 && !composing && (
+              <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', padding: 'var(--sp-2) 0' }}>
+                No breakdown yet. Split it and the allocation adds itself up.
+              </span>
+            )}
+
+            {composing ? (
+              <div style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'center' }}>
+                <span style={{ display: 'flex', color: 'var(--fg-4)', paddingLeft: 2 }}><Icon name="corner-down-right" size={15} /></span>
+                <Well focus style={{ flex: 1, minWidth: 0 }} height={40}>
+                  <input
+                    ref={composeRef}
+                    className="ag-field"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                      if (e.key === 'Escape') { e.preventDefault(); setComposing(false); setDraft(''); }
+                    }}
+                    placeholder={'Step of ' + t.title + '\u2026'}
+                    aria-label="Subtask title"
+                    style={fieldStyle}
+                  />
+                  <Kicker tone="var(--fg-4)">Enter</Kicker>
+                </Well>
+                <Button size="sm" variant="ghost" onClick={() => { setComposing(false); setDraft(''); }}>Done</Button>
+              </div>
+            ) : (
+              <span>
+                <Button size="sm" variant="glass" iconLeft={<Icon name="plus" size={15} />} onClick={() => setComposing(true)}>
+                  Add step
+                </Button>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function SubRow({ title, depth, value, locked, onChange, onDrop }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+          marginLeft: depth * 26, minHeight: 44, padding: '0 var(--sp-4)',
+          borderRadius: 'var(--r-sm)',
+          backgroundImage: hover ? 'var(--glass-fill-1)' : 'none',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        <span style={{ display: 'flex', color: 'var(--fg-4)', flex: '0 0 auto' }}><Icon name="corner-down-right" size={14} /></span>
+        <span style={{
+          flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+          color: depth ? 'var(--fg-2)' : 'var(--fg-1)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {title}
+        </span>
+        <span style={{ opacity: hover ? 1 : 0, pointerEvents: hover ? 'auto' : 'none', transition: 'opacity var(--dur-fast) var(--ease-glass)' }}>
+          <IconButton label={'Remove ' + title} size="sm" variant="ghost" onClick={onDrop}><Icon name="x" size={15} /></IconButton>
+        </span>
+        <TimeField value={value} onChange={onChange} label={title} size="sm" locked={locked} />
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     PERT — a distribution, so it draws one.
+   * ------------------------------------------------------------------ */
+
+  function PertDialog({ task, onClose, onApply }) {
+    /* Defaults come off the current allocation, so the dialog always
+       opens valid and already drawing. */
+    const base = task ? Math.max(5, taskTotal(task)) : 30;
+    const round5 = (n) => Math.max(5, Math.round(n / 5) * 5);
+    const [o, setO] = React.useState(task && task.pert ? task.pert.o : round5(base * 0.6));
+    const [m, setM] = React.useState(task && task.pert ? task.pert.m : base);
+    const [p, setP] = React.useState(task && task.pert ? task.pert.p : round5(base * 1.8));
+
+    if (!task) return null;
+
+    const valid = o <= m && m <= p && p > 0;
+    const e = valid ? (o + 4 * m + p) / 6 : 0;
+    const sd = valid ? (p - o) / 6 : 0;
+    const safe = e + sd;
+
+    const lo = Math.min(o, m, p), hi = Math.max(o, m, p, 1);
+    const at = (v) => (hi === lo ? 50 : ((v - lo) / (hi - lo)) * 100);
+
+    /* A plain function, not a component — a nested component type would
+       remount the field on every keystroke and eat the caret. */
+    const row = (label, hint, value, set, tone) => (
+      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
+        <div style={{ display: 'grid', gap: 2, flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', font: 'var(--type-label)', color: 'var(--fg-1)' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: tone, flex: '0 0 auto' }} />
+            {label}
+          </span>
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>{hint}</span>
+        </div>
+        <TimeField value={value} onChange={set} label={label} size="sm" />
+      </div>
+    );
+
+    return (
+      <Dialog
+        open
+        onClose={onClose}
+        width={560}
+        title="PERT estimation"
+        description={task.title}
+        actions={
+          <React.Fragment>
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button
+              variant="frost"
+              disabled={!valid}
+              iconRight={<Icon name="check" size={16} />}
+              onClick={() => onApply({ alloc: Math.round(e), pert: { o, m, p, sd: Math.round(sd) } })}
+            >
+              {valid ? 'Allocate ' + mins(e) : 'Allocate'}
+            </Button>
+          </React.Fragment>
+        }
+      >
+        <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+          {row('Optimistic', 'Nothing gets in the way.', o, setO, 'var(--hue-cyan)')}
+          {row('Most likely', 'The honest guess.', m, setM, 'var(--fg-1)')}
+          {row('Pessimistic', 'Everything that can slip, slips.', p, setP, 'var(--hue-amber)')}
+        </div>
+
+        {/* The three inputs are a shape. Draw the shape. */}
+        <div style={{ display: 'grid', gap: 'var(--sp-4)', padding: 'var(--sp-6)', borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)' }}>
+          {valid ? (
+            <React.Fragment>
+              <div style={{ position: 'relative', height: 56 }}>
+                <span style={{
+                  position: 'absolute', left: at(o) + '%', right: (100 - at(p)) + '%', bottom: 12, height: 6,
+                  borderRadius: 'var(--r-pill)',
+                  background: 'linear-gradient(90deg, oklch(0.70 0.15 210 / 0.45), oklch(0.75 0.15 82 / 0.45))',
+                }} />
+                {[
+                  { v: o, c: 'var(--hue-cyan)', h: 18 },
+                  { v: m, c: 'var(--fg-1)', h: 34 },
+                  { v: p, c: 'var(--hue-amber)', h: 18 },
+                ].map((k, i) => (
+                  <span key={i} style={{
+                    position: 'absolute', left: at(k.v) + '%', bottom: 12, width: 2, height: k.h,
+                    marginLeft: -1, borderRadius: 1, background: k.c, opacity: 0.8,
+                  }} />
+                ))}
+                <span style={{
+                  position: 'absolute', left: at(e) + '%', bottom: 6, width: 2, height: 46, marginLeft: -1,
+                  borderRadius: 1, background: 'var(--accent)', boxShadow: '0 0 12px 0 var(--accent)',
+                  transition: 'left var(--dur-base) var(--ease-glass)',
+                }} />
+                <span style={{
+                  position: 'absolute', left: at(e) + '%', bottom: 52, transform: 'translateX(-50%)',
+                  font: 'var(--type-kicker)', color: 'var(--accent)', whiteSpace: 'nowrap',
+                }}>
+                  E
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'grid', gap: 2 }}>
+                  <Kicker>Expected</Kicker>
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-3xl)', color: 'var(--fg-1)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                    {mins(e)}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gap: 2 }}>
+                  <Kicker>Deviation</Kicker>
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-lg)', color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>
+                    {'\u00b1' + mins(sd)}
+                  </span>
+                </div>
+                <span style={{ flex: 1 }} />
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty', maxWidth: '26ch' }}>
+                  Roughly five in six sessions finish inside {mins(safe)}.
+                </span>
+              </div>
+            </React.Fragment>
+          ) : (
+            <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'oklch(0.95 0.07 82)' }}>
+              Optimistic must be the shortest and pessimistic the longest.
+            </span>
+          )}
+        </div>
+      </Dialog>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     CAPTURE — unfurls out of its own pill, bottom right. A thought
+     arriving mid-plan must not take the screen away from the plan.
+   * ------------------------------------------------------------------ */
+
+  function Capture({ onSave }) {
+    const [open, setOpen] = React.useState(false);
+    const [text, setText] = React.useState('');
+    const [list, setList] = React.useState('\u26a1 Action Steps');
+    const [hover, setHover] = React.useState(false);
+    const ref = React.useRef(null);
+
+    React.useEffect(() => { if (open && ref.current) ref.current.focus(); }, [open]);
+
+    const commit = () => {
+      if (!text.trim()) { setOpen(false); return; }
+      onSave(text.trim(), list);
+      setText('');
+      setOpen(false);
+    };
+
+    return (
+      <div style={{ position: 'fixed', right: 'var(--sp-8)', bottom: 'var(--sp-8)', zIndex: 70 }}>
+        {open ? (
+          <div style={{
+            width: 380, display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-7)',
+            borderRadius: 'var(--r-xl)',
+            backgroundImage: 'var(--glass-fill-3)',
+            backdropFilter: 'var(--glass-bd-xl)', WebkitBackdropFilter: 'var(--glass-bd-xl)',
+            boxShadow: 'var(--glass-shadow-thick), var(--shadow-4)',
+            animation: 'ag-unfurl var(--dur-morph) var(--ease-morph) both',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+              <Kicker icon="inbox">Capture</Kicker>
+              <span style={{ flex: 1 }} />
+              <IconButton label="Close capture" size="sm" variant="ghost" onClick={() => setOpen(false)}><Icon name="x" size={16} /></IconButton>
+            </div>
+
+            <Well focus pad="var(--sp-4) var(--sp-5)" height={0} radius="var(--r-lg)">
+              <textarea
+                ref={ref}
+                className="ag-field"
+                rows={2}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+                  if (e.key === 'Escape') { e.preventDefault(); setOpen(false); }
+                }}
+                placeholder="It lands in the list, not in this session."
+                aria-label="Capture a task"
+                style={Object.assign({}, fieldStyle, { resize: 'none', width: '100%', lineHeight: 'var(--leading-normal)' })}
+              />
+            </Well>
+
+            <div className="ag-scroll" style={{ display: 'flex', gap: 'var(--sp-3)', overflowX: 'auto', paddingBottom: 2 }}>
+              {LISTS.map((l) => (
+                <Chip key={l} active={list === l} onClick={() => setList(l)}>{l}</Chip>
+              ))}
+            </div>
+
+            <Button variant="frost" block onClick={commit} iconRight={<Icon name="corner-down-left" size={16} />}>Save task</Button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-label="Capture a task"
+            onClick={() => setOpen(true)}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            style={{
+              display: 'grid', placeItems: 'center', width: 60, height: 60, padding: 0, border: 0,
+              cursor: 'pointer', borderRadius: 'var(--r-pill)',
+              backgroundImage: 'var(--glass-fill-3)',
+              backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+              boxShadow: hover
+                ? 'var(--glass-rim-2), var(--shadow-4), var(--glow-white-sm)'
+                : 'var(--glass-rim-2), var(--shadow-3)',
+              color: 'var(--fg-1)',
+              transform: hover ? 'scale(1.04)' : 'scale(1)',
+              transition: 'var(--t-hover)',
+            }}
+          >
+            <Icon name="plus" size={24} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE SCREEN
+   * ------------------------------------------------------------------ */
+
+  function Deadlines() {
+    const [tasks, setTasks] = React.useState(START_TASKS);
+    const [openId, setOpenId] = React.useState(null);
+    const [pertId, setPertId] = React.useState(null);
+    const [start, setStart] = React.useState('09:00');
+    const [window_, setWindow] = React.useState(240);
+    const [toast, setToast] = React.useState(null);
+    const [wide, setWide] = React.useState(window.innerWidth >= 1180);
+
+    React.useEffect(() => {
+      const onResize = () => setWide(window.innerWidth >= 1180);
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    const say = (title, detail) => {
+      setToast({ title, detail });
+      window.setTimeout(() => setToast(null), 2600);
+    };
+
+    const allocated = tasks.reduce((n, t) => n + taskTotal(t), 0);
+    const over = allocated > window_;
+    const startMin = parseClock(start);
+    const ends = startMin + allocated;
+    const unplanned = window_ - allocated;
+
+    const patch = (id, fn) => setTasks((cur) => cur.map((t) => (t.id === id ? fn(t) : t)));
+
+    /* The commit pill's own controls. Armed sits between "nothing
+       allocated" and "running", which is exactly where an even split or
+       a deliberate skip belongs. */
+    const [armed, setArmed] = React.useState(false);
+
+    const setAlloc = (id, v) => patch(id, (t) => Object.assign({}, t, { alloc: v, pert: null }));
+
+    const setSubAlloc = (id, nodeId, v) => patch(id, (t) => Object.assign({}, t, {
+      subs: t.subs.map((s) => (s.id === nodeId
+        ? Object.assign({}, s, { alloc: v })
+        : Object.assign({}, s, { kids: s.kids.map((k) => (k.id === nodeId ? Object.assign({}, k, { alloc: v }) : k)) }))),
+    }));
+
+    const addSub = (id, title) => patch(id, (t) => Object.assign({}, t, {
+      subs: t.subs.concat({ id: 's' + Date.now(), title, alloc: 15, kids: [] }),
+    }));
+
+    const dropSub = (id, nodeId) => patch(id, (t) => Object.assign({}, t, {
+      subs: t.subs.filter((s) => s.id !== nodeId).map((s) => Object.assign({}, s, { kids: s.kids.filter((k) => k.id !== nodeId) })),
+    }));
+
+    const move = (id, d) => setTasks((cur) => {
+      const i = cur.findIndex((t) => t.id === id), j = i + d;
+      if (i < 0 || j < 0 || j >= cur.length) return cur;
+      const next = cur.slice(); next[i] = cur[j]; next[j] = cur[i]; return next;
+    });
+
+    /* Squeeze every allocation proportionally until the plan fits the
+       window. Cheaper than asking the user to do the arithmetic, and
+       honest about what it did. */
+    const fit = () => {
+      if (!over || !allocated) return;
+      const k = window_ / allocated;
+      setTasks((cur) => cur.map((t) => (t.subs.length
+        ? Object.assign({}, t, {
+          subs: t.subs.map((s) => (s.kids.length
+            ? Object.assign({}, s, { kids: s.kids.map((x) => Object.assign({}, x, { alloc: Math.max(5, Math.round(x.alloc * k / 5) * 5) })) })
+            : Object.assign({}, s, { alloc: Math.max(5, Math.round(s.alloc * k / 5) * 5) }))),
+        })
+        : Object.assign({}, t, { alloc: Math.max(5, Math.round(t.alloc * k / 5) * 5), pert: null }))));
+      say('Trimmed to fit.', 'Every allocation scaled by ' + Math.round(k * 100) + '%.');
+    };
+
+    const pertTask = tasks.find((t) => t.id === pertId) || null;
+
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+    const go = (v) => { const hit = NAV.find((n) => n.value === v); if (hit && hit.href) location.href = hit.href; };
+
+    const paneStyle = {
+      display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-6)', alignContent: 'start', minWidth: 0,
+      padding: 'var(--pad-card-lg)', borderRadius: 'var(--r-card-lg)',
+      backgroundImage: 'var(--glass-fill-2)',
+      backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+      boxShadow: 'var(--glass-shadow-pane)',
+    };
+
+    /* Run order → clock. Computed once, read by both panes. */
+    let cursor = startMin;
+    const blocks = tasks.map((t) => {
+      const dur = taskTotal(t);
+      const b = { id: t.id, title: t.title, at: cursor, dur: dur, list: t.list };
+      cursor += dur;
+      return b;
+    });
+
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'flex-start' }}>
+        <GlassFilters />
+
+        <div style={{ position: 'sticky', top: 'var(--sp-9)', flex: '0 0 auto', padding: wide ? 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' : 'var(--sp-6) 0 var(--sp-6) var(--sp-5)', zIndex: 40 }}>
+          <MiniNav orientation="vertical" items={navItems} value="session" onChange={go} />
+        </div>
+
+        <div style={{
+          flex: 1, minWidth: 0, display: 'grid', gap: 'var(--sp-8)',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-13)' : 'var(--sp-8) var(--gutter-page-sm) var(--sp-13)',
+        }}>
+          <header style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-6)', flexWrap: 'wrap',
+            padding: 'var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4)', borderRadius: 'var(--r-pill)',
+            backgroundImage: 'var(--glass-fill-2)',
+            backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+            boxShadow: 'var(--glass-shadow-pane)',
+          }}>
+            <a href="session.html" style={{ display: 'flex', border: 0 }} aria-label="Back to the queue">
+              <IconButton label="Back to the queue" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+            </a>
+            <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+              <span style={{ font: 'var(--type-system)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-system)', color: 'var(--fg-1)', whiteSpace: 'nowrap' }}>
+                Deadlines
+              </span>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Allocate the queue. The clock does the rest.</span>
+            </div>
+            <span style={{ flex: 1, minWidth: 'var(--sp-8)' }} />
+            <Stepper current={1} steps={[{ label: 'Select' }, { label: 'Deadlines' }, { label: 'Focus' }]} style={{ margin: 0 }} />
+          </header>
+
+          <div style={{
+            display: 'grid', gap: 'var(--gap-card)', alignItems: 'start',
+            gridTemplateColumns: wide ? 'minmax(0, 1.55fr) minmax(0, 1fr)' : '1fr',
+          }}>
+            {/* ============ ALLOCATION ============ */}
+            <div style={paneStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                  Allocation
+                </h2>
+                <Chip>{tasks.length} committed</Chip>
+                <span style={{ flex: 1 }} />
+                {over && (
+                  <Button size="sm" variant="glass" iconLeft={<Icon name="scaling" size={15} />} onClick={fit}>
+                    Trim to fit
+                  </Button>
+                )}
+              </div>
+
+              {/* The budget line. Minutes only mean something against a window. */}
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+                  <Kicker icon="timer" tone={over ? 'var(--hue-amber)' : 'var(--fg-3)'}>Allocated</Kicker>
+                  <span style={{
+                    font: 'var(--type-numeric)', fontSize: 'var(--text-lg)', fontVariantNumeric: 'tabular-nums',
+                    color: over ? 'var(--hue-amber)' : 'var(--fg-1)',
+                  }}>
+                    {mins(allocated)}
+                  </span>
+                  <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)' }}>of a {mins(window_)} window</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ font: 'var(--type-caption)', color: over ? 'oklch(0.95 0.07 82)' : 'var(--fg-4)' }}>
+                    {over ? mins(allocated - window_) + ' past the window' : mins(unplanned) + ' unplanned'}
+                  </span>
+                </div>
+                <div style={{ height: 8, padding: 2, borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden' }}>
+                  <span style={{
+                    display: 'block', height: '100%', borderRadius: 'var(--r-pill)',
+                    width: Math.min(100, (allocated / Math.max(1, window_)) * 100) + '%',
+                    background: over
+                      ? 'linear-gradient(90deg, oklch(0.75 0.15 82 / 0.6), var(--hue-amber))'
+                      : 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.55), var(--accent))',
+                    boxShadow: over ? '0 0 14px -2px var(--hue-amber)' : '0 0 14px -2px var(--accent)',
+                    transition: 'width var(--dur-slow) var(--ease-glass), background var(--dur-base) var(--ease-glass)',
+                  }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-3)' }}>
+                {tasks.map((t, n) => (
+                  <TaskCard
+                    key={t.id}
+                    t={t}
+                    n={n}
+                    total={tasks.length}
+                    startAt={blocks[n].at}
+                    open={openId === t.id}
+                    onToggle={() => setOpenId(openId === t.id ? null : t.id)}
+                    onAlloc={(v) => setAlloc(t.id, v)}
+                    onSubAlloc={(nodeId, v) => setSubAlloc(t.id, nodeId, v)}
+                    onAddSub={(title) => addSub(t.id, title)}
+                    onDropSub={(nodeId) => dropSub(t.id, nodeId)}
+                    onMove={(d) => move(t.id, d)}
+                    onPert={() => setPertId(t.id)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* ============ THE CLOCK ============ */}
+            <div style={paneStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                  The run
+                </h2>
+                <span style={{ flex: 1 }} />
+                <Kicker icon="play">Starts</Kicker>
+                <Well height={38} pad="0 var(--sp-4)" style={{ flex: '0 0 auto' }}>
+                  <input
+                    className="ag-field"
+                    type="time"
+                    value={start}
+                    onChange={(e) => setStart(e.target.value || '09:00')}
+                    aria-label="Session start time"
+                    style={Object.assign({}, fieldStyle, { font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', width: 76, flex: '0 0 auto' })}
+                  />
+                </Well>
+              </div>
+
+              {/* The screen's loudest number: when this ends. */}
+              <div style={{
+                display: 'grid', gap: 'var(--sp-3)', padding: 'var(--sp-7)', borderRadius: 'var(--r-lg)',
+                backgroundImage: over ? 'var(--glass-tint-amber)' : 'var(--glass-tint-accent)',
+                boxShadow: over ? 'var(--glass-rim-2), var(--glow-amber-md)' : 'var(--glass-rim-2), var(--glow-accent-sm)',
+                transition: 'background-image var(--dur-base) var(--ease-glass)',
+              }}>
+                <Kicker icon="flag-triangle-right" tone={over ? 'oklch(0.95 0.07 82)' : 'var(--accent)'}>Session ends</Kicker>
+                <span style={{
+                  font: 'var(--type-numeric)', fontSize: 'var(--text-5xl)', lineHeight: 1,
+                  color: 'var(--fg-1)', fontVariantNumeric: 'tabular-nums',
+                  textShadow: over ? 'none' : '0 0 34px oklch(0.70 0.15 162 / 0.45)',
+                }}>
+                  {clock(ends)}
+                </span>
+                <span style={{ font: 'var(--type-caption)', color: over ? 'oklch(0.95 0.07 82)' : 'var(--fg-2)' }}>
+                  {over
+                    ? mins(allocated - window_) + ' past the window you set.'
+                    : mins(unplanned) + ' of the window still unplanned.'}
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                {blocks.map((b, i) => (
+                  <div key={b.id} style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'stretch' }}>
+                    <span style={{
+                      font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: i === 0 ? 'var(--fg-2)' : 'var(--fg-4)',
+                      fontVariantNumeric: 'tabular-nums', width: 42, flex: '0 0 auto', paddingTop: 12,
+                    }}>
+                      {clock(b.at)}
+                    </span>
+                    <div style={{
+                      flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+                      height: Math.max(38, Math.min(120, b.dur * 0.5)),
+                      padding: '0 var(--sp-5)', borderRadius: 'var(--r-sm)',
+                      backgroundImage: i === 0 ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+                      boxShadow: i === 0 ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+                      transition: 'height var(--dur-slow) var(--ease-glass)',
+                    }}>
+                      <span style={{
+                        flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+                        color: i === 0 ? 'var(--fg-1)' : 'var(--fg-2)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {b.title}
+                      </span>
+                      <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>
+                        {mins(b.dur)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+
+                {!over && unplanned > 0 && (
+                  <div style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'stretch' }}>
+                    <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)', fontVariantNumeric: 'tabular-nums', width: 42, flex: '0 0 auto', paddingTop: 12 }}>
+                      {clock(ends)}
+                    </span>
+                    <div style={{
+                      flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+                      minHeight: 38, padding: '0 var(--sp-5)', borderRadius: 'var(--r-sm)',
+                      border: '1px dashed var(--line-soft)',
+                    }}>
+                      <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-4)', flex: 1 }}>Unplanned</span>
+                      <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)', fontVariantNumeric: 'tabular-nums' }}>
+                        {mins(unplanned)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ---- Commit bar. The window is a field, not a label. ---- */}
+          <div style={{
+            position: 'sticky', bottom: 'var(--sp-6)', zIndex: 30,
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
+            padding: 'var(--sp-4) var(--sp-5)', borderRadius: 'var(--r-pill)',
+            backgroundImage: 'var(--glass-fill-2)',
+            backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+            boxShadow: 'var(--glass-shadow-thick)',
+          }}>
+            <Kicker icon="hourglass" style={{ paddingLeft: 'var(--sp-4)' }}>Work session</Kicker>
+            <TimeField value={window_} onChange={setWindow} label="Work session" size="lg" tone={over ? 'amber' : null} />
+            <span style={{ font: 'var(--type-label)', color: over ? 'oklch(0.95 0.07 82)' : 'var(--fg-3)', minWidth: 0 }}>
+              {over
+                ? mins(allocated - window_) + ' more work than window'
+                : allocated === 0 ? 'Nothing allocated yet' : mins(allocated) + ' allocated \u00b7 ends ' + clock(ends)}
+            </span>
+            <span style={{ flex: 1 }} />
+            <MorphCluster
+              open={armed}
+              onOpenChange={setArmed}
+              align="end"
+              tone="accent"
+              label="Start controls"
+              trigger={
+                <Button variant="frost" disabled={allocated === 0} iconRight={<Icon name="arrow-right" size={16} />}>
+                  Start protocol
+                </Button>
+              }
+            >
+              <IconButton
+                label={'Split ' + mins(window_) + ' evenly across ' + tasks.length + ' tasks'}
+                variant="glass"
+                onClick={() => {
+                  const each = Math.max(5, Math.round(window_ / Math.max(1, tasks.length) / 5) * 5);
+                  tasks.forEach((t) => setAlloc(t.id, each));
+                  say('Split evenly.', tasks.length + ' tasks \u00b7 ' + mins(each) + ' each');
+                }}
+              >
+                <Icon name="sliders-horizontal" size={18} />
+              </IconButton>
+              <Button
+                variant="glass"
+                onClick={() => { setArmed(false); say('Left unallocated.', 'Allocate before the session starts.'); }}
+              >
+                Skip
+              </Button>
+              <Button
+                variant="solid"
+                iconRight={<Icon name="play" size={16} />}
+                onClick={() => {
+                  setArmed(false);
+                  say('Protocol armed.', tasks.length + ' tasks \u00b7 ' + mins(allocated) + ' \u00b7 ends ' + clock(ends));
+                }}
+              >
+                Commit
+              </Button>
+            </MorphCluster>
+          </div>
+        </div>
+
+        <PertDialog
+          key={pertId || 'none'}
+          task={pertTask}
+          onClose={() => setPertId(null)}
+          onApply={(next) => {
+            patch(pertId, (t) => Object.assign({}, t, { alloc: next.alloc, pert: next.pert }));
+            say('Estimate applied.', mins(next.alloc) + ' \u00b1' + next.pert.sd + 'm');
+            setPertId(null);
+          }}
+        />
+
+        <Capture onSave={(title, list) => say('Captured.', title + ' \u2192 ' + list)} />
+
+        {toast && (
+          <div style={{ position: 'fixed', bottom: 'var(--sp-8)', left: '50%', transform: 'translateX(-50%)', zIndex: 90 }}>
+            <Toast icon={<Icon name="check" size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Deadlines />);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>BASE — Task row states</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; min-height: 100%; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-lift); }
+</style>
+</helmet>
+<div class="ag-page" data-screen-label="Task row states" style="min-height:100vh;padding:var(--sp-13) var(--gutter-page) var(--sp-14);box-sizing:border-box">
+  <div style="max-width:960px;margin:0 auto;display:grid;gap:var(--gap-section)">
+
+    <header style="display:grid;gap:var(--sp-4)">
+      <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-3)">TaskRow · state specimen</span>
+      <h1 style="margin:0;font:var(--type-display);font-size:var(--text-2xl);letter-spacing:var(--tracking-title);color:var(--fg-1)">Task row states</h1>
+      <p style="margin:0;font:var(--type-body);color:var(--fg-3);text-wrap:pretty">Five states, one row. Fill never carries state.</p>
+    </header>
+
+    <section style="display:grid;gap:var(--sp-5)">
+      <div style="display:grid;grid-template-columns:minmax(140px,200px) minmax(0,1fr);gap:var(--sp-5) var(--sp-8);align-items:center">
+
+        <div style="display:grid;gap:var(--sp-2)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">01 Default</span>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Hairline glass. Hover or tap it.</span></sc-if>
+        </div>
+        <div role="button" tabindex="0" onClick="{{ toggleLive }}" style="display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-md);background-image:var(--glass-fill-1);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:{{ liveShadow }};cursor:pointer;transition:var(--t-hover)" style-hover="background-image:var(--glass-fill-2);transform:translateX(2px)">
+          <span style="flex:0 0 auto;width:24px;height:24px;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), 0 0 0 1px var(--line-soft)"></span>
+          <div style="flex:1;min-width:0;display:grid;gap:2px">
+            <span style="font:var(--type-body);color:var(--fg-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Draft Q3 allocation review</span>
+            <span style="font:var(--type-caption);color:var(--fg-3)">⚡ Action Steps · 3 subtasks</span>
+          </div>
+          <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3);font-variant-numeric:tabular-nums">45 min</span>
+        </div>
+
+        <div style="display:grid;gap:var(--sp-2)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">02 Hovered</span>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Fill brightens one step, cast lifts, actions arrive.</span></sc-if>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-md);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:var(--glass-rim-2), var(--glass-cast-2);transform:translateX(2px)">
+          <span style="flex:0 0 auto;width:24px;height:24px;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), 0 0 0 1px var(--line-strong)"></span>
+          <div style="flex:1;min-width:0;display:grid;gap:2px">
+            <span style="font:var(--type-body);color:var(--fg-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Draft Q3 allocation review</span>
+            <span style="font:var(--type-caption);color:var(--fg-3)">⚡ Action Steps · 3 subtasks</span>
+          </div>
+          <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3);font-variant-numeric:tabular-nums">45 min</span>
+          <div style="display:flex;gap:var(--sp-2);flex:0 0 auto">
+            <span aria-label="Start" style="width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r-pill);background-image:var(--glass-fill-2);box-shadow:var(--glass-rim-1);color:var(--fg-1)">{{ iconPlay }}</span>
+            <span aria-label="More" style="width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--fg-2)">{{ iconMore }}</span>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:var(--sp-2)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">03 Selected</span>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Emerald rim only. Fill stays neutral. No glow.</span></sc-if>
+        </div>
+        <div aria-selected="true" style="display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-md);background-image:var(--glass-fill-1);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:var(--glass-rim-2), inset 0 0 0 1px var(--accent-hairline), 0 0 0 1px oklch(0.70 0.15 162 / 0.10)">
+          <span style="flex:0 0 auto;width:24px;height:24px;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), 0 0 0 1px var(--line-soft)"></span>
+          <div style="flex:1;min-width:0;display:grid;gap:2px">
+            <span style="font:var(--type-body);color:var(--fg-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Draft Q3 allocation review</span>
+            <span style="font:var(--type-caption);color:var(--fg-3)">⚡ Action Steps · 3 subtasks</span>
+          </div>
+          <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3);font-variant-numeric:tabular-nums">45 min</span>
+        </div>
+
+        <div style="display:grid;gap:var(--sp-2)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">04 In progress</span>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">The dot moves and the clock counts. Surface is untouched.</span></sc-if>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-md);background-image:var(--glass-fill-1);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:var(--glass-rim-1)">
+          <span style="flex:0 0 auto;width:24px;height:24px;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), 0 0 0 1px var(--line-soft)"></span>
+          <div style="flex:1;min-width:0;display:grid;gap:2px">
+            <span style="font:var(--type-body);color:var(--fg-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Draft Q3 allocation review</span>
+            <span style="font:var(--type-caption);color:var(--fg-3)">⚡ Action Steps · 1 / 3 subtasks</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-4);flex:0 0 auto">
+            {{ liveDot }}
+            <span style="font:var(--type-numeric);font-size:var(--text-sm);font-variant-numeric:tabular-nums;display:flex;gap:6px"><span style="color:var(--fg-1)">{{ elapsed }}</span><span style="color:var(--fg-4)">/</span><span style="color:var(--fg-3)">45 min</span></span>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:var(--sp-2)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">05 Blocked</span>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">No rim light, no cast, no hover. Lock replaces the checkbox.</span></sc-if>
+        </div>
+        <div aria-disabled="true" style="display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-md);background-image:linear-gradient(155deg, oklch(1 0 0 / 0.028) 0%, oklch(1 0 0 / 0.008) 100%);box-shadow:inset 0 0 0 1px var(--line-faint);cursor:not-allowed;user-select:none">
+          <span style="flex:0 0 auto;width:24px;height:24px;display:grid;place-items:center;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);color:var(--fg-4)">{{ iconLock }}</span>
+          <div style="flex:1;min-width:0;display:grid;gap:2px">
+            <span style="font:var(--type-body);color:var(--fg-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Draft Q3 allocation review</span>
+            <span style="font:var(--type-caption);color:var(--fg-3)">Blocked by Confirm vendor quote</span>
+          </div>
+          <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-4);font-variant-numeric:tabular-nums">45 min</span>
+        </div>
+
+      </div>
+    </section>
+
+    <section style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 380px), 1fr));gap:var(--gap-card);align-items:start">
+
+      <div style="display:grid;gap:var(--sp-5)">
+        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">Status pills · task sheet header</span>
+        <div style="display:grid;gap:0;padding:var(--sp-3) var(--pad-sheet);border-radius:var(--r-card-lg);background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-shadow-thick)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;padding:var(--sp-6) 0;border-bottom:1px solid var(--line-faint)">
+            <span style="display:inline-flex;align-items:center;height:30px;padding:0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);font:var(--type-label);color:var(--fg-2)">⚡ Action Steps</span>
+            <span style="display:inline-flex;align-items:center;gap:var(--sp-3);height:30px;padding:0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-tint-cyan);box-shadow:var(--glass-rim-1);font:var(--type-kicker);font-size:var(--text-xs);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--status-queued);white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--status-queued);box-shadow:0 0 8px var(--status-queued)"></span>To do</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;padding:var(--sp-6) 0;border-bottom:1px solid var(--line-faint)">
+            <span style="display:inline-flex;align-items:center;height:30px;padding:0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);font:var(--type-label);color:var(--fg-2)">⚡ Action Steps</span>
+            <span style="display:inline-flex;align-items:center;gap:var(--sp-3);height:30px;padding:0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-tint-accent);box-shadow:var(--glass-rim-1);font:var(--type-kicker);font-size:var(--text-xs);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--status-running);white-space:nowrap">{{ rippleDot }}In progress</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;padding:var(--sp-6) 0">
+            <span style="display:inline-flex;align-items:center;height:30px;padding:0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);font:var(--type-label);color:var(--fg-2)">⚡ Action Steps</span>
+            <span style="display:inline-flex;align-items:center;gap:var(--sp-3);height:30px;padding:0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-tint-accent);box-shadow:var(--glass-rim-1);font:var(--type-kicker);font-size:var(--text-xs);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--status-done);white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--status-done);box-shadow:0 0 8px var(--status-done)"></span>Done</span>
+          </div>
+        </div>
+        <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">The pill ripples. The row orbits. Never both on one surface.</span></sc-if>
+      </div>
+
+      <div style="display:grid;gap:var(--sp-5)">
+        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">Completed row · repeat count</span>
+        <div style="display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-md);background-image:var(--glass-fill-1);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:var(--glass-rim-1)">
+          <span style="flex:0 0 auto;width:24px;height:24px;display:grid;place-items:center;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), inset 0 0 0 1px var(--accent-hairline);color:var(--accent)">{{ iconCheck }}</span>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--sp-3)">
+            <span style="font:var(--type-body);color:var(--fg-3);text-decoration:line-through;text-decoration-color:var(--fg-4);white-space:nowrap;flex:0 0 auto">Oil Hair</span>
+            <span style="flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border-radius:var(--r-pill);box-shadow:inset 0 0 0 1px var(--line-soft);font:var(--type-kicker);font-size:var(--text-2xs);color:var(--fg-3);font-variant-numeric:tabular-nums">{{ iconRepeat }}×14</span>
+          </div>
+          <span style="flex:0 0 auto;font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap">Done 2 days ago</span>
+        </div>
+        <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><div style="display:grid;gap:var(--sp-2)">
+          <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Strike on the title only. The count is a record, so it stays unstruck.</span>
+          <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Completion time takes the allocated-minutes slot. Check is emerald stroke, no fill.</span>
+        </div></sc-if>
+      </div>
+
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;liveDot&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;orbit&quot;,&quot;breathe&quot;],&quot;default&quot;:&quot;orbit&quot;,&quot;tsType&quot;:&quot;'orbit' | 'breathe'&quot;},&quot;showNotes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { t: 724, sel: false };
+  componentDidMount() { this.iv = setInterval(() => this.setState(s => ({ t: s.t + 1 })), 1000); }
+  componentWillUnmount() { clearInterval(this.iv); }
+  icon(size, kids) {
+    const h = React.createElement;
+    return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+      kids.map((k, i) => h(k[0], Object.assign({ key: i }, k[1]))));
+  }
+  dot() {
+    const h = React.createElement;
+    const A = 'var(--accent)';
+    const core = h('span', { key: 'c', style: { position: 'absolute', left: 5, top: 5, width: 6, height: 6, borderRadius: '50%', background: A, boxShadow: '0 0 8px ' + A, animation: 'ag-pulse 1.8s var(--ease-in-out) infinite' } });
+    if ((this.props.liveDot ?? 'orbit') === 'breathe') {
+      const halo = h('span', { key: 'h', style: { position: 'absolute', inset: 0, borderRadius: '50%', boxShadow: 'inset 0 0 0 1px var(--accent-hairline)', animation: 'ag-pulse 1.8s var(--ease-in-out) infinite reverse' } });
+      return h('span', { role: 'img', 'aria-label': 'Running', style: { position: 'relative', width: 16, height: 16, flex: '0 0 auto' } }, [halo, core]);
+    }
+    const track = h('span', { key: 't', style: { position: 'absolute', inset: 0, borderRadius: '50%', boxShadow: 'inset 0 0 0 1.5px oklch(0.70 0.15 162 / 0.14)' } });
+    const arc = h('span', { key: 'a', style: {
+      position: 'absolute', inset: 0, borderRadius: '50%',
+      background: 'conic-gradient(from 0deg, transparent 0 40%, oklch(0.70 0.15 162 / 0.0) 40%, ' + A + ' 100%)',
+      WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px))',
+      mask: 'radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px))',
+      animation: 'ag-spin 1.6s linear infinite' } });
+    return h('span', { role: 'img', 'aria-label': 'Running', style: { position: 'relative', width: 16, height: 16, flex: '0 0 auto' } }, [track, arc, core]);
+  }
+  renderVals() {
+    const h = React.createElement;
+    const t = this.state.t;
+    const mm = String(Math.floor(t / 60)).padStart(2, '0'), ss = String(t % 60).padStart(2, '0');
+    if (!this._static) {
+      this._static = {
+        iconPlay: this.icon(16, [['polygon', { points: '6 3 20 12 6 21 6 3' }]]),
+        iconMore: this.icon(16, [['circle', { cx: 12, cy: 12, r: 1 }], ['circle', { cx: 19, cy: 12, r: 1 }], ['circle', { cx: 5, cy: 12, r: 1 }]]),
+        iconLock: this.icon(14, [['rect', { width: 18, height: 11, x: 3, y: 11, rx: 2, ry: 2 }], ['path', { d: 'M7 11V7a5 5 0 0 1 10 0v4' }]]),
+        iconCheck: this.icon(14, [['path', { d: 'M20 6 9 17l-5-5', strokeWidth: 2 }]]),
+        iconRepeat: this.icon(11, [['path', { d: 'm17 2 4 4-4 4' }], ['path', { d: 'M3 11v-1a4 4 0 0 1 4-4h14' }], ['path', { d: 'm7 22-4-4 4-4' }], ['path', { d: 'M21 13v1a4 4 0 0 1-4 4H3' }]]),
+        rippleDot: h('span', { style: { position: 'relative', display: 'inline-flex', width: 6, height: 6, flex: '0 0 auto' } }, [
+          h('span', { key: 'a', style: { position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--status-running)', boxShadow: '0 0 8px var(--status-running)' } }),
+          h('span', { key: 'b', style: { position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--status-running)', animation: 'ag-ripple 1.8s var(--ease-in-out) infinite' } })
+        ])
+      };
+    }
+    if (this._dotMode !== (this.props.liveDot ?? 'orbit')) { this._dotMode = this.props.liveDot ?? 'orbit'; this._dot = this.dot(); }
+    return {
+      ...this._static,
+      liveDot: this._dot,
+      elapsed: mm + ':' + ss,
+      notes: this.props.showNotes ?? true,
+      liveShadow: this.state.sel
+        ? 'var(--glass-rim-2), inset 0 0 0 1px var(--accent-hairline), 0 0 0 1px oklch(0.70 0.15 162 / 0.10)'
+        : 'var(--glass-rim-1)',
+      toggleLive: () => this.setState(s => ({ sel: !s.sel }))
+    };
+  }
+}
+</script>
+</body>
+</html>

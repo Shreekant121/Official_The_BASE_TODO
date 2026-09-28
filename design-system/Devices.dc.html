@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+body{margin:0;background:oklch(0.085 0.004 260);-webkit-font-smoothing:antialiased}
+a{color:oklch(0.82 0.15 165)}a:hover{color:oklch(0.9 0.1 165)}
+@keyframes lg-float{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4%,-3%) scale(1.06)}}
+@keyframes lg-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+</style>
+</helmet>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="lg-refract" x="0" y="0" width="1" height="1" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB"><feImage ref="{{ mapRef }}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="m"></feImage><feDisplacementMap in="SourceGraphic" in2="m" scale="0.075" xChannelSelector="R" yChannelSelector="G" result="dr"></feDisplacementMap><feColorMatrix in="dr" type="matrix" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="r"></feColorMatrix><feDisplacementMap in="SourceGraphic" in2="m" scale="0.065" xChannelSelector="R" yChannelSelector="G" result="dg"></feDisplacementMap><feColorMatrix in="dg" type="matrix" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="g"></feColorMatrix><feDisplacementMap in="SourceGraphic" in2="m" scale="0.055" xChannelSelector="R" yChannelSelector="G" result="db"></feDisplacementMap><feColorMatrix in="db" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="b"></feColorMatrix><feBlend in="r" in2="g" mode="screen" result="rg"></feBlend><feBlend in="rg" in2="b" mode="screen"></feBlend></filter>
+</svg>
+<div style="min-height:100vh;padding:64px 56px 96px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',Inter,system-ui,sans-serif;font-feature-settings:'cv11','ss03';color:oklch(0.86 0.006 260)">
+<div style="display:grid;gap:10px;margin-bottom:48px;max-width:720px">
+  <div style="font-size:13px;font-weight:600;color:oklch(0.82 0.15 165)">Aurora Glass</div>
+  <h1 style="margin:0;font-size:48px;letter-spacing:-0.035em;font-weight:700;color:#fff;line-height:1.05">Home, on laptop and phone</h1>
+  <p style="margin:0;font-size:17px;line-height:1.45;color:oklch(0.66 0.008 260);text-wrap:pretty">Clear glass that bends what’s behind it. Emerald for what’s live.</p>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<div style="display:grid;gap:14px">
+<div style="font-size:13px;font-weight:500;color:oklch(0.6 0.008 260)">Laptop · 1280 × 800</div>
+<div data-screen-label="Laptop home" style="width:1280px;height:800px;border-radius:28px;padding:10px;background:linear-gradient(160deg,oklch(0.30 0.004 260),oklch(0.14 0.004 260));box-shadow:0 0 0 1px oklch(1 0 0 / 0.08),0 60px 120px -30px oklch(0 0 0 / 0.9)">
+<div style="position:relative;width:100%;height:100%;border-radius:20px;overflow:hidden;background:oklch(0.10 0.01 200);display:grid;grid-template-columns:96px 1fr;isolation:isolate">
+  <div style="position:absolute;inset:0;z-index:-1;overflow:hidden">
+    <div style="position:absolute;width:900px;height:900px;left:-240px;top:-420px;border-radius:50%;background:oklch(0.42 0.12 170);filter:blur(120px);opacity:.55;animation:lg-float 26s ease-in-out infinite"></div>
+    <div style="position:absolute;width:760px;height:760px;right:-260px;bottom:-360px;border-radius:50%;background:oklch(0.48 0.10 200);filter:blur(130px);opacity:.45;animation:lg-float 32s ease-in-out infinite reverse"></div>
+    <div style="position:absolute;width:1500px;height:180px;left:-100px;top:470px;border-radius:200px;transform:rotate(-14deg);background:linear-gradient(90deg,transparent,oklch(0.72 0.14 168 / 0.55),oklch(0.85 0.1 175 / 0.7),oklch(0.62 0.12 190 / 0.4),transparent);filter:blur(28px)"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(oklch(1 0 0 / 0.05) 1px,transparent 1px),linear-gradient(90deg,oklch(1 0 0 / 0.05) 1px,transparent 1px);background-size:64px 64px"></div>
+  </div>
+
+  <nav style="position:relative;margin:18px 0 18px 18px;border-radius:40px;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:8px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.09),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.05));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(10px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.28),inset 0 0 24px oklch(1 0 0 / 0.05),0 20px 50px -14px oklch(0 0 0 / 0.6)">
+    <img src="assets/mark-white.png" alt="" style="width:26px;height:26px;object-fit:contain;margin:6px 0 12px;filter:drop-shadow(0 2px 6px oklch(0 0 0 / 0.5))"></img>
+    <sc-for list="{{ railItems }}" as="r" hint-placeholder-count="6">
+      <button onClick="{{ r.go }}" aria-label="{{ r.label }}" style="position:relative;width:52px;height:52px;border:0;padding:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;background:transparent;color:#fff">
+        <span style="{{ r.glow }}"></span>
+        <span style="{{ r.plate }}"></span>
+        <i class="ph-fill {{ r.icon }}" style="{{ r.glyph }}"></i>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(145deg,oklch(0.8 0.1 170),oklch(0.5 0.12 175));display:grid;place-items:center;color:#fff;font-weight:600;font-size:15px;box-shadow:inset 1px 1px 1px oklch(1 0 0 / 0.5),0 6px 16px -6px oklch(0 0 0 / 0.6)">S</div>
+  </nav>
+
+  <main style="padding:26px 28px 24px 22px;display:grid;grid-template-rows:auto 1fr;gap:20px;min-width:0">
+    <header style="display:flex;align-items:center;gap:12px">
+      <div style="display:grid;gap:2px">
+        <div style="font-size:30px;font-weight:700;letter-spacing:-0.028em;color:#fff">Good evening, Shree</div>
+        <div style="font-size:14px;font-weight:500;color:oklch(0.72 0.01 200)">Tuesday, 23 September · <span style="color:oklch(0.84 0.15 165)">4 of 7 done</span></div>
+      </div>
+      <div style="flex:1"></div>
+      <label style="display:flex;align-items:center;gap:10px;width:300px;height:46px;padding:0 8px 0 16px;box-sizing:border-box;border-radius:999px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.08),oklch(1 0 0 / 0.02));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(10px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.5),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.2),0 10px 30px -12px oklch(0 0 0 / 0.5)">
+        <i class="ph-bold ph-magnifying-glass" style="font-size:17px;color:#fff;opacity:.85"></i>
+        <input placeholder="Search" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:#fff;font:inherit;font-size:15px"></input>
+        <span style="height:28px;padding:0 9px;border-radius:14px;display:grid;place-items:center;font-size:12px;font-weight:600;color:oklch(0.85 0.01 260);background:oklch(1 0 0 / 0.08)">⌘K</span>
+      </label>
+      <button aria-label="Notifications" style="position:relative;width:46px;height:46px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;cursor:pointer;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.09),oklch(1 0 0 / 0.02));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(10px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.55),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.22),inset 0 8px 16px -10px oklch(1 0 0 / 0.12),inset 0 -10px 20px -12px oklch(0 0 0 / 0.4),0 10px 30px -12px oklch(0 0 0 / 0.5)"><i class="ph-fill ph-bell" style="font-size:20px;filter:drop-shadow(0 2px 4px oklch(0 0 0 / 0.4))"></i><span style="position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 6px;box-sizing:border-box;border-radius:10px;background:oklch(0.63 0.21 25);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;box-shadow:0 3px 8px oklch(0.4 0.18 25 / 0.6)">3</span></button>
+      <button style="position:relative;display:flex;align-items:center;gap:8px;height:46px;padding:0 22px;border:0;border-radius:999px;cursor:pointer;color:oklch(0.18 0.05 165);font:inherit;font-size:15px;font-weight:600;background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),inset 0 -2px 6px oklch(0.45 0.12 165 / 0.5),0 12px 30px -8px oklch(0.7 0.16 162 / 0.55)"><i class="ph-bold ph-plus" style="font-size:16px"></i>New session</button>
+    </header>
+
+    <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;grid-template-rows:290px 1fr;gap:16px;min-height:0">
+
+      <section style="position:relative;border-radius:34px;padding:24px 26px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:20px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(12px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),inset 0 0 30px oklch(1 0 0 / 0.05),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+        <div style="display:grid;gap:14px;align-content:space-between;height:100%;min-width:0">
+          <div style="display:flex;align-items:center;gap:10px"><span style="display:flex;align-items:center;gap:7px;height:28px;padding:0 12px;border-radius:14px;background:oklch(0.74 0.16 162 / 0.22);color:oklch(0.9 0.12 165);font-size:13px;font-weight:600"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.82 0.16 162);animation:lg-pulse 1.6s infinite"></span>Live</span><span style="font-size:14px;color:oklch(0.75 0.01 200)">Q4 Launch · Copy</span></div>
+          <div style="display:grid;gap:4px"><div style="font-size:20px;font-weight:600;letter-spacing:-0.02em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Write the onboarding email</div>
+            <div style="font-size:76px;line-height:1;font-weight:600;letter-spacing:-0.045em;font-variant-numeric:tabular-nums;color:#fff">{{ timer }}</div>
+            <div style="font-size:14px;color:oklch(0.72 0.01 200)">of 45 minutes</div></div>
+          <div style="display:flex;gap:10px">
+            <button onClick="{{ toggleRun }}" style="height:44px;padding:0 20px;border:0;border-radius:22px;cursor:pointer;font:inherit;font-size:15px;font-weight:600;color:#fff;background:oklch(1 0 0 / 0.12);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.5)">{{ runLabel }}</button>
+            <button style="height:44px;padding:0 20px;border:0;border-radius:22px;cursor:pointer;font:inherit;font-size:15px;font-weight:600;color:oklch(0.18 0.05 165);background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),inset 0 -2px 6px oklch(0.45 0.12 165 / 0.5)">Mark done</button>
+          </div>
+        </div>
+        <div style="position:relative;width:176px;height:176px;display:grid;place-items:center">
+          <div style="position:absolute;inset:18px;border-radius:50%;background:oklch(0.74 0.16 162);filter:blur(38px);opacity:.45"></div>
+          <svg width="176" height="176" viewBox="0 0 176 176" style="position:absolute;inset:0;transform:rotate(-90deg)">
+            <circle cx="88" cy="88" r="74" fill="none" stroke="oklch(1 0 0 / 0.09)" stroke-width="14"></circle>
+            <circle cx="88" cy="88" r="74" fill="none" stroke="oklch(0.82 0.16 163)" stroke-width="14" stroke-linecap="round" stroke-dasharray="{{ ringDash }}" style="transition:stroke-dasharray 1s linear"></circle>
+          </svg>
+          <button onClick="{{ toggleRun }}" aria-label="Pause" style="position:relative;width:92px;height:92px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.14),oklch(1 0 0 / 0.03));-webkit-backdrop-filter:blur(8px);backdrop-filter:url(#lg-refract) blur(8px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.7),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.3),0 10px 24px -8px oklch(0 0 0 / 0.6)"><i class="{{ runIcon }}" style="font-size:30px;filter:drop-shadow(0 2px 6px oklch(0 0 0 / 0.4))"></i></button>
+        </div>
+      </section>
+
+      <section style="position:relative;border-radius:34px;padding:22px 24px;display:grid;grid-template-rows:auto 1fr;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(12px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:17px;font-weight:600;color:#fff;white-space:nowrap">Focus score</span><span style="font-size:13px;font-weight:600;color:oklch(0.84 0.15 165)">+6 this week</span></div>
+        <div style="position:relative;display:grid;place-items:end center">
+          <div style="position:absolute;bottom:10px;width:190px;height:90px;border-radius:50%;background:oklch(0.74 0.16 162);filter:blur(40px);opacity:.4"></div>
+          <svg width="220" height="120" viewBox="0 0 220 120" style="position:relative">
+            <path d="M 20 110 A 90 90 0 0 1 200 110" fill="none" stroke="oklch(1 0 0 / 0.09)" stroke-width="22" stroke-linecap="round"></path>
+            <path d="M 20 110 A 90 90 0 0 1 200 110" fill="none" stroke="oklch(0.82 0.16 163)" stroke-width="22" stroke-linecap="round" pathLength="100" stroke-dasharray="82 100"></path>
+          </svg>
+          <div style="position:absolute;bottom:0;display:grid;justify-items:center"><span style="font-size:48px;font-weight:600;letter-spacing:-0.04em;color:#fff;line-height:1;font-variant-numeric:tabular-nums">82</span><span style="font-size:14px;color:oklch(0.72 0.01 200)">Steady — keep going</span></div>
+        </div>
+      </section>
+
+      <section style="position:relative;border-radius:34px;padding:22px 24px;display:grid;grid-template-rows:auto 1fr auto;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(12px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:17px;font-weight:600;color:#fff">Streak</span>
+          <span style="position:relative;width:44px;height:44px;display:grid;place-items:center">
+            <span style="position:absolute;left:2px;top:2px;width:32px;height:32px;border-radius:11px;transform:rotate(-10deg);background:linear-gradient(145deg,oklch(0.86 0.15 90),oklch(0.72 0.17 55))"></span>
+            <span style="position:absolute;right:0;bottom:0;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:oklch(1 0 0 / 0.16);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.8),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.3)"><i class="ph-fill ph-fire" style="font-size:17px;color:#fff"></i></span>
+          </span></div>
+        <div style="align-self:center;display:flex;align-items:baseline;gap:8px"><span style="font-size:72px;font-weight:600;letter-spacing:-0.05em;line-height:1;color:#fff;font-variant-numeric:tabular-nums">12</span><span style="font-size:17px;font-weight:500;color:oklch(0.75 0.01 200)">days</span></div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
+          <sc-for list="{{ week }}" as="d" hint-placeholder-count="7"><div style="display:grid;justify-items:center;gap:6px"><span style="{{ d.dot }}"></span><span style="font-size:12px;font-weight:500;color:oklch(0.62 0.01 200)">{{ d.l }}</span></div></sc-for>
+        </div>
+      </section>
+
+      <section style="position:relative;border-radius:34px;padding:22px 24px 18px;display:grid;grid-template-rows:auto auto 1fr;gap:6px;min-height:0;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(12px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+        <div style="display:flex;align-items:center"><span style="font-size:17px;font-weight:600;color:#fff">Focus time</span><div style="flex:1"></div><span style="font-size:13px;font-weight:600;color:oklch(0.84 0.15 165)">+18%</span></div>
+        <div style="font-size:14px;color:oklch(0.72 0.01 200)">{{ selDay }} · <span style="color:#fff;font-weight:600">{{ selVal }}</span></div>
+        <div style="position:relative;display:grid;grid-template-columns:repeat(7,1fr);gap:10px;align-items:end;padding-top:14px">
+          <div style="position:absolute;left:0;right:0;bottom:{{ avgPct }}%;border-top:1.5px dashed oklch(0.84 0.15 165 / 0.6);z-index:2;pointer-events:none"><span style="position:absolute;left:0;top:-20px;font-size:11px;font-weight:600;color:oklch(0.84 0.15 165)">Avg</span></div>
+          <sc-for list="{{ bars }}" as="b" hint-placeholder-count="7">
+            <button onClick="{{ b.go }}" style="position:relative;height:100%;border:0;padding:0;background:transparent;cursor:pointer;display:grid;grid-template-rows:1fr auto;gap:8px;align-items:end">
+              <span style="{{ b.bar }}"><span style="{{ b.glow }}"></span></span>
+              <span style="{{ b.label }}">{{ b.d }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="position:relative;border-radius:34px;padding:20px 18px 16px;display:grid;grid-template-rows:auto 1fr;gap:10px;min-height:0;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(12px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 6px"><span style="font-size:17px;font-weight:600;color:#fff">Today</span><span style="font-size:13px;color:oklch(0.72 0.01 200)">2h 40m left</span></div>
+        <div style="display:grid;gap:4px;align-content:start">
+          <sc-for list="{{ queue }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.toggle }}" style="display:flex;align-items:center;gap:12px;padding:9px 8px;border:0;border-radius:18px;text-align:left;cursor:pointer;background:transparent;color:inherit;font:inherit">
+              <span style="{{ t.check }}"><i class="ph-bold ph-check" style="font-size:13px"></i></span>
+              <span style="flex:1;min-width:0;display:grid;gap:1px"><span style="{{ t.titleStyle }}">{{ t.title }}</span><span style="font-size:12px;color:oklch(0.62 0.01 200)">{{ t.mins }}</span></span>
+              <span style="{{ t.pill }}">{{ t.status }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="position:relative;border-radius:34px;padding:20px 20px 16px;display:grid;grid-template-rows:auto 1fr auto;gap:8px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(12px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+        <div style="display:flex;align-items:center;gap:8px;padding:0 4px"><span style="font-size:17px;font-weight:600;color:#fff">Atlas</span><span style="font-size:13px;color:oklch(0.72 0.01 200)">{{ atlasState }}</span></div>
+        <div style="display:grid;place-items:center"><canvas ref="{{ aiRef }}" style="width:132px;height:132px"></canvas></div>
+        <div style="display:flex;align-items:center;gap:8px;height:46px;padding:0 5px 0 16px;border-radius:23px;background:oklch(0 0 0 / 0.22);box-shadow:inset 0 1px 3px oklch(0 0 0 / 0.35),inset 0 -1px 0 oklch(1 0 0 / 0.08)"><input placeholder="Ask Atlas…" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:#fff;font:inherit;font-size:15px"></input><button onClick="{{ cycleAtlas }}" aria-label="Talk" style="width:36px;height:36px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:oklch(0.18 0.05 165);background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1px 1px oklch(1 0 0 / 0.7)"><i class="ph-fill ph-microphone" style="font-size:17px"></i></button></div>
+      </section>
+    </div>
+  </main>
+</div>
+</div>
+</div>
+
+<div style="display:grid;gap:14px">
+<div style="font-size:13px;font-weight:500;color:oklch(0.6 0.008 260)">Phone · 390 × 844</div>
+<div data-screen-label="Phone home" style="width:390px;height:844px;border-radius:58px;padding:10px;background:linear-gradient(160deg,oklch(0.30 0.004 260),oklch(0.14 0.004 260));box-shadow:0 0 0 1px oklch(1 0 0 / 0.1),0 60px 120px -30px oklch(0 0 0 / 0.9)">
+<div style="position:relative;width:100%;height:100%;border-radius:48px;overflow:hidden;background:oklch(0.10 0.01 200);isolation:isolate">
+  <div style="position:absolute;inset:0;z-index:-1;overflow:hidden">
+    <div style="position:absolute;width:520px;height:520px;left:-200px;top:-220px;border-radius:50%;background:oklch(0.42 0.12 170);filter:blur(90px);opacity:.6;animation:lg-float 26s ease-in-out infinite"></div>
+    <div style="position:absolute;width:480px;height:480px;right:-240px;bottom:-120px;border-radius:50%;background:oklch(0.48 0.10 200);filter:blur(90px);opacity:.5"></div>
+    <div style="position:absolute;width:700px;height:120px;left:-160px;top:400px;border-radius:100px;transform:rotate(-24deg);background:linear-gradient(90deg,transparent,oklch(0.75 0.14 168 / 0.55),oklch(0.86 0.1 175 / 0.65),transparent);filter:blur(22px)"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(oklch(1 0 0 / 0.05) 1px,transparent 1px),linear-gradient(90deg,oklch(1 0 0 / 0.05) 1px,transparent 1px);background-size:48px 48px"></div>
+  </div>
+  <div style="height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 32px 0 38px;font-size:16px;font-weight:600;color:#fff"><span>19:22</span><span style="width:122px;height:36px;border-radius:20px;background:#000"></span><span style="display:flex;gap:6px"><i class="ph-fill ph-cell-signal-full" style="font-size:16px"></i><i class="ph-fill ph-battery-full" style="font-size:20px"></i></span></div>
+
+  <div style="padding:10px 20px 0;display:grid;gap:16px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="display:grid;gap:0;flex:1"><span style="font-size:14px;font-weight:500;color:oklch(0.72 0.01 200)">Tuesday, 23 Sep</span><span style="font-size:30px;font-weight:700;letter-spacing:-0.03em;color:#fff">Evening, Shree</span></div>
+      <button aria-label="Notifications" style="position:relative;width:46px;height:46px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.1),oklch(1 0 0 / 0.02));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(10px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.55),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.22),inset 0 8px 16px -10px oklch(1 0 0 / 0.12),inset 0 -10px 20px -12px oklch(0 0 0 / 0.4),0 10px 30px -12px oklch(0 0 0 / 0.5)"><i class="ph-fill ph-bell" style="font-size:20px"></i><span style="position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;border-radius:10px;background:oklch(0.63 0.21 25);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;box-shadow:0 3px 8px oklch(0.4 0.18 25 / 0.6)">3</span></button>
+    </div>
+
+    <section style="position:relative;border-radius:34px;padding:20px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.11),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(12px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 24px 50px -18px oklch(0 0 0 / 0.6)">
+      <div style="display:grid;gap:6px"><span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:oklch(0.88 0.13 165)"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.82 0.16 162);animation:lg-pulse 1.6s infinite"></span>Live · Copy</span><span style="font-size:16px;font-weight:600;color:#fff">Onboarding email</span><span style="font-size:52px;font-weight:600;line-height:1;letter-spacing:-0.045em;color:#fff;font-variant-numeric:tabular-nums">{{ timer }}</span></div>
+      <div style="position:relative;width:104px;height:104px;display:grid;place-items:center">
+        <div style="position:absolute;inset:14px;border-radius:50%;background:oklch(0.74 0.16 162);filter:blur(24px);opacity:.5"></div>
+        <svg width="104" height="104" viewBox="0 0 104 104" style="position:absolute;inset:0;transform:rotate(-90deg)"><circle cx="52" cy="52" r="44" fill="none" stroke="oklch(1 0 0 / 0.09)" stroke-width="10"></circle><circle cx="52" cy="52" r="44" fill="none" stroke="oklch(0.82 0.16 163)" stroke-width="10" stroke-linecap="round" stroke-dasharray="{{ ringDashSm }}" style="transition:stroke-dasharray 1s linear"></circle></svg>
+        <button onClick="{{ toggleRun }}" aria-label="Pause" style="position:relative;width:56px;height:56px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.16),oklch(1 0 0 / 0.03));-webkit-backdrop-filter:blur(8px);backdrop-filter:url(#lg-refract) blur(8px);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.7),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.3)"><i class="{{ runIcon }}" style="font-size:22px"></i></button>
+      </div>
+    </section>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+      <sc-for list="{{ tiles }}" as="tl" hint-placeholder-count="4">
+        <button style="border:0;background:transparent;padding:0;display:grid;justify-items:center;gap:8px;color:#fff;font:inherit;cursor:pointer">
+          <span style="position:relative;width:62px;height:62px">
+            <span style="{{ tl.back }}"></span>
+            <span style="position:absolute;right:0;bottom:0;width:50px;height:50px;border-radius:16px;display:grid;place-items:center;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.30),oklch(1 0 0 / 0.08));-webkit-backdrop-filter:blur(8px) saturate(1.6);backdrop-filter:blur(8px) saturate(1.6);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.9),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.35),0 8px 18px -8px oklch(0 0 0 / 0.5)"><i class="ph-fill {{ tl.icon }}" style="font-size:24px;color:#fff;filter:drop-shadow(0 2px 4px oklch(0 0 0 / 0.25))"></i></span>
+          </span>
+          <span style="font-size:12px;font-weight:500;color:oklch(0.85 0.01 200)">{{ tl.label }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <section style="position:relative;border-radius:30px;padding:12px 10px;display:grid;gap:2px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(12px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 24px 50px -18px oklch(0 0 0 / 0.6)">
+      <div style="display:flex;justify-content:space-between;padding:4px 10px 6px"><span style="font-size:17px;font-weight:600;color:#fff">Up next</span><span style="font-size:13px;color:oklch(0.72 0.01 200)">2h 40m</span></div>
+      <sc-for list="{{ queueShort }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.toggle }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 10px;border:0;border-radius:18px;text-align:left;background:transparent;color:inherit;font:inherit">
+          <span style="{{ t.check }}"><i class="ph-bold ph-check" style="font-size:13px"></i></span>
+          <span style="flex:1;min-width:0;display:grid;gap:1px"><span style="{{ t.titleStyle }}">{{ t.title }}</span><span style="font-size:12px;color:oklch(0.62 0.01 200)">{{ t.mins }}</span></span>
+          <span style="{{ t.pill }}">{{ t.status }}</span>
+        </button>
+      </sc-for>
+    </section>
+  </div>
+
+  <div style="position:absolute;left:16px;right:16px;bottom:28px;display:flex;align-items:center;gap:10px">
+    <div style="position:relative;flex:1;height:66px;border-radius:33px;padding:6px;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#lg-refract) blur(10px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 20px 40px -12px oklch(0 0 0 / 0.6)">
+      <span style="position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px) / 4);border-radius:27px;background:oklch(1 0 0 / 0.14);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.2);transform:translateX({{ tabX }}%);transition:transform 460ms cubic-bezier(0.34,1.32,0.64,1)"></span>
+      <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="4">
+        <button onClick="{{ tb.go }}" aria-label="{{ tb.label }}" style="position:relative;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:#fff"><i class="ph-fill {{ tb.icon }}" style="{{ tb.glyph }}"></i></button>
+      </sc-for>
+    </div>
+    <button onClick="{{ cycleAtlas }}" aria-label="Atlas" style="position:relative;width:66px;height:66px;border:0;padding:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02));-webkit-backdrop-filter:blur(10px);backdrop-filter:url(#lg-refract) blur(10px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 20px 40px -12px oklch(0 0 0 / 0.6)"><canvas ref="{{ aiRefSm }}" style="width:56px;height:56px"></canvas></button>
+  </div>
+  <div style="position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:oklch(1 0 0 / 0.7)"></div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { left: 1458, run: true, tab: 0, rail: 0, atlas: 0, sel: 3, done: { 0: true } };
+  mapRef = React.createRef(); aiRef = React.createRef(); aiRefSm = React.createRef();
+  componentDidMount() {
+    this.t = setInterval(() => { if (this.state.run) this.setState(s => ({ left: Math.max(0, s.left - 1) })); }, 1000);
+    this.buildMap();
+    this.startAI();
+  }
+  componentWillUnmount() { clearInterval(this.t); cancelAnimationFrame(this.raf); }
+  buildMap() {
+    const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const ctx = cv.getContext('2d'), img = ctx.createImageData(N, N);
+    const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const nx = x / (N - 1) * 2 - 1, ny = y / (N - 1) * 2 - 1, i = (y * N + x) * 4;
+      img.data[i] = 128 - Math.sign(nx) * (ss(0.45, 1, Math.abs(nx)) * 0.85 + Math.abs(nx) * 0.15) * 127;
+      img.data[i + 1] = 128 - Math.sign(ny) * (ss(0.45, 1, Math.abs(ny)) * 0.85 + Math.abs(ny) * 0.15) * 127;
+      img.data[i + 2] = 128; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const url = cv.toDataURL();
+    const el = this.mapRef.current;
+    if (el) { el.setAttribute('href', url); el.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url); }
+  }
+  async startAI() {
+    let src; try { src = await (await fetch('components/data/AiPresence.jsx')).text(); } catch (e) { return; }
+    const VERT = (src.match(/const VERT = '([^']*)'/) || [])[1];
+    const FRAG = (src.match(/const FRAG = `([\s\S]*?)`;/) || [])[1];
+    if (!VERT || !FRAG) return;
+    const TARGET = { idle: [0.4, 9], thinking: [0.8, 11], speaking: [0.9, 13] };
+    const make = (cv) => {
+      const gl = cv && cv.getContext('webgl', { premultipliedAlpha: false, antialias: true, alpha: true });
+      if (!gl) return null;
+      const sh = (ty, s) => { const o = gl.createShader(ty); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+      const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
+      gl.useProgram(pr); gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const l = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
+      const u = n => gl.getUniformLocation(pr, n);
+      return { gl, cv, R: u('R'), T: u('T'), A: u('A'), F: u('F'), S: u('S'), V: u('V') };
+    };
+    const ctxs = [make(this.aiRef.current), make(this.aiRefSm.current)].filter(Boolean);
+    let last = performance.now(), clock = 0, amp = 0.4, freq = 9, sp = 0, vl = 0;
+    const frame = (now) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const st = ['idle', 'thinking', 'speaking'][this.state.atlas], tg = TARGET[st], speaking = st === 'speaking';
+      const k = 1 - Math.exp(-dt * 2.5);
+      amp += (tg[0] - amp) * k; freq += (tg[1] - freq) * k; sp += ((speaking ? 1 : 0) - sp) * k;
+      const tv = speaking ? 0.5 + 0.5 * Math.sin(now / 140) * Math.sin(now / 370) : 0;
+      vl += (tv - vl) * (1 - Math.exp(-dt * 14));
+      clock += dt * (st === 'thinking' ? 1.35 : speaking ? 1.6 : 0.8);
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      for (const c of ctxs) {
+        const px = Math.round(c.cv.clientWidth * dpr);
+        if (c.cv.width !== px) { c.cv.width = c.cv.height = px; c.gl.viewport(0, 0, px, px); }
+        const g = c.gl;
+        g.uniform2f(c.R, c.cv.width, c.cv.height); g.uniform1f(c.T, clock); g.uniform1f(c.A, amp); g.uniform1f(c.F, freq); g.uniform1f(c.S, sp); g.uniform1f(c.V, vl);
+        g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); g.drawArrays(g.TRIANGLES, 0, 3);
+      }
+      this.raf = requestAnimationFrame(frame);
+    };
+    this.raf = requestAnimationFrame(frame);
+  }
+  renderVals() {
+    const s = this.state;
+    const fmt = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
+    const frac = 1 - s.left / 2700;
+    const HUE = { Live: 162, Queued: 215, Review: 82, Due: 35 };
+    const tasks = [['Draft launch announcement', '25 min', 'Done'], ['Write the onboarding email', '45 min', 'Live'], ['Review pricing page', '30 min', 'Review'], ['Send invoice to Northwind', '15 min', 'Due'], ['Plan sprint 14', '40 min', 'Queued']];
+    const queue = tasks.map((t, i) => {
+      const d = !!s.done[i]; const st = d ? 'Done' : t[2]; const h = HUE[st];
+      return {
+        title: t[0], mins: t[1], status: st,
+        toggle: () => this.setState(p => ({ done: { ...p.done, [i]: !p.done[i] } })),
+        titleStyle: `font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${d ? 'oklch(0.55 0.01 200)' : '#fff'};text-decoration:${d ? 'line-through' : 'none'}`,
+        check: `flex:0 0 auto;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;transition:all 320ms cubic-bezier(0.34,1.32,0.64,1);transform:scale(${d ? 1 : 0.9});color:${d ? 'oklch(0.2 0.05 165)' : 'transparent'};background:${d ? 'linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162))' : 'oklch(1 0 0 / 0.06)'};box-shadow:${d ? 'inset 0 1px 1px oklch(1 0 0 / 0.7), 0 4px 12px -2px oklch(0.72 0.16 162 / 0.5)' : 'inset 0 0 0 1.5px oklch(1 0 0 / 0.22)'}`,
+        pill: d ? 'display:none' : `flex:0 0 auto;height:24px;padding:0 10px;border-radius:12px;display:flex;align-items:center;font-size:12px;font-weight:600;color:oklch(0.9 0.08 ${h});background:oklch(0.72 0.13 ${h} / 0.22)`,
+      };
+    });
+    const railIcons = [['ph-squares-four', 'Home'], ['ph-list-checks', 'Queue'], ['ph-calendar-dots', 'Deadlines'], ['ph-target', 'Focus'], ['ph-sparkle', 'Atlas'], ['ph-gear-six', 'Settings']];
+    const railItems = railIcons.map(([icon, label], i) => {
+      const on = s.rail === i;
+      return { icon, label, go: () => this.setState({ rail: i }),
+        glow: `position:absolute;inset:6px;border-radius:50%;background:oklch(0.74 0.16 162);filter:blur(14px);transition:opacity 400ms ease;opacity:${on ? 0.7 : 0}`,
+        plate: `position:absolute;inset:0;border-radius:50%;transition:all 420ms cubic-bezier(0.34,1.32,0.64,1);transform:scale(${on ? 1 : 0.7});opacity:${on ? 1 : 0};background:oklch(1 0 0 / 0.14);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.7),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45)`,
+        glyph: `position:relative;font-size:22px;transition:opacity 200ms ease;opacity:${on ? 1 : 0.55};filter:drop-shadow(0 2px 5px oklch(0 0 0 / 0.45))`,
+      };
+    });
+    const tabs = [['ph-squares-four', 'Home'], ['ph-list-checks', 'Queue'], ['ph-calendar-dots', 'Deadlines'], ['ph-user', 'Profile']].map(([icon, label], i) => ({
+      icon, label, go: () => this.setState({ tab: i }),
+      glyph: `font-size:24px;transition:opacity 250ms ease, transform 420ms cubic-bezier(0.34,1.32,0.64,1);opacity:${s.tab === i ? 1 : 0.55};transform:scale(${s.tab === i ? 1.08 : 1});filter:drop-shadow(0 2px 5px oklch(0 0 0 / 0.45))`,
+    }));
+    const tiles = [['ph-timer', 'Focus', 162], ['ph-calendar-dots', 'Plan', 190], ['ph-chart-bar', 'Stats', 140], ['ph-sparkle', 'Atlas', 215]].map(([icon, label, h]) => ({
+      icon, label, back: `position:absolute;left:0;top:0;width:46px;height:46px;border-radius:15px;transform:rotate(-10deg);background:linear-gradient(145deg,oklch(0.86 0.13 ${h}),oklch(0.60 0.15 ${h + 8}))`,
+    }));
+    const week = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((l, i) => ({ l, dot: `width:16px;height:16px;border-radius:50%;background:${i < 5 ? 'linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.70 0.16 162))' : 'oklch(1 0 0 / 0.08)'};box-shadow:${i < 5 ? 'inset 0 1px 1px oklch(1 0 0 / 0.6)' : 'inset 0 0 0 1.5px oklch(1 0 0 / 0.12)'}` }));
+    const vals = [2.4, 3.1, 1.8, 4.2, 2.9, 1.2, 3.6], days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const max = 4.6, avg = vals.reduce((a, b) => a + b) / vals.length;
+    const hm = v => Math.floor(v) + 'h ' + String(Math.round((v % 1) * 60)).padStart(2, '0') + 'm';
+    const bars = vals.map((v, i) => {
+      const on = s.sel === i;
+      return { d: days[i].slice(0, 1), go: () => this.setState({ sel: i }),
+        bar: `position:relative;display:block;width:100%;height:${(v / max) * 100}%;border-radius:14px;transition:all 420ms cubic-bezier(0.34,1.32,0.64,1);background:${on ? 'linear-gradient(180deg,oklch(0.9 0.13 165),oklch(0.68 0.16 162) 60%,oklch(0.52 0.13 165))' : 'linear-gradient(180deg,oklch(1 0 0 / 0.14),oklch(1 0 0 / 0.03))'};box-shadow:${on ? 'inset 0 1.5px 1px oklch(1 0 0 / 0.7),inset 0 -6px 12px oklch(0.4 0.1 165 / 0.4)' : 'inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.35)'}`,
+        glow: `position:absolute;left:-30%;right:-30%;top:10%;bottom:-10%;z-index:-1;border-radius:20px;background:oklch(0.74 0.16 162);filter:blur(18px);opacity:${on ? 0.55 : 0};transition:opacity 400ms ease`,
+        label: `font-size:12px;font-weight:600;color:${on ? '#fff' : 'oklch(0.6 0.01 200)'}`,
+      };
+    });
+    const C = 2 * Math.PI * 74, c2 = 2 * Math.PI * 44;
+    return {
+      mapRef: this.mapRef, aiRef: this.aiRef, aiRefSm: this.aiRefSm,
+      timer: fmt(s.left), ringDash: `${C * frac} ${C}`, ringDashSm: `${c2 * frac} ${c2}`,
+      runIcon: s.run ? 'ph-fill ph-pause' : 'ph-fill ph-play', runLabel: s.run ? 'Pause' : 'Resume',
+      toggleRun: () => this.setState(p => ({ run: !p.run })),
+      queue, queueShort: queue.slice(1, 4), railItems, tabs, tabX: s.tab * 100, tiles, week, bars,
+      selDay: days[s.sel], selVal: hm(vals[s.sel]), avgPct: (avg / max) * 100 * 0.84 + 12,
+      atlasState: ['Idle', 'Thinking', 'Speaking'][s.atlas],
+      cycleAtlas: () => this.setState(p => ({ atlas: (p.atlas + 1) % 3 })),
+    };
+  }
+}
+</script>
+</body>
+</html>

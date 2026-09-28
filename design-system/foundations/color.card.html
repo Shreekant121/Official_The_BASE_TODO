@@ -1,0 +1,58 @@
+<!-- @dsCard group="Foundations" viewport="700x340" name="Colour" subtitle="Near-black ladder, one emerald accent, status hues locked to equal weight" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Colour</title>
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div class="pad col" style="gap: var(--sp-7)">
+  <div>
+    <span class="lbl">Base ladder</span>
+    <div class="row" style="gap: var(--sp-3); margin-top: var(--sp-4)">
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--void-0);box-shadow:inset 0 0 0 1px var(--line-soft)"></div><div class="lbl" style="margin-top:6px">void-0</div></div>
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--void-1);box-shadow:inset 0 0 0 1px var(--line-soft)"></div><div class="lbl" style="margin-top:6px">void-1</div></div>
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--void-2);box-shadow:inset 0 0 0 1px var(--line-soft)"></div><div class="lbl" style="margin-top:6px">void-2</div></div>
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--void-3);box-shadow:inset 0 0 0 1px var(--line-soft)"></div><div class="lbl" style="margin-top:6px">void-3</div></div>
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--void-4);box-shadow:inset 0 0 0 1px var(--line-soft)"></div><div class="lbl" style="margin-top:6px">void-4</div></div>
+    </div>
+  </div>
+  <div>
+    <span class="lbl">Accent — emerald means live</span>
+    <div class="row" style="gap: var(--sp-3); margin-top: var(--sp-4)">
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--accent-lift)"></div><div class="lbl" style="margin-top:6px">lift</div></div>
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--accent);box-shadow:var(--glow-accent-sm)"></div><div class="lbl" style="margin-top:6px">accent</div></div>
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--accent-sink)"></div><div class="lbl" style="margin-top:6px">sink</div></div>
+      <div style="width:104px"><div style="height:64px;border-radius:var(--r-sm);background:var(--accent-wash);box-shadow:inset 0 0 0 1px var(--accent-hairline)"></div><div class="lbl" style="margin-top:6px">wash</div></div>
+    </div>
+  </div>
+  <div>
+    <span class="lbl">Status hues — semantic only</span>
+    <div class="row" style="gap: var(--sp-3); margin-top: var(--sp-4)">
+      <div style="width:84px"><div style="height:48px;border-radius:var(--r-sm);background:var(--status-running)"></div><div class="lbl" style="margin-top:6px">running</div></div>
+      <div style="width:84px"><div style="height:48px;border-radius:var(--r-sm);background:var(--status-queued)"></div><div class="lbl" style="margin-top:6px">queued</div></div>
+      <div style="width:84px"><div style="height:48px;border-radius:var(--r-sm);background:var(--status-review)"></div><div class="lbl" style="margin-top:6px">review</div></div>
+      <div style="width:84px"><div style="height:48px;border-radius:var(--r-sm);background:var(--status-done)"></div><div class="lbl" style="margin-top:6px">done</div></div>
+      <div style="width:84px"><div style="height:48px;border-radius:var(--r-sm);background:var(--status-overrun)"></div><div class="lbl" style="margin-top:6px">overrun</div></div>
+      <div style="width:84px"><div style="height:48px;border-radius:var(--r-sm);background:var(--status-backburner)"></div><div class="lbl" style="margin-top:6px">backburner</div></div>
+      <div style="width:84px"><div style="height:48px;border-radius:var(--r-sm);background:var(--status-archived)"></div><div class="lbl" style="margin-top:6px">archived</div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

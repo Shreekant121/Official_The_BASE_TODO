@@ -1,0 +1,57 @@
+<!-- @dsCard group="Foundations" viewport="700x230" name="Iconography" subtitle="Lucide at 1.5 stroke — the set the product already ships" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Iconography</title>
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD(['../components/core/Icon.jsx']).then(function (AG) {
+  const { Icon } = AG;
+  const names = ['house','list-checks','target','clock','circle-check','bell','search','plus','power','archive','snowflake','book-open','chart-column','settings','log-out','ellipsis'];
+
+  function Demo() {
+    return (
+      <div className="pad col" style={{ gap: 'var(--sp-6)' }}>
+        <div>
+          <span className="lbl">Sizes — 16 / 18 / 20 / 24, stroke 1.5</span>
+          <div className="row" style={{ marginTop: 'var(--sp-4)', gap: 'var(--sp-6)', color: 'var(--fg-1)' }}>
+            {[16, 18, 20, 24].map((s) => (
+              <span key={s} style={{ display: 'grid', gap: 6, justifyItems: 'center' }}>
+                <Icon name="clock" size={s} />
+                <span className="lbl">{s}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span className="lbl">In use</span>
+          <div className="row" style={{ marginTop: 'var(--sp-4)', gap: 'var(--sp-6)', color: 'var(--fg-2)' }}>
+            {names.map((n) => <Icon key={n} name={n} size={20} />)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

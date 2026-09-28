@@ -1,0 +1,346 @@
+/*
+ * ── Aurora Glass design system ────────────────────────────────────────────
+ *
+ * These come first, and unlayered, on purpose. They are almost entirely
+ * `:root` custom-property declarations plus `@keyframes`, neither of which
+ * can collide with a Tailwind utility. The handful of real selectors they do
+ * carry (`.ag-page`, `.ag-glass`, `.ag-kicker`, the focus ring) are meant to
+ * outrank the utility layer, and unlayered CSS does exactly that.
+ *
+ * `tokens/reset.css` from the design project is deliberately NOT here —
+ * Tailwind's preflight already does most of it and the two would fight.
+ * `tokens/base.css` is the trimmed half that survives; it documents the split.
+ *
+ * The verbatim, unmodified design project lives in `design-system/` at the
+ * repo root. It is reference material — nothing imports it, Vite never builds
+ * it. When these files and those disagree, the difference is intentional and
+ * the reason is written at the top of the file here.
+ */
+@import './ui/tokens/fonts.css';
+@import './ui/tokens/colors.css';
+@import './ui/tokens/typography.css';
+@import './ui/tokens/spacing.css';
+@import './ui/tokens/radii.css';
+@import './ui/tokens/glass.css';
+@import './ui/tokens/elevation.css';
+@import './ui/tokens/motion.css';
+@import './ui/tokens/backdrop.css';
+@import './ui/tokens/base.css';
+@import './ui/screens.css';
+/* V3 (V3-1) — last, so its scoped page and kicker rules outrank the ones
+   above. Applies only inside `[data-v3]`; see the file's header. */
+@import './ui/tokens/v3.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * INVARIANT — every `backdrop-filter` pair in this repo's stylesheets MUST be
+ * written as `-webkit-backdrop-filter` first, then the unprefixed
+ * `backdrop-filter`. CSS minifiers that treat the two as one property
+ * (Lightning CSS) keep only the LAST declaration, and Chromium does not
+ * support the `-webkit-` form, so the prefixed-last order silently ships glass
+ * surfaces with zero blur.
+ *
+ * UI-20 retired the `.liquid-glass*` classes this was written for, along with
+ * `scripts/check-glass-css.mjs`, which asserted it against `dist/`, and the
+ * `build.cssMinify: 'esbuild'` pin in `vite.config.ts` — Lightning CSS was
+ * built both ways and diffed, and it now keeps both declarations rather than
+ * collapsing them, because it prefixes against Vite's browser targets. The
+ * measurement is written up in `vite.config.ts`.
+ *
+ * The ordering stays anyway, in the two places CSS files still declare the
+ * pair: the touch blur cap on `[style*="backdrop-filter"]` further down this
+ * file, and `.ag-glass*` in `ui/tokens/glass.css`, whose own header says the
+ * same thing. It costs nothing and it is what makes any future minifier's
+ * collapse harmless instead of invisible.
+ *
+ * None of it applies to the Aurora Glass components in `src/ui/`: those write
+ * both properties as React inline styles, which never reach the minifier at
+ * all. That is why the build check could retire rather than be rewritten.
+ */
+
+@layer base {
+  body {
+    /*
+     * `bg-background` now resolves to `var(--void-0)` via tailwind.config.js,
+     * and the real backdrop — near-black plus the 88px grid the glass
+     * refracts — comes from `.ag-page` on <body> in index.html. The two
+     * radial-gradient washes that used to be here are what `.ag-page`
+     * replaces; the grid is the thing that makes a pane read as glass rather
+     * than as a grey rectangle.
+     *
+     * `selection:bg-white selection:text-black` is gone with them: the design
+     * system's `::selection` (accent wash, white text) lives in
+     * `ui/tokens/base.css` and the Tailwind pair would have outranked it.
+     *
+     * Every screen paints `.ag-page` now — UI-20 took the last opaque
+     * `bg-[#050505]` wrapper off `SplashScreen` — so the grid is visible from
+     * the first frame of a cold load, not only after auth resolves.
+     */
+    @apply min-h-screen overflow-hidden antialiased text-white bg-background;
+  }
+
+  /*
+   * Global scrollbars come from `ui/tokens/base.css`. Do not add a second copy
+   * here, and do not reintroduce an opt-in class: `.no-scrollbar` and
+   * `.custom-scrollbar` both lived at the bottom of this file until UI-20 and
+   * both were dead by then — UI-18 pointed `.no-scrollbar`'s last caller,
+   * `BulkAddInput`, at `.ag-scroll` in `ui/screens.css`, and UI-19 took
+   * `.custom-scrollbar` off `SharePage`, its only one, because the global rule
+   * already draws exactly the thin glassy bar it was reaching for.
+   */
+
+  /*
+   * ── Touch ──────────────────────────────────────────────────────────────
+   *
+   * Until this block the app declared no touch behaviour at all, which on a
+   * tablet is not a neutral default: rows are `draggable`, a long press is
+   * the only gesture that means "pick this up", and a long press on a
+   * `draggable` element is exactly what raises the browser's own
+   * share / copy / Save Image sheet. Trying to drag a task got you the
+   * operating system's menu instead.
+   *
+   * These rules live in `@layer base` deliberately. Unlayered CSS outranks
+   * *every* Tailwind utility, so `button { touch-action: manipulation }`
+   * written outside a layer would quietly beat a `touch-none` class on a
+   * drag handle — the one thing a pointer-based DnD library has to be able
+   * to set. In `base`, the utilities layer still wins.
+   */
+
+  /*
+   * Not here: `-webkit-tap-highlight-color`, the grey box the platform paints
+   * over whatever you just tapped. Tailwind's preflight already sets it to
+   * `transparent` on `html` (`tailwindcss/src/css/preflight.css:39`), so a
+   * rule for it here would be a second copy of a rule that is already in the
+   * bundle — checked, not assumed.
+   */
+
+  /*
+   * Two selectors, because the app drags in two ways and both raise the same
+   * sheet. `[data-drag-row]` is set by `SortableRow`
+   * (`components/SortableList.tsx`) on every row dnd-kit moves, which since
+   * Session 7c is every reorder and every cross-list move in the app —
+   * dnd-kit is pointer-based and never sets `draggable`, so a row converted to
+   * it silently drops out of the *other* selector. `[draggable='true']` is
+   * React's own attribute, and what still needs it is New Session's subtask →
+   * "Selected for Today" drag (`components/session/QueueSubtaskTree.tsx`): a
+   * copy onto one target rather than a reorder, deliberately left on native
+   * drag — the row that sets `draggable` is in that file. Neither
+   * selector is redundant; the first covers far more rows, the second is the
+   * only thing covering those.
+   *
+   * Attributes rather than a class list on purpose: both are written by the
+   * mechanism that makes a row draggable in the first place, so there is no
+   * second place to remember to update when a new list becomes reorderable.
+   *
+   * Both properties inherit, so a row's cover image and its title are covered
+   * without being named. `user-select` belongs with the callout rather than
+   * being a separate nicety: suppressing the callout alone leaves the *other*
+   * long-press behaviour in place, and a press that selects the task title and
+   * raises the selection bubble (Copy / Look Up / Share) looks, to the person
+   * holding the tablet, like the same failure.
+   *
+   * WHICH OF THESE ACTUALLY PROTECTS THE REAL TABLET — corrected 2026-09-11,
+   * because this comment used to be written about an iPad. The tablet is
+   * **Android, in Chrome** (`CLAUDE.md`, "His two devices"), so:
+   *
+   * - `user-select: none` is the line doing the work here. It is not a
+   *   "nicety" — on Android Chrome it is the whole defence, because that is
+   *   what stops the long-press from selecting the title and raising the
+   *   selection bubble. Treat it as load-bearing.
+   * - `-webkit-touch-callout: none` is **inert on the device this ships to.**
+   *   It is a WebKit-only property; Chromium does not implement it at all, on
+   *   Android or anywhere else. It is kept because it costs nothing and covers
+   *   a WebKit browser if one ever opens the app, but do not reason as if it
+   *   were protecting anything today, and do not spend a session debugging it.
+   *
+   * Nothing local can check either line's effect: `touch-callout` never appears
+   * in `getComputedStyle` (Chromium does not know it), and the screenshot
+   * harness photographs nothing about long-press. `user-select` is the one to
+   * verify, and it has to be verified by holding a finger on a row on the
+   * actual tablet — see `curl-is-not-a-browser` reasoning: the local signals
+   * here stay green either way. A CSS minifier that drops unrecognised
+   * prefixed properties would also silently take `touch-callout` with it,
+   * which is the shape of bug `scripts/check-glass-css.mjs` exists for. If
+   * touch drag ever regresses to raising a selection bubble or share sheet,
+   * grep the built CSS in `dist/assets/` for `user-select` first and
+   * `touch-callout` second.
+   */
+  [draggable='true'],
+  [data-drag-row] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    /*
+     * These rows sit in scrolling lists, so this cannot be `touch-action:
+     * none` — that would freeze the list under your finger. `manipulation`
+     * keeps panning and pinch-zoom and gives up only double-tap-to-zoom,
+     * which also retires the ~300ms the browser spends waiting to find out
+     * whether a tap was the first half of one.
+     */
+    touch-action: manipulation;
+  }
+
+  /*
+   * …but a text field inside a draggable row still has to be selectable, and
+   * two screens have one: **Set Deadlines**, whose hh/mm boxes sit inside the
+   * draggable card, and **New Session**, whose inline rename input sits inside
+   * the draggable row. Without this, `user-select` inherits into them and a
+   * typo becomes impossible to correct — you could no longer select the digits
+   * to type over them. Six inputs match it today; the rule is not speculative.
+   */
+  [draggable='true'] input,
+  [draggable='true'] textarea,
+  [draggable='true'] [contenteditable='true'],
+  [data-drag-row] input,
+  [data-drag-row] textarea,
+  [data-drag-row] [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* The same double-tap wait, on everything the app asks you to press. */
+  button,
+  a,
+  label,
+  select,
+  input,
+  textarea,
+  [role='button'] {
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  /*
+   * Chromium/WebKit render backdrop-filter + border-radius elements onto their
+   * own compositor layer. When that layer's edge doesn't line up perfectly with
+   * the pixel grid (which happens constantly during hover/scale transforms),
+   * a stray 1px "seam" of the layer background shows through as a white hairline
+   * — or, when the layer is torn down and rebuilt, a full-brightness "flash"/
+   * "lightning" flicker for a single frame.
+   *
+   * Forcing each glass surface onto its own isolated, GPU-composited layer with
+   * `transform: translateZ(0)` + `isolation: isolate` fixes the seam — BUT
+   * Framer Motion's `whileHover`/`whileTap`/`animate` write directly to the
+   * element's inline `style.transform` on every animation frame. That
+   * completely overwrites (not merges with) whatever `transform` a CSS class
+   * provided, which means the moment any of these elements is hovered/tapped,
+   * the `translateZ(0)` promotion silently disappears and the seam/flash comes
+   * right back — exactly why this bug felt unfixable: it only reappears on
+   * interaction, on elements Framer Motion is actively animating.
+   *
+   * `will-change` is a distinct CSS property that Framer Motion never touches,
+   * so pairing it here keeps the element permanently promoted to its own
+   * compositor layer regardless of what `transform` value is currently active,
+   * closing the gap for every hover/tap interaction everywhere in the app.
+   *
+   * The attribute selector is the whole net, and since UI-20 it is the only
+   * one. It used to sit beside a list of `.liquid-glass*` classes and exist to
+   * catch the few screens that hand-rolled a surface with inline
+   * `backdropFilter` instead. That is now every glass surface in the app:
+   * `<GlassSurface>` and the components built on it — Card, Dialog, MorphMenu,
+   * MiniNav, Toast, NotificationCard, StatusPill, Button — all write both
+   * backdrop-filter properties as React inline styles, so all of them match
+   * this rule and none of them can show the hairline seam.
+   */
+  [style*="backdrop-filter"] {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    isolation: isolate;
+    backface-visibility: hidden;
+    will-change: transform, backdrop-filter;
+  }
+
+  /* ── Scroll fade: apply to a scroll container to fade content into its
+     rounded header instead of a hard clip line. Not part of the retired
+     system — `scroll-fade-y` is what masks both ends of Task Selection's
+     scroller (`components/TaskSelection.tsx`). `scroll-fade-top` has no
+     caller today; it is the same utility with one end open and is kept with
+     its pair rather than left as half a documented idea. ── */
+  .scroll-fade-top {
+    mask-image: linear-gradient(to bottom, transparent 0px, black 28px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 28px);
+  }
+  .scroll-fade-y {
+    mask-image: linear-gradient(to bottom, transparent 0px, black 24px, black calc(100% - 24px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 24px, black calc(100% - 24px), transparent 100%);
+  }
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────
+ * Tablet / touch-device glass rendering cap  (plan item 6)
+ * ─────────────────────────────────────────────────────────────────────────
+ * The seam/flash fix above permanently promotes every glass surface to its own
+ * compositor layer with `will-change: transform, backdrop-filter`, and the
+ * design system's own blur radii run to 72px (`--glass-blur-xl`). Desktop
+ * Chromium handles that fine, but touch devices (iPadOS Safari, tablet Chrome)
+ * have a much smaller GPU compositing budget. Keeping a dozen always-live
+ * `backdrop-filter` layers at that radius overruns it, which is what made the
+ * header / footer glass "break" (blank / black / flickering panels) and threw a
+ * full-screen flash the moment another blurred layer mounted — e.g. opening
+ * the Task Selection filter panel.
+ *
+ * This rule lives OUTSIDE `@layer components` so it wins without `!important`
+ * against layered defaults; the `!important` it does carry is aimed at the
+ * element's own inline `style`, which is where every Aurora Glass surface
+ * writes its blur.
+ *
+ * Two levers, both plan-prescribed:
+ *   1. Drop `backdrop-filter` from `will-change` — the `transform` promotion
+ *      alone still fixes the seam, but the browser no longer keeps every
+ *      filter layer permanently "live", which is the main cost driver.
+ *   2. Cap the blur radius so the total composite fits the tablet budget while
+ *      still reading as glass.
+ *
+ * UI-20 deleted the nine per-class overrides that used to sit beside this —
+ * one for each `.liquid-glass*` variant, plus `.nav-active-pill` and
+ * `input.login-glass-input`. None of those classes exist any more, and the one
+ * rule left covers what they covered plus everything they never did, because
+ * Aurora Glass puts its blur inline on every surface. Note the ordering
+ * invariant at the top of this file: this pair reaches the minifier.
+ */
+@media (pointer: coarse) {
+  [style*="backdrop-filter"] {
+    will-change: transform !important;
+    -webkit-backdrop-filter: blur(16px) saturate(1.3) !important;
+    backdrop-filter: blur(16px) saturate(1.3) !important;
+  }
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────
+ * Opaque fallback when backdrop-filter is unavailable  (plan item A7)
+ * ─────────────────────────────────────────────────────────────────────────
+ * Every glass surface in the app paints only a translucent white fill
+ * (`--glass-fill-1/2/3`, 1.8–16.5% white) and relies entirely on
+ * `backdrop-filter` blur to read as frosted glass. When the blur never renders
+ * — a browser without backdrop-filter support, Brave shields stripping it, or
+ * a stale asset on the live domain — that fill is effectively invisible over
+ * the near-black page, so headers, footers, dialogs and cards look
+ * "transparent" or disappear entirely.
+ *
+ * This block lives OUTSIDE `@layer components` for the same reason as the one
+ * above, and `!important` beats the element's own inline `style`.
+ *
+ * It fires only when NEITHER `backdrop-filter` nor `-webkit-backdrop-filter`
+ * is supported. `--surface-card` is `--void-2`, which `ui/tokens/colors.css`
+ * labels "opaque card fallback" — this is the case it was named for. UI-20
+ * dropped the fifteen `.liquid-glass*` / `.glow-*` rules that used to sit here
+ * with hard-coded hexes; one token-backed rule now covers every surface,
+ * because every surface declares its blur inline.
+ */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [style*="backdrop-filter"] {
+    background: var(--surface-card) !important;
+  }
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

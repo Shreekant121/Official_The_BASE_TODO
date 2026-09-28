@@ -1,0 +1,64 @@
+<!-- @dsCard group="Motion" viewport="720x440" name="AI presence" subtitle="Atlas's mark — a matte blue sphere turning, surface bands rippling across it" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI presence</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD(['../data/AiPresence.jsx']).then(function (AG) {
+  const { AiPresence } = AG;
+  const E = 'var(--ease-glass)';
+  const STATES = [['idle', 'Idle'], ['thinking', 'Thinking'], ['speaking', 'Speaking']];
+
+  function Demo() {
+    const [st, setSt] = React.useState('idle');
+    const [lv, setLv] = React.useState(0);
+    React.useEffect(() => {
+      if (st !== 'speaking') return undefined;
+      let id, t = 0;
+      const tick = () => { t += 0.12; setLv(Math.max(0, Math.sin(t * 3.1) * 0.5 + Math.sin(t * 7.3) * 0.3 + 0.35)); id = setTimeout(tick, 90); };
+      tick();
+      return () => clearTimeout(id);
+    }, [st]);
+    const lbl = { font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+    return (
+      <div style={{ padding: 'var(--sp-7)', display: 'grid', gap: 'var(--sp-7)', justifyItems: 'center', alignContent: 'center', minHeight: 380 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-8)' }}>
+          <AiPresence state={st} level={st === 'speaking' ? lv : undefined} size={180} />
+          <AiPresence state={st} level={st === 'speaking' ? lv : undefined} size={56} />
+        </div>
+        <div role="radiogroup" aria-label="Atlas state" style={{
+          display: 'flex', gap: 4, padding: 4, borderRadius: 'var(--r-pill)',
+          backgroundImage: 'var(--glass-fill-2)', backdropFilter: 'var(--glass-bd-sm)', WebkitBackdropFilter: 'var(--glass-bd-sm)', boxShadow: 'var(--glass-rim-1)',
+        }}>
+          {STATES.map(([k, l]) => (
+            <button key={k} role="radio" aria-checked={st === k} onClick={() => setSt(k)} style={Object.assign({}, lbl, {
+              height: 32, padding: '0 16px', borderRadius: 'var(--r-pill)', border: 0, cursor: 'pointer',
+              color: st === k ? 'var(--fg-1)' : 'var(--fg-3)',
+              background: st === k ? 'oklch(1 0 0 / 0.10)' : 'oklch(1 0 0 / 0)',
+              transition: 'background-color var(--dur-base) ' + E + ', color var(--dur-base) ' + E,
+            })}>{l}</button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

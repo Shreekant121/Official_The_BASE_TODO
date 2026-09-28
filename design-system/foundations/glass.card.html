@@ -1,0 +1,72 @@
+<!-- @dsCard group="Foundations" viewport="700x330" name="The glass material" subtitle="Five layers, three thicknesses, and what happens when you drop one" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Glass material</title>
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD(['../components/material/GlassFilters.jsx', '../components/material/GlassSurface.jsx']).then(function (AG) {
+  const { GlassFilters, GlassSurface } = AG;
+
+  const Cell = ({ note, children }) => (
+    <div style={{ display: 'grid', gap: 'var(--sp-3)', justifyItems: 'center' }}>
+      {children}
+      <span className="lbl">{note}</span>
+    </div>
+  );
+
+  function Demo() {
+    return (
+      <div className="pad col" style={{ gap: 'var(--sp-7)' }}>
+        <GlassFilters />
+        <div>
+          <span className="lbl">Thickness</span>
+          <div className="row" style={{ marginTop: 'var(--sp-4)', alignItems: 'flex-start' }}>
+            <Cell note="level 1 — chip"><GlassSurface level={1} style={{ width: 122, height: 84 }} /></Cell>
+            <Cell note="level 2 — card"><GlassSurface level={2} style={{ width: 122, height: 84 }} /></Cell>
+            <Cell note="level 3 — sheet"><GlassSurface level={3} style={{ width: 122, height: 84 }} /></Cell>
+            <Cell note="refract"><GlassSurface level={2} refract style={{ width: 122, height: 84 }} /></Cell>
+            <Cell note="blur only — wrong">
+              <div style={{ width: 122, height: 84, borderRadius: 'var(--r-card)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', background: 'oklch(1 0 0 / 0.05)' }} />
+            </Cell>
+          </div>
+        </div>
+        <div>
+          <span className="lbl">Tint &amp; emission</span>
+          <div className="row" style={{ marginTop: 'var(--sp-4)', gap: 'var(--sp-4)' }}>
+            {['accent', 'cyan', 'violet', 'amber', 'rose', 'frost'].map((t) => (
+              <GlassSurface key={t} level={2} tint={t} radius="var(--r-md)" style={{ width: 88, height: 50, display: 'grid', placeItems: 'center' }}>
+                <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase' }}>{t}</span>
+              </GlassSurface>
+            ))}
+            <GlassSurface level={2} glow="accent" radius="var(--r-md)" style={{ width: 88, height: 50, display: 'grid', placeItems: 'center' }}>
+              <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase' }}>glow</span>
+            </GlassSurface>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

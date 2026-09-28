@@ -1,0 +1,87 @@
+<!-- @dsCard group="Motion" viewport="720x520" name="Bottom bar → sheet" subtitle="Interactive. Tap or drag the bar up; the same glass grows into a sheet, anchored to the bottom" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bottom bar</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD(['../core/Icon.jsx', '../actions/IconButton.jsx', '../actions/Button.jsx', '../navigation/BottomBar.jsx']).then(function (AG) {
+  const { Icon, IconButton, Button, BottomBar } = AG;
+  const E = 'var(--ease-glass)';
+  const mono = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' };
+  const kick = { font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)', whiteSpace: 'nowrap' };
+
+  function useClock(run, start) {
+    const [s, setS] = React.useState(start);
+    React.useEffect(() => {
+      if (!run) return undefined;
+      const id = setInterval(() => setS((v) => Math.max(0, v - 1)), 1000);
+      return () => clearInterval(id);
+    }, [run]);
+    return s;
+  }
+  const fmt = (s) => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+
+  function Demo() {
+    const [run, setRun] = React.useState(true);
+    const [open, setOpen] = React.useState(false);
+    const s = useClock(run, 18 * 60 + 24);
+    const pct = 1 - s / (25 * 60);
+    const dot = <span style={{ width: 8, height: 8, borderRadius: '50%', flex: '0 0 auto', background: run ? 'var(--accent)' : 'var(--fg-4)', boxShadow: run ? '0 0 8px var(--accent)' : 'none', transition: 'background-color var(--dur-base) ' + E }} />;
+
+    return (
+      <div style={{ position: 'relative', height: '100%', minHeight: 480, display: 'grid', alignContent: 'end', justifyItems: 'center', padding: '0 var(--sp-6) var(--sp-7)' }}>
+        <span style={Object.assign({}, kick, { position: 'absolute', top: 'var(--sp-6)', left: 0, right: 0, textAlign: 'center' })}>
+          {open ? 'Tap the grabber, Esc or drag down' : 'Tap or drag the bar up'}
+        </span>
+
+        <BottomBar
+          open={open}
+          onOpenChange={setOpen}
+          label="Focus session"
+          peek={<>
+            {dot}
+            <span style={{ flex: 1, minWidth: 0, font: 'var(--type-body)', color: 'var(--fg-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Write launch brief</span>
+            <span style={Object.assign({}, mono, { fontSize: 15, color: 'var(--fg-2)' })}>{fmt(s)}</span>
+          </>}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+            {dot}
+            <span style={kick}>{run ? 'Focus · Aurora launch' : 'Paused · Aurora launch'}</span>
+          </div>
+          <div style={{ font: 'var(--type-title)', color: 'var(--fg-1)' }}>Write launch brief</div>
+          <div style={Object.assign({}, mono, { fontSize: 56, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1, color: 'var(--fg-1)' })}>{fmt(s)}</div>
+          <div style={{ height: 3, borderRadius: 2, background: 'var(--line-soft)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: (pct * 100) + '%', background: 'var(--accent)', transition: 'width 1s linear' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', marginTop: 'var(--sp-2)' }}>
+            <IconButton label={run ? 'Pause' : 'Resume'} variant="glass" onClick={() => setRun((r) => !r)}>
+              <Icon name={run ? 'pause' : 'play'} size={18} />
+            </IconButton>
+            <IconButton label="Skip" variant="glass"><Icon name="skip-forward" size={18} /></IconButton>
+            <span style={{ flex: 1 }} />
+            <Button variant="solid" size="sm" iconLeft={<Icon name="check" size={16} />} onClick={() => setOpen(false)}>Done</Button>
+          </div>
+        </BottomBar>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

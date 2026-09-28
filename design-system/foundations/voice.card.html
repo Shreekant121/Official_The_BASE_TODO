@@ -1,0 +1,45 @@
+<!-- @dsCard group="Foundations" viewport="700x300" name="Voice" subtitle="Three registers — system, interface, explanatory — never mixed in one line" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voice</title>
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div class="pad col" style="gap: var(--sp-7)">
+  <div class="col" style="gap: var(--sp-3)">
+    <span class="lbl">System voice — machine states only, one per screen</span>
+    <span style="font: var(--type-system); letter-spacing: var(--tracking-system); text-transform: uppercase; color: var(--accent)">Booting system...</span>
+  </div>
+  <div class="col" style="gap: var(--sp-3)">
+    <span class="lbl">Interface voice — imperative, Title Case on headings</span>
+    <span style="font: var(--type-title); color: var(--fg-1)">Select Previous List</span>
+    <span style="font: var(--type-label); color: var(--fg-2)">Start session · Mark done · Reallocate time</span>
+  </div>
+  <div class="col" style="gap: var(--sp-3)">
+    <span class="lbl">Explanatory voice — one sentence, ~12 words max</span>
+    <span style="font: var(--type-body); color: var(--fg-2)">Strict focus. One task at a time.</span>
+    <span style="font: var(--type-body); color: var(--fg-3)">Access your saved task configurations.</span>
+  </div>
+  <div class="col" style="gap: var(--sp-3)">
+    <span class="lbl">Never</span>
+    <span style="font: var(--type-body); color: var(--status-overrun)">Oops! Looks like you're almost done — great job! 🎉</span>
+  </div>
+</div>
+</body>
+</html>

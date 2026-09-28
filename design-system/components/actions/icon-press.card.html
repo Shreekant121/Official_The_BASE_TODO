@@ -1,0 +1,175 @@
+<!-- @dsCard group="Motion" viewport="720x460" name="Icon press → sheet → toolbar" subtitle="Interactive. Press the button; one glass surface reshapes into a sheet, then a pill toolbar" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Icon press</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD(['../core/Icon.jsx']).then(function (AG) {
+  const { Icon } = AG;
+  const E = 'var(--ease-glass)';
+  const D = '320ms';
+
+  /* One glass surface, three shapes. Only size and radius change —
+     the surface never jumps, so the eye tracks one object:
+       button  64 × 64, circle
+       sheet   208 × 212, 26px radius
+       toolbar 232 × 60, pill                                        */
+  const SHAPE = {
+    button:  { w: 64,  h: 64,  r: 32 },
+    sheet:   { w: 208, h: 212, r: 26 },
+    toolbar: { w: 232, h: 60,  r: 30 },
+  };
+  const ROWS = [
+    ['play', 'Start session'],
+    ['clock', 'Defer 15 min'],
+    ['folder-input', 'Move to list'],
+    ['archive', 'Archive'],
+  ];
+  const TOOLS = [['chevron-left', 'Back'], ['plus', 'Add'], ['timer', 'Timer'], ['check', 'Done']];
+
+  function usePress() {
+    const [down, setDown] = React.useState(false);
+    const [bloom, setBloom] = React.useState(0);
+    return [down, bloom, {
+      onPointerDown: () => setDown(true),
+      onPointerUp: () => { setDown(false); setBloom((b) => b + 1); },
+      onPointerLeave: () => setDown(false),
+    }];
+  }
+
+  function Bloom({ k }) {
+    const [on, setOn] = React.useState(false);
+    React.useEffect(() => {
+      if (!k) return undefined;
+      setOn(true);
+      const id = setTimeout(() => setOn(false), 140);
+      return () => clearTimeout(id);
+    }, [k]);
+    return <span aria-hidden="true" style={{
+      position: 'absolute', inset: 0, borderRadius: 'inherit', pointerEvents: 'none',
+      background: 'radial-gradient(120% 80% at 50% 0%, oklch(1 0 0 / 0.28), oklch(1 0 0 / 0) 65%)',
+      opacity: on ? 1 : 0, transition: 'opacity ' + (on ? '120ms' : '520ms') + ' ' + E,
+    }} />;
+  }
+
+  function Layer({ show, delay = 0, children, style }) {
+    return <div style={Object.assign({
+      position: 'absolute', inset: 0,
+      opacity: show ? 1 : 0, visibility: show ? 'visible' : 'hidden', pointerEvents: show ? 'auto' : 'none',
+      transition: 'opacity ' + (show ? '220ms ' + E + ' ' + delay + 'ms' : '120ms ' + E) + ', visibility 0s linear ' + (show ? '0s' : '120ms'),
+    }, style)}>{children}</div>;
+  }
+
+  function PressIcon({ icon, label, onClick, size = 20 }) {
+    const [down, bloom, h] = usePress();
+    return (
+      <button aria-label={label} onClick={onClick} {...h} style={{
+        position: 'relative', width: 44, height: 44, borderRadius: '50%', border: 0, padding: 0, cursor: 'pointer',
+        display: 'grid', placeItems: 'center', color: 'var(--fg-1)',
+        background: down ? 'oklch(1 0 0 / 0.10)' : 'oklch(1 0 0 / 0)',
+        transform: down ? 'scale(0.92)' : 'scale(1)',
+        transition: 'transform var(--dur-fast) ' + E + ', background-color var(--dur-fast) ' + E,
+      }}>
+        <Bloom k={bloom} />
+        <Icon name={icon} size={size} stroke={1.5} />
+      </button>
+    );
+  }
+
+  function Demo() {
+    const [mode, setMode] = React.useState('button');
+    const [picked, setPicked] = React.useState(null);
+    const [down, bloom, press] = usePress();
+    const ref = React.useRef(null);
+    const s = SHAPE[mode];
+
+    React.useEffect(() => {
+      if (mode !== 'sheet') return undefined;
+      const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setMode('button'); };
+      const key = (e) => { if (e.key === 'Escape') setMode('button'); };
+      document.addEventListener('pointerdown', away);
+      document.addEventListener('keydown', key);
+      return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', key); };
+    }, [mode]);
+
+    const isBtn = mode === 'button';
+    const hint = { button: 'Press the button', sheet: 'Pick an action · Esc closes', toolbar: 'Back returns to the button' }[mode];
+
+    return (
+      <div style={{ padding: 'var(--sp-6) var(--sp-7)', display: 'grid', gap: 'var(--sp-5)', justifyItems: 'center' }}>
+        <div style={{ position: 'relative', width: '100%', height: 300, display: 'grid', placeItems: 'center' }}>
+          <div
+            ref={ref}
+            role={isBtn ? 'button' : mode === 'sheet' ? 'menu' : 'toolbar'}
+            aria-label={isBtn ? 'Task actions' : undefined}
+            tabIndex={isBtn ? 0 : -1}
+            onClick={isBtn ? () => setTimeout(() => setMode('sheet'), 160) : undefined}
+            onKeyDown={isBtn ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMode('sheet'); } } : undefined}
+            {...(isBtn ? press : {})}
+            style={{
+              position: 'relative', width: s.w, height: s.h, borderRadius: s.r, overflow: 'hidden',
+              cursor: isBtn ? 'pointer' : 'default', outline: 'none',
+              backgroundImage: 'var(--glass-fill-3)', backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+              boxShadow: 'var(--glass-shadow-thick)',
+              opacity: isBtn && down ? 0.78 : 1,
+              transform: isBtn && down ? 'scale(0.95)' : 'scale(1)',
+              transition: ['width', 'height', 'border-radius'].map((p) => p + ' ' + D + ' ' + E).join(', ')
+                + ', transform var(--dur-fast) ' + E + ', opacity var(--dur-fast) ' + E,
+            }}>
+            <Bloom k={bloom} />
+
+            <Layer show={isBtn} style={{ display: 'grid', placeItems: 'center', color: 'var(--fg-1)' }}>
+              <Icon name="share" size={24} stroke={1.5} />
+            </Layer>
+
+            <Layer show={mode === 'sheet'} delay={120} style={{ padding: 8, display: 'grid', alignContent: 'start', gap: 2 }}>
+              {ROWS.map(([ic, label]) => (
+                <button key={label} role="menuitem" onClick={() => { setPicked(label); setMode('toolbar'); }} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, height: 46, padding: '0 14px', borderRadius: 18,
+                  border: 0, cursor: 'pointer', textAlign: 'left', whiteSpace: 'nowrap',
+                  font: 'var(--type-body)', color: 'var(--fg-1)', background: 'oklch(1 0 0 / 0)',
+                  transition: 'background-color var(--dur-fast) ' + E,
+                }}
+                  onPointerEnter={(e) => { e.currentTarget.style.background = 'oklch(1 0 0 / 0.08)'; }}
+                  onPointerLeave={(e) => { e.currentTarget.style.background = 'oklch(1 0 0 / 0)'; }}>
+                  <Icon name={ic} size={18} stroke={1.5} style={{ color: 'var(--fg-2)' }} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </Layer>
+
+            <Layer show={mode === 'toolbar'} delay={120} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px' }}>
+              {TOOLS.map(([ic, label]) => (
+                <PressIcon key={ic} icon={ic} label={label} onClick={ic === 'chevron-left' ? () => setMode('button') : undefined} />
+              ))}
+            </Layer>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)' }}>
+          <span>{hint}</span>
+          {mode === 'toolbar' && picked && <span style={{ color: 'var(--fg-2)' }}>· {picked}</span>}
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

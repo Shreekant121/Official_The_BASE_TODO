@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>Atlas asks — mid-turn questions</title>
+<meta name="design_doc_mode" content="canvas">
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; min-height: 100%; }
+  a { color: var(--fg-1); text-decoration: none; }
+  a:hover { color: var(--accent-lift); }
+</style>
+</helmet>
+<section data-screen-label="Turn 1 — Atlas asks" class="ag-page" style="min-height:100vh;box-sizing:border-box;padding:64px;display:grid;gap:40px;align-content:start">
+  <header style="display:grid;gap:var(--sp-3);max-width:720px">
+    <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Turn 1 · Atlas asks mid-turn</span>
+    <h1 style="margin:0;font:var(--type-display);font-size:var(--text-2xl);letter-spacing:var(--tracking-title);color:var(--fg-1)">The turn stops. The card waits.</h1>
+    <p style="margin:0;font:var(--type-body);color:var(--fg-3);text-wrap:pretty">All three are live. Tap, or hover a card and use 1–9, Enter, Esc.</p>
+  </header>
+
+  <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+    <div id="1a" style="display:grid;gap:var(--sp-4)">
+      <div style="display:flex;align-items:center;gap:var(--sp-4)">
+        <span style="display:grid;place-items:center;height:26px;padding:0 var(--sp-3);border-radius:var(--r-pill);background-image:var(--glass-fill-3);box-shadow:var(--glass-rim-2);font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-1)">1a</span>
+        <span style="font:var(--type-label);color:var(--fg-2)">Atlas chat · four questions, one card</span>
+        <span style="flex:1"></span>
+        <button type="button" onClick="{{ replayA }}" style="display:inline-flex;align-items:center;gap:var(--sp-2);height:32px;padding:0 var(--sp-4);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-3);font:var(--type-caption);cursor:pointer" style-hover="color:var(--fg-1)">{{ icReplay }}Replay</button>
+      </div>
+      <div data-screen-label="1a Atlas chat" class="ag-page" style="position:relative;width:1200px;height:900px;border-radius:28px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--line-soft), 0 40px 80px -40px oklch(0 0 0 / 0.9);display:flex">
+        <div style="flex:0 0 auto;padding:var(--sp-9) 0 0 var(--sp-7)">
+          <div style="display:grid;gap:var(--sp-2);padding:6px;border-radius:var(--r-pill);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)">
+            <sc-for list="{{ rail }}" as="r" hint-placeholder-count="5">
+              <span style="display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background-image:{{ r.fill }};box-shadow:{{ r.rim }};color:{{ r.ink }}">{{ r.icon }}</span>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;padding:var(--sp-9) var(--sp-9) var(--sp-7)">
+          <div style="width:100%;max-width:760px;margin:0 auto;display:flex;align-items:center;gap:var(--sp-4)">
+            <div style="display:grid;gap:2px;flex:1;min-width:0">
+              <span style="font:var(--type-title);font-size:var(--text-lg);letter-spacing:var(--tracking-title);color:var(--fg-1)">Call the CA</span>
+              <span style="display:flex;align-items:center;gap:var(--sp-3);font:var(--type-caption);color:{{ a.ink }};transition:color var(--dur-base) var(--ease-glass)">{{ a.dot }}{{ a.status }}</span>
+            </div>
+          </div>
+          <div ref="{{ scA }}" style="flex:1;min-height:0;overflow-y:auto;margin-top:var(--sp-5);scrollbar-width:none">
+            <div style="width:100%;max-width:760px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:var(--sp-7);padding:var(--sp-6) 0 var(--sp-7);box-sizing:border-box">
+              <div style="display:flex;justify-content:flex-end"><p style="margin:0;max-width:56ch;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-lg);background-image:var(--glass-fill-3);box-shadow:var(--glass-rim-2), var(--glass-cast-1);font:var(--type-body);color:var(--fg-1)">add a task to call the CA</p></div>
+              <div style="display:grid;gap:var(--sp-5)">
+                <div style="display:flex;align-items:center;gap:var(--sp-3);color:var(--fg-4)">{{ icSearch }}<span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">search_tasks · 2 CA tasks found, none open</span></div>
+                <p style="margin:0;max-width:62ch;font:var(--type-body);line-height:var(--leading-relaxed);color:var(--fg-2);text-wrap:pretty">Nothing like it is open, so it will be new. It needs four answers first — the date, the time and the score change where it lands in your week.</p>
+                <dc-import name="Ask Card" set="task" run="{{ runA }}" on-phase="{{ onA }}" hint-size="100%,420px"></dc-import>
+              </div>
+            </div>
+          </div>
+          <div style="width:100%;max-width:760px;margin:0 auto;display:grid;gap:var(--sp-3)">
+            <div style="display:flex;align-items:center;gap:var(--sp-3);min-height:56px;padding:var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-6);border-radius:var(--r-xl);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-rim-1), var(--glass-inner-1), var(--glass-cast-1);box-sizing:border-box">
+              <span style="flex:1;min-width:0;font:var(--type-body);font-size:var(--text-md);color:var(--fg-4)">{{ a.placeholder }}</span>
+              <span style="display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--fg-4)">{{ icArrowUp }}</span>
+            </div>
+            <div style="display:flex;gap:var(--sp-3);padding:0 var(--sp-5);font:var(--type-caption);color:var(--fg-4)"><span>Auto</span><span>·</span><span>Some</span><span style="flex:1"></span><span style="color:{{ a.ink }};opacity:{{ a.noteOp }};transition:opacity var(--dur-base) var(--ease-glass)">Typing here answers the card in your own words</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1b" style="display:grid;gap:var(--sp-4)">
+      <div style="display:flex;align-items:center;gap:var(--sp-4)">
+        <span style="display:grid;place-items:center;height:26px;padding:0 var(--sp-3);border-radius:var(--r-pill);background-image:var(--glass-fill-3);box-shadow:var(--glass-rim-2);font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-1)">1b</span>
+        <span style="font:var(--type-label);color:var(--fg-2)">Atlas chat · one question, one tap</span>
+        <span style="flex:1"></span>
+        <button type="button" onClick="{{ replayB }}" style="display:inline-flex;align-items:center;gap:var(--sp-2);height:32px;padding:0 var(--sp-4);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-3);font:var(--type-caption);cursor:pointer" style-hover="color:var(--fg-1)">{{ icReplay }}Replay</button>
+      </div>
+      <div data-screen-label="1b Atlas single" class="ag-page" style="position:relative;width:1000px;height:640px;border-radius:28px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--line-soft), 0 40px 80px -40px oklch(0 0 0 / 0.9);display:flex;flex-direction:column;padding:var(--sp-9) var(--sp-9) var(--sp-7);box-sizing:border-box">
+        <div style="width:100%;max-width:720px;margin:0 auto;display:grid;gap:2px">
+          <span style="font:var(--type-title);font-size:var(--text-lg);letter-spacing:var(--tracking-title);color:var(--fg-1)">Call the CA</span>
+          <span style="display:flex;align-items:center;gap:var(--sp-3);font:var(--type-caption);color:{{ b.ink }};transition:color var(--dur-base) var(--ease-glass)">{{ b.dot }}{{ b.status }}</span>
+        </div>
+        <div ref="{{ scB }}" style="flex:1;min-height:0;overflow-y:auto;margin-top:var(--sp-5);scrollbar-width:none">
+          <div style="width:100%;max-width:720px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:var(--sp-7);padding:var(--sp-6) 0 var(--sp-7);box-sizing:border-box">
+            <div style="display:flex;justify-content:flex-end"><p style="margin:0;max-width:56ch;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-lg);background-image:var(--glass-fill-3);box-shadow:var(--glass-rim-2), var(--glass-cast-1);font:var(--type-body);color:var(--fg-1)">add a task to call the CA — Friday, about 30 min, 7 out of 9</p></div>
+            <dc-import name="Ask Card" set="list" run="{{ runB }}" on-phase="{{ onB }}" hint-size="100%,220px"></dc-import>
+          </div>
+        </div>
+        <div style="width:100%;max-width:720px;margin:0 auto;display:flex;align-items:center;gap:var(--sp-3);min-height:56px;padding:var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-6);border-radius:var(--r-xl);background-image:var(--glass-fill-2);box-shadow:var(--glass-rim-1), var(--glass-inner-1), var(--glass-cast-1);box-sizing:border-box">
+          <span style="flex:1;min-width:0;font:var(--type-body);font-size:var(--text-md);color:var(--fg-4)">{{ b.placeholder }}</span>
+          <span style="display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--fg-4)">{{ icArrowUp }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="1c" style="display:grid;gap:var(--sp-4)">
+      <div style="display:flex;align-items:center;gap:var(--sp-4)">
+        <span style="display:grid;place-items:center;height:26px;padding:0 var(--sp-3);border-radius:var(--r-pill);background-image:var(--glass-fill-3);box-shadow:var(--glass-rim-2);font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-1)">1c</span>
+        <span style="font:var(--type-label);color:var(--fg-2)">AI panel beside a project board · 404 px</span>
+        <span style="flex:1"></span>
+        <button type="button" onClick="{{ replayC }}" style="display:inline-flex;align-items:center;gap:var(--sp-2);height:32px;padding:0 var(--sp-4);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-3);font:var(--type-caption);cursor:pointer" style-hover="color:var(--fg-1)">{{ icReplay }}Replay</button>
+      </div>
+      <div data-screen-label="1c Project board + AI panel" class="ag-page" style="position:relative;width:1180px;height:900px;border-radius:28px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--line-soft), 0 40px 80px -40px oklch(0 0 0 / 0.9);display:grid;grid-template-columns:minmax(0,1fr) 404px">
+
+        <div style="min-width:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:var(--sp-7);padding:var(--sp-9) var(--sp-7) var(--sp-7) var(--sp-9)">
+          <div style="display:grid;gap:var(--sp-2)">
+            <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Project · Mutineer Work</span>
+            <span style="font:var(--type-display);font-size:var(--text-xl);letter-spacing:var(--tracking-title);color:var(--fg-1)">Admin &amp; Finance</span>
+            <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3)">{{ boardMeta }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:var(--sp-5);min-height:0">
+            <sc-for list="{{ cols }}" as="col" hint-placeholder-count="3">
+              <div style="display:grid;gap:var(--sp-3);align-content:start;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:var(--sp-3);padding:0 var(--sp-2) var(--sp-2)"><span style="font:var(--type-label);color:var(--fg-1)">{{ col.name }}</span><span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-4)">{{ col.n }}</span></div>
+                <sc-for list="{{ col.tasks }}" as="t" hint-placeholder-count="2">
+                  <div style="display:grid;gap:var(--sp-3);padding:var(--sp-5);border-radius:var(--r-card);background-image:var(--glass-fill-1);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:{{ t.sh }};opacity:{{ t.op }};transform:{{ t.tf }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass), box-shadow var(--dur-sheet) var(--ease-glass)">
+                    <span style="font:var(--type-body);font-size:var(--text-sm);color:var(--fg-1);text-wrap:pretty">{{ t.title }}</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:var(--sp-2) var(--sp-4);font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3)"><span style="color:{{ t.dueInk }}">{{ t.due }}</span><span>{{ t.est }}</span><span>{{ t.imp }}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <aside style="min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;border-radius:var(--r-card-lg) 0 0 var(--r-card-lg);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)">
+          <div style="display:flex;align-items:flex-start;gap:var(--sp-4);padding:var(--sp-6) var(--sp-5) var(--sp-5) var(--sp-6);border-bottom:1px solid var(--line-faint)">
+            <div style="flex:1;min-width:0;display:grid;gap:2px">
+              <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Project · Mutineer Work</span>
+              <span style="font:var(--type-title);font-size:var(--text-md);color:var(--fg-1)">Admin &amp; Finance</span>
+              <span style="display:flex;align-items:center;gap:var(--sp-3);margin-top:var(--sp-2);font:var(--type-caption);color:{{ c.ink }};transition:color var(--dur-base) var(--ease-glass)">{{ c.dot }}{{ c.status }}</span>
+            </div>
+            <span style="display:grid;place-items:center;width:44px;height:44px;border-radius:50%;color:var(--fg-3)">{{ icX }}</span>
+          </div>
+          <div ref="{{ scC }}" style="min-height:0;overflow-y:auto;scrollbar-width:none">
+            <div style="min-height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:var(--sp-5);padding:var(--sp-5) var(--sp-4) var(--sp-5);box-sizing:border-box">
+              <div style="display:flex;justify-content:flex-end;padding-right:var(--sp-2)"><p style="margin:0;max-width:86%;padding:var(--sp-3) var(--sp-5);border-radius:var(--r-lg);background-image:var(--glass-fill-3);box-shadow:var(--glass-rim-2), var(--glass-cast-1);font:var(--type-body);font-size:var(--text-sm);color:var(--fg-1)">add a task to call the CA</p></div>
+              <p style="margin:0;padding:0 var(--sp-2);font:var(--type-body);font-size:var(--text-sm);color:var(--fg-2)">Goes in this project. Four answers first.</p>
+              <dc-import name="Ask Card" set="task" compact="{{ true }}" run="{{ runC }}" on-phase="{{ onC }}" hint-size="100%,440px"></dc-import>
+            </div>
+          </div>
+          <div style="padding:var(--sp-3) var(--sp-4) var(--sp-5)">
+            <div style="display:flex;align-items:center;gap:var(--sp-3);min-height:48px;padding:0 5px 0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)">
+              <span style="flex:1;min-width:0;font:var(--type-body);font-size:var(--text-sm);color:var(--fg-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.placeholderShort }}</span>
+              <span style="display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--fg-4)">{{ icArrowUp }}</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const BOARD = [
+  { name: 'Today', tasks: [
+    { title: 'Reconcile the invoices', due: '4d late', late: true, est: '45 min', imp: '8/9' },
+    { title: 'Reply to the two demo asks', due: 'Today', est: '20 min', imp: '6/9' },
+  ]},
+  { name: 'This week', tasks: [
+    { title: 'Draft the investor update', due: 'Mon 29 Sep', est: '1 h', imp: '6/9' },
+    { title: 'File the quarterly returns', due: '1 Oct', est: '1 h 30', imp: '7/9' },
+  ]},
+  { name: 'Later', tasks: [
+    { title: 'Back up the project archive', due: 'No date', est: '30 min', imp: '3/9' },
+  ]},
+];
+
+class Component extends DCLogic {
+  state = { ph: { a: 'ask', b: 'ask', c: 'ask' }, run: { a: 0, b: 0, c: 0 }, info: null, shownNew: false };
+
+  icon(size, kids) {
+    const h = React.createElement;
+    return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, style: { flex: '0 0 auto' } },
+      kids.map((k, i) => h(k[0], Object.assign({ key: i }, k[1]))));
+  }
+  icons() {
+    if (this._ic) return this._ic;
+    const I = (s, k) => this.icon(s, k), h = React.createElement;
+    const dot = (bg, anim, ring) => h('span', { style: { position: 'relative', width: 7, height: 7, flex: '0 0 auto' } },
+      h('span', { style: { position: 'absolute', inset: 0, borderRadius: '50%', background: bg, boxShadow: anim ? '0 0 8px ' + bg : 'none', animation: anim ? 'ag-pulse 1.4s var(--ease-glass) infinite' : 'none' } }),
+      ring ? h('span', { style: { position: 'absolute', inset: 0, borderRadius: '50%', boxShadow: '0 0 0 1px ' + bg, animation: 'ag-ripple 1.8s var(--ease-glass) infinite' } }) : null);
+    this._ic = {
+      icReplay: I(13, [['path', { d: 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8' }], ['path', { d: 'M3 3v5h5' }]]),
+      icArrowUp: I(16, [['path', { d: 'm5 12 7-7 7 7' }], ['path', { d: 'M12 19V5' }]]),
+      icX: I(18, [['path', { d: 'M18 6 6 18' }], ['path', { d: 'm6 6 12 12' }]]),
+      icSearch: I(13, [['circle', { cx: 11, cy: 11, r: 8 }], ['path', { d: 'm21 21-4.3-4.3' }]]),
+      dAsk: dot('var(--status-review)', true, true), dWork: dot('var(--accent)', true, false), dIdle: dot('var(--fg-4)', false, false),
+      rail: [
+        I(20, [['path', { d: 'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8' }], ['path', { d: 'M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }]]),
+        I(20, [['path', { d: 'M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z' }]]),
+        I(20, [['path', { d: 'M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z' }]]),
+        I(20, [['path', { d: 'M10.268 21a2 2 0 0 0 3.464 0' }], ['path', { d: 'M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326' }]]),
+      ],
+    };
+    return this._ic;
+  }
+
+  setPh(k, p, info) {
+    this.setState(s => ({ ph: { ...s.ph, [k]: p }, ...(k === 'c' ? { info: p === 'done' ? info : null, shownNew: false } : {}) }));
+    if (k === 'c' && p === 'done') { clearTimeout(this.tn); this.tn = setTimeout(() => this.setState({ shownNew: true }), 40); }
+  }
+  replay(k) { this.setState(s => ({ run: { ...s.run, [k]: s.run[k] + 1 } })); }
+  scA = React.createRef(); scB = React.createRef(); scC = React.createRef();
+  componentDidMount() {
+    this.ros = [this.scA, this.scB, this.scC].map(ref => {
+      const el = ref.current; if (!el || !window.ResizeObserver) return null;
+      const pin = () => { el.scrollTop = el.scrollHeight; };
+      pin(); requestAnimationFrame(pin);
+      const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
+      return ro;
+    });
+  }
+  componentWillUnmount() { clearTimeout(this.tn); (this.ros || []).forEach(r => r && r.disconnect()); }
+
+  status(p, n, ic) {
+    if (p === 'ask') return { status: n === 1 ? 'Waiting on you · 1 question' : 'Waiting on you · ' + n + ' questions', ink: 'var(--status-review)', dot: ic.dAsk,
+      placeholder: 'Answer above, or type your own reply', placeholderShort: 'Answer above, or type', noteOp: 1 };
+    if (p === 'work') return { status: 'Working', ink: 'var(--fg-2)', dot: ic.dWork, placeholder: 'Message Atlas', placeholderShort: 'Ask about this project', noteOp: 0 };
+    return { status: 'Awake on the laptop', ink: 'var(--fg-3)', dot: ic.dIdle, placeholder: 'Message Atlas', placeholderShort: 'Ask about this project', noteOp: 0 };
+  }
+
+  renderVals() {
+    const s = this.state, ic = this.icons();
+    const card = (t, fresh) => ({ ...t, dueInk: t.late ? 'var(--status-overrun)' : 'var(--fg-2)',
+      sh: fresh ? 'var(--glass-rim-3), 0 0 0 1px var(--line-strong), var(--glass-cast-2)' : 'var(--glass-rim-1)',
+      op: fresh && !s.shownNew ? 0 : 1, tf: fresh && !s.shownNew ? 'translateY(-6px)' : 'translateY(0)' });
+    const i = s.info;
+    const cols = BOARD.map((c, ci) => {
+      const tasks = c.tasks.map(t => card(t, false));
+      if (i && ci === (/Today|Tue/.test(i.due) ? 0 : 1)) tasks.unshift(card({ title: 'Call the CA', due: i.due, est: i.est, imp: i.imp + '/9' }, true));
+      return { name: c.name, n: String(tasks.length), tasks };
+    });
+    const total = cols.reduce((a, c) => a + c.tasks.length, 0);
+    return {
+      ...ic, scA: this.scA, scB: this.scB, scC: this.scC,
+      rail: ic.rail.map((icon, k) => ({ icon, fill: k === 1 ? 'var(--glass-fill-solid)' : 'none', rim: k === 1 ? 'var(--glass-rim-3), var(--glass-cast-1)' : 'none', ink: k === 1 ? 'var(--fg-1)' : 'var(--fg-3)' })),
+      a: this.status(s.ph.a, 4, ic), b: this.status(s.ph.b, 1, ic), c: this.status(s.ph.c, 4, ic),
+      runA: s.run.a, runB: s.run.b, runC: s.run.c,
+      onA: (p, x) => this.setPh('a', p, x), onB: (p, x) => this.setPh('b', p, x), onC: (p, x) => this.setPh('c', p, x),
+      replayA: () => this.replay('a'), replayB: () => this.replay('b'), replayC: () => this.replay('c'),
+      cols, boardMeta: total + ' open · 5 h 05 planned',
+    };
+  }
+}
+</script>
+</body>
+</html>

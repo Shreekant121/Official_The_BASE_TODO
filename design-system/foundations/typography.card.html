@@ -1,0 +1,49 @@
+<!-- @dsCard group="Foundations" viewport="700x420" name="Typography" subtitle="System sans for the human, mono for the measured, plus the OS voice" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Typography</title>
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div class="pad col" style="gap: var(--sp-8)">
+  <div class="col" style="gap: var(--sp-4)">
+    <span class="lbl">Timer · mono 300 / 88px</span>
+    <span style="font: var(--type-timer); color: var(--fg-1); letter-spacing:-0.02em; font-variant-numeric: tabular-nums">24:18</span>
+  </div>
+  <div class="col" style="gap: var(--sp-4)">
+    <span class="lbl">Display · 48 / Metric · 36 / Title · 18</span>
+    <span style="font: var(--type-display); color: var(--fg-1); letter-spacing: var(--tracking-display)">BASE</span>
+    <span style="font: var(--type-metric); color: var(--fg-1); letter-spacing: var(--tracking-display)">3.4 h focused</span>
+    <span style="font: var(--type-title); color: var(--fg-1)">Select Previous List</span>
+  </div>
+  <div class="col" style="gap: var(--sp-4)">
+    <span class="lbl">Body · 15 / Label · 13 / Caption · 12</span>
+    <span style="font: var(--type-body); color: var(--fg-2)">Access your saved task configurations.</span>
+    <span style="font: var(--type-label); color: var(--fg-2)">Allocate time</span>
+    <span style="font: var(--type-caption); color: var(--fg-3)">⚡ Action Steps · 3 subtasks</span>
+  </div>
+  <div class="col" style="gap: var(--sp-4)">
+    <span class="lbl">Kicker · mono 11 · 0.14em</span>
+    <span class="ag-kicker">Focus time today</span>
+    <span class="lbl" style="margin-top: var(--sp-4)">System voice · bold 13 · 0.30em — use sparingly</span>
+    <span style="font: var(--type-system); letter-spacing: var(--tracking-system); text-transform: uppercase; color: var(--accent)">Initializing core...</span>
+  </div>
+</div>
+</body>
+</html>

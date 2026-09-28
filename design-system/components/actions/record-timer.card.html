@@ -1,0 +1,62 @@
+<!-- @dsCard group="Motion" viewport="720x420" name="Record timer" subtitle="Mic button widens into a live counter — rose while recording, emerald when saved" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Record timer</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD(['../core/Icon.jsx', '../actions/RecordTimer.jsx']).then(function (AG) {
+  const { Icon, RecordTimer } = AG;
+  const E = 'var(--ease-glass)';
+
+  function Toggle({ on, onChange, label }) {
+    return (
+      <button role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} style={{
+        position: 'relative', width: 44, height: 26, borderRadius: 13, border: 'var(--glass-hairline)', padding: 0, cursor: 'pointer',
+        background: on ? 'var(--accent-wash)' : 'oklch(1 0 0 / 0.06)', transition: 'background-color var(--dur-base) ' + E,
+      }}>
+        <span style={{
+          position: 'absolute', top: 3, left: 3, width: 18, height: 18, borderRadius: '50%',
+          background: on ? 'var(--accent)' : 'var(--fg-3)',
+          transform: on ? 'translateX(18px)' : 'translateX(0)',
+          transition: 'transform var(--dur-base) var(--ease-spring), background-color var(--dur-base) ' + E,
+        }} />
+      </button>
+    );
+  }
+
+  function Demo() {
+    const [armed, setArmed] = React.useState(false);
+    const [last, setLast] = React.useState(null);
+    const lbl = { font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)', whiteSpace: 'nowrap' };
+    const fmt = (s) => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    return (
+      <div style={{ padding: 'var(--sp-7)', display: 'grid', gap: 'var(--sp-7)', justifyItems: 'center', alignContent: 'center', minHeight: 340 }}>
+        <RecordTimer armed={armed} onSave={setLast} icon={<Icon name="mic" size={24} />} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <Toggle on={armed} onChange={setArmed} label="Arm voice capture" />
+          <span style={lbl}>{armed ? 'Armed · press the mic' : 'Arm voice capture'}</span>
+          {last != null && <span style={Object.assign({}, lbl, { color: 'var(--fg-2)' })}>· Saved {fmt(last)}</span>}
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

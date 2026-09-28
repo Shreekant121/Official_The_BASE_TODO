@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Settings</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+</style>
+</head>
+<body class="ag-page" data-screen-label="Settings">
+<div id="root">
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:1120px;margin:0 auto;height:56px"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/forms/Input.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/navigation/Tabs.jsx',
+  '../components/overlay/MorphMenu.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, Input, Switch, Toast, MiniNav, Tabs, MorphMenu } = AG;
+
+  const NAV = [
+    { value: 'home',      label: 'Home',          icon: 'house',    href: 'home.html' },
+    { value: 'assistant', label: 'Assistant',     icon: 'sparkles', href: 'atlas.html' },
+    { value: 'session',   label: 'New Session',   icon: 'zap',      href: 'session.html' },
+    { value: 'score',     label: 'Score',         icon: 'award', badge: 6, href: 'scoring.html' },
+    { value: 'alerts',    label: 'Notifications', icon: 'bell',     href: 'notifications.html' },
+    { value: 'settings',  label: 'Settings',      icon: 'settings' },
+  ];
+
+  /* Storage composition. Percentages are of the 8.1 KB record, not of the cap —
+     the cap is a separate, far quieter fact. */
+  const USAGE = [
+    { name: 'Tasks & subtasks',   size: '4.5 KB', pct: 56 },
+    { name: 'Today’s focus queue', size: '2.0 KB', pct: 25 },
+    { name: 'Time log',           size: '518 B',  pct: 6 },
+    { name: 'Lists',              size: '438 B',  pct: 5 },
+    { name: 'Projects',           size: '414 B',  pct: 5 },
+    { name: 'Remembered timings', size: '94 B',   pct: 1 },
+    { name: 'Session length',     size: '24 B',   pct: 0 },
+  ];
+  const SHADE = ['0.52', '0.40', '0.30', '0.23', '0.17', '0.12', '0.08'];
+
+  const TRASH = [
+    { id: 't1', icon: 'square-check-big', kind: 'Task',    name: 'Book the photographer', meta: 'deleted 10 Mar', left: 28 },
+    { id: 't2', icon: 'list',             kind: 'List',    name: 'Old marketing ideas',   meta: '2 tasks · deleted 5 Mar', left: 23 },
+    { id: 't3', icon: 'folder',           kind: 'Project', name: 'Consulting side line',  meta: '2 lists · 3 tasks · deleted 18 Feb', left: 8 },
+  ];
+
+  function useMedia(q) {
+    const [on, setOn] = React.useState(() => window.matchMedia(q).matches);
+    React.useEffect(() => {
+      const mq = window.matchMedia(q);
+      const fn = (e) => setOn(e.matches);
+      mq.addEventListener('change', fn);
+      return () => mq.removeEventListener('change', fn);
+    }, [q]);
+    return on;
+  }
+
+  /* ---------------------------------------------------------------- */
+
+  function Kicker({ children, trail }) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-3)', padding: '0 var(--sp-2)' }}>
+        <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)' }}>{children}</span>
+        {trail != null && <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)' }}>{trail}</span>}
+      </div>
+    );
+  }
+
+  function Card({ children, pad = 'var(--pad-card)', style }) {
+    return (
+      <section style={{
+        borderRadius: 'var(--r-card)', padding: pad,
+        backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+        animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+        ...style,
+      }}>{children}</section>
+    );
+  }
+
+  function Well({ children, pad = 'var(--sp-5)', style }) {
+    return (
+      <div style={{
+        borderRadius: 'var(--r-lg)', padding: pad,
+        background: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', ...style,
+      }}>{children}</div>
+    );
+  }
+
+  function FieldLabel({ icon, children, hint }) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+        <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name={icon} size={14} /></span>
+        <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)' }}>{children}</span>
+        <span style={{ flex: 1 }} />
+        {hint}
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Connections                                                       */
+
+  function Connections({ onToast }) {
+    const [key, setKey] = React.useState('');
+    const [shown, setShown] = React.useState(false);
+    const [domain, setDomain] = React.useState('');
+    const [testing, setTesting] = React.useState(false);
+    const [state, setState] = React.useState('idle'); // idle | ok | bad
+    const [saved, setSaved] = React.useState(false);
+
+    const dirty = key.trim().length > 0 || domain.trim().length > 0;
+    const dot = state === 'ok' ? 'var(--accent)' : state === 'bad' ? 'var(--status-overrun)' : 'var(--status-review)';
+    const status = state === 'ok' ? 'Key verified' : state === 'bad' ? 'Key rejected' : 'Not connected';
+
+    function test() {
+      if (!key.trim()) return;
+      setTesting(true);
+      setTimeout(() => {
+        const ok = key.trim().startsWith('sk_');
+        setTesting(false);
+        setState(ok ? 'ok' : 'bad');
+        onToast(ok
+          ? { icon: 'circle-check', title: 'SimpleURL reachable', detail: 'Short links and QR codes are available.' }
+          : { icon: 'triangle-alert', title: 'Key rejected', detail: 'Keys begin with sk_live_ or sk_test_.' });
+      }, 900);
+    }
+
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+        <Card>
+          <div style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+              <span aria-hidden="true" style={{
+                display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 auto', borderRadius: '50%',
+                backgroundImage: state === 'ok' ? 'var(--glass-tint-accent)' : 'var(--glass-fill-2)',
+                boxShadow: state === 'ok' ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-2)',
+                color: state === 'ok' ? 'oklch(0.93 0.07 162)' : 'var(--fg-2)',
+                transition: 'var(--t-hover)',
+              }}>
+                <Icon name="link" size={20} />
+              </span>
+              <div style={{ display: 'grid', gap: 2, minWidth: 0, flex: 1 }}>
+                <h2 style={{ font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>SimpleURL</h2>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Short links, QR codes and click counts for shared views.</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto' }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%', background: dot,
+                  boxShadow: state === 'ok' ? 'var(--glow-accent-sm)' : 'none',
+                  animation: state === 'ok' ? 'ag-pulse 2.4s var(--ease-glass) infinite' : 'none',
+                }} />
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{status}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+              <FieldLabel icon="key-round" hint={
+                <a href="#" style={{ font: 'var(--type-caption)', border: 0 }} onClick={(e) => e.preventDefault()}>
+                  SimpleURL dashboard ↗
+                </a>
+              }>API key</FieldLabel>
+              <div style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'center' }}>
+                <span style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex' }}>
+                  <Input
+                    type={shown ? 'text' : 'password'}
+                    value={key}
+                    onChange={(e) => { setKey(e.target.value); setState('idle'); setSaved(false); }}
+                    placeholder="sk_live_…"
+                    invalid={state === 'bad'}
+                    style={{ paddingRight: 52 }}
+                    aria-label="SimpleURL API key"
+                  />
+                  <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)' }}>
+                    <IconButton label={shown ? 'Hide key' : 'Show key'} variant="ghost" size="sm" onClick={() => setShown((s) => !s)}>
+                      <Icon name={shown ? 'eye-off' : 'eye'} size={16} />
+                    </IconButton>
+                  </span>
+                </span>
+                <Button variant="glass" loading={testing} disabled={!key.trim()} onClick={test} style={{ flex: '0 0 auto' }}>Test</Button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+              <FieldLabel icon="globe">Branded domain</FieldLabel>
+              <Input
+                value={domain}
+                onChange={(e) => { setDomain(e.target.value); setSaved(false); }}
+                placeholder="smplu.link (default)"
+                aria-label="Branded domain"
+              />
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+                Add and verify the domain in SimpleURL first. Empty uses smplu.link.
+              </span>
+            </div>
+
+            <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', flex: 1, minWidth: 180 }}>
+                {saved ? 'Saved. Shared views now use these credentials.' : dirty ? 'Unsaved changes.' : 'Nothing to save yet.'}
+              </span>
+              <Button variant="frost" disabled={!dirty || saved} iconLeft={<Icon name="check" size={16} />}
+                onClick={() => { setSaved(true); onToast({ icon: 'check', title: 'Integration saved', detail: 'SimpleURL credentials stored on this account.' }); }}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Storage                                                           */
+
+  function Storage() {
+    const [wide] = [useMedia('(min-width: 960px)')];
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+        <Card>
+          <div style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 200 }}>
+                <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)' }}>
+                  Record size
+                </span>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-3)' }}>
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'clamp(40px, 6vw, 60px)', fontWeight: 300, letterSpacing: '-0.03em', color: 'var(--fg-1)', lineHeight: 1 }}>
+                    8.1
+                  </span>
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-lg)', color: 'var(--fg-3)' }}>KB</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gap: 'var(--sp-3)', width: wide ? 320 : '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--sp-4)' }}>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>of the 1 MB cap</span>
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--accent)' }}>&lt;1%</span>
+                </div>
+                <div style={{ position: 'relative', height: 8, borderRadius: 'var(--r-pill)', background: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden' }}>
+                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 8, borderRadius: 'var(--r-pill)', background: 'var(--accent)', boxShadow: 'var(--glow-accent-sm)' }} />
+                </div>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>Far more room than this app is likely to need.</span>
+              </div>
+            </div>
+
+            {/* Composition of the 8.1 KB, not of the cap — so the bar is legible. */}
+            <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+              <Kicker trail="share of 8.1 KB">What is using it</Kicker>
+              <div style={{ display: 'flex', gap: 3, height: 12 }}>
+                {USAGE.map((u, i) => (
+                  <span key={u.name} title={u.name} style={{
+                    flex: Math.max(u.pct, 0.6),
+                    borderRadius: 'var(--r-pill)',
+                    background: 'rgba(255,255,255,' + SHADE[i] + ')',
+                    animation: 'ag-condense var(--dur-slow) var(--ease-glass) both',
+                    animationDelay: (i * 44) + 'ms',
+                  }} />
+                ))}
+              </div>
+
+              <Well pad="var(--sp-2) var(--sp-5)">
+                {USAGE.map((u, i) => (
+                  <div key={u.name} style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 44,
+                    borderTop: i === 0 ? 'none' : '1px solid var(--line-faint)',
+                  }}>
+                    <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, flex: '0 0 auto', background: 'rgba(255,255,255,' + SHADE[i] + ')' }} />
+                    <span style={{ font: 'var(--type-body)', color: 'var(--fg-2)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
+                    <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-2)', width: 62, textAlign: 'right', flex: '0 0 auto' }}>{u.size}</span>
+                    <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)', width: 38, textAlign: 'right', flex: '0 0 auto' }}>{u.pct}%</span>
+                  </div>
+                ))}
+              </Well>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' }}>
+              <span style={{ display: 'flex', color: 'var(--fg-4)', marginTop: 1, flex: '0 0 auto' }}><Icon name="hard-drive" size={16} /></span>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+                This browser separately holds under 1 MB of offline copy, sign-in and cached files. That allowance is measured in gigabytes and is not the cap above.
+              </span>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Trash                                                             */
+
+  function Trash({ items, setItems, onToast }) {
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+        <Card>
+          <div style={{ display: 'grid', gap: 'var(--sp-6)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gap: 2, flex: 1, minWidth: 200 }}>
+                <h2 style={{ font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>Trash</h2>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Kept 30 days, then removed for good.</span>
+              </div>
+              {items.length > 0 && (
+                <MorphMenu
+                  align="end"
+                  width={264}
+                  trigger={<Button variant="ghost" iconLeft={<Icon name="trash-2" size={16} />}>Empty Trash</Button>}
+                  items={[
+                    { value: 'empty', label: 'Empty Trash', icon: <Icon name="trash-2" size={16} />, tone: 'danger',
+                      confirm: {
+                        label: 'Remove all ' + items.length + ' items?',
+                        hint: 'This cannot be undone.',
+                        action: 'Empty',
+                        onConfirm: () => { setItems([]); onToast({ icon: 'trash-2', title: 'Trash emptied', detail: 'Nothing was restorable after 30 days anyway.' }); },
+                      } },
+                  ]}
+                />
+              )}
+            </div>
+
+            {items.length === 0 ? (
+              <Well pad="var(--sp-11) var(--sp-7)" style={{ display: 'grid', placeItems: 'center', gap: 'var(--sp-3)', textAlign: 'center' }}>
+                <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="trash-2" size={20} /></span>
+                <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)' }}>Trash is empty.</span>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', maxWidth: '40ch', textWrap: 'pretty' }}>
+                  Deleted projects, lists and tasks wait here for 30 days.
+                </span>
+              </Well>
+            ) : (
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                {items.map((t, i) => (
+                  <TrashRow key={t.id} item={t} delay={i * 44}
+                    onRestore={() => { setItems((cur) => cur.filter((x) => x.id !== t.id)); onToast({ icon: 'rotate-ccw', title: t.name + ' restored', detail: t.kind + ' put back where it came from.' }); }} />
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+              {[
+                ['corner-down-left', 'Restoring rebuilds the project or list around an item.'],
+                ['calendar-x',       'It does not return to today’s queue — pick it again there.'],
+                ['git-branch',       'Subtasks are not covered. Deleting one of those is immediate.'],
+                ['database',         'Trash is kept apart from the 1 MB record above.'],
+              ].map(([icon, line]) => (
+                <div key={line} style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                  <span style={{ display: 'flex', color: 'var(--fg-4)', flex: '0 0 auto' }}><Icon name={icon} size={14} /></span>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>{line}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  function TrashRow({ item, onRestore, delay }) {
+    const [hover, setHover] = React.useState(false);
+    const urgent = item.left <= 10;
+    return (
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 64,
+          padding: '0 var(--sp-4) 0 var(--sp-5)', borderRadius: 'var(--r-lg)',
+          background: hover ? 'var(--glass-fill-1)' : 'var(--glass-well)',
+          boxShadow: hover ? 'var(--glass-rim-1)' : 'var(--glass-well-shadow)',
+          transition: 'var(--t-hover)',
+          animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+          animationDelay: delay + 'ms',
+        }}>
+        <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto' }}><Icon name={item.icon} size={18} /></span>
+        <div style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+          <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.kind} · {item.meta}
+          </span>
+        </div>
+        <span style={{
+          font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', flex: '0 0 auto',
+          color: urgent ? 'var(--status-overrun)' : 'var(--fg-4)',
+        }}>{item.left}d left</span>
+        <Button size="sm" variant="glass" iconLeft={<Icon name="rotate-ccw" size={14} />} onClick={onRestore} style={{ flex: '0 0 auto' }}>Restore</Button>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+
+  function Settings() {
+    const wide = useMedia('(min-width: 960px)');
+    const [tab, setTab] = React.useState('connections');
+    const [trash, setTrash] = React.useState(TRASH);
+    const [toast, setToast] = React.useState(null);
+
+    React.useEffect(() => {
+      if (!toast) return;
+      const t = setTimeout(() => setToast(null), 3600);
+      return () => clearTimeout(t);
+    }, [toast]);
+
+    const navItems = NAV.map(({ value, label, icon, badge }) => ({ value, label, icon: <Icon name={icon} size={20} />, badge }));
+    function go(v) {
+      const item = NAV.find((n) => n.value === v);
+      if (item && item.href) window.location.href = item.href;
+    }
+
+    const SUB = {
+      connections: 'Integrations and connected services',
+      storage: 'What the account record holds',
+      trash: trash.length + ' items recoverable for 30 days',
+    };
+
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'stretch' }}>
+        <GlassFilters />
+
+        {wide && (
+          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="settings" onChange={go} />
+          </div>
+        )}
+
+        <div style={{
+          flex: 1, minWidth: 0, boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-13)' : 'var(--sp-8) var(--gutter-page-sm) 128px',
+        }}>
+          <div style={{ width: '100%', maxWidth: 880, margin: '0 auto', display: 'grid', gap: 'var(--sp-8)' }}>
+
+            <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+              <a href="home.html" style={{ display: 'flex', border: 0 }} aria-label="Back to Home">
+                <IconButton label="Back to Home" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+              </a>
+              <span aria-hidden="true" style={{
+                display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 auto', borderRadius: '50%',
+                backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)', color: 'var(--fg-2)',
+              }}>
+                <Icon name="settings" size={20} />
+              </span>
+              <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                <h1 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>Settings</h1>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{SUB[tab]}</span>
+              </div>
+            </header>
+
+            <Tabs
+              value={tab}
+              onChange={setTab}
+              tabs={[
+                { value: 'connections', label: 'Connections' },
+                { value: 'storage', label: 'Storage' },
+                { value: 'trash', label: 'Trash', count: trash.length },
+              ]}
+            />
+
+            <div key={tab}>
+              {tab === 'connections' && <Connections onToast={setToast} />}
+              {tab === 'storage' && <Storage />}
+              {tab === 'trash' && <Trash items={trash} setItems={setTrash} onToast={setToast} />}
+            </div>
+          </div>
+        </div>
+
+        {toast && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: wide ? 'var(--sp-9)' : 'var(--sp-13)', display: 'grid', placeItems: 'center', zIndex: 60, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <Toast icon={<Icon name={toast.icon} size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+            </span>
+          </div>
+        )}
+
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <MiniNav items={navItems} value="settings" onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Settings />);
+});
+</script>
+</body>
+</html>

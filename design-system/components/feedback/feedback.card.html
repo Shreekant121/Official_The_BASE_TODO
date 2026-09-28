@@ -1,0 +1,93 @@
+<!-- @dsCard group="Components" viewport="700x400" name="Feedback" subtitle="Notifications that expand in place, toasts, skeletons and voice bars" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Feedback</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../core/Icon.jsx',
+  '../actions/Button.jsx',
+  '../actions/IconButton.jsx',
+  '../feedback/NotificationCard.jsx',
+  '../feedback/Toast.jsx',
+  '../feedback/Skeleton.jsx',
+  '../feedback/Waveform.jsx'
+]).then(function (AG) {
+  const { Icon, Button, IconButton, NotificationCard, Toast, Skeleton, Waveform } = AG;
+
+  function Demo() {
+    const [open, setOpen] = React.useState('a');
+    const [listening, setListening] = React.useState(true);
+
+    return (
+      <div className="pad col" style={{ gap: 'var(--sp-7)' }}>
+        <div className="col" style={{ gap: 'var(--sp-4)', maxWidth: 560 }}>
+          <NotificationCard
+            icon={<Icon name="clock" size={18} />}
+            title="Session ran over by 4 minutes"
+            time="2m"
+            body="Draft the Q3 brief used 49 of 45 allocated minutes."
+            tone="overrun"
+            unread
+            open={open === 'a'}
+            onToggle={(v) => setOpen(v ? 'a' : null)}
+            actions={<><Button size="sm" variant="tint" tone="accent">Adjust allocation</Button><Button size="sm" variant="ghost">Dismiss</Button></>}
+          />
+          <NotificationCard
+            icon={<Icon name="refresh-cw" size={18} />}
+            title="Google Tasks synced"
+            time="1h"
+            body="12 tasks pulled from 3 lists."
+            open={open === 'b'}
+            onToggle={(v) => setOpen(v ? 'b' : null)}
+          />
+        </div>
+
+        <div className="row" style={{ gap: 'var(--sp-5)' }}>
+          <Toast icon={<Icon name="check" size={15} />} title="Session saved" detail="7 tasks · 3h 20m" onDismiss={() => {}} />
+        </div>
+
+        <div className="row" style={{ gap: 'var(--sp-7)', alignItems: 'center' }}>
+          <div className="col" style={{ gap: 'var(--sp-3)', width: 240 }}>
+            <span className="lbl">Loading</span>
+            <Skeleton width="62%" />
+            <Skeleton width="88%" />
+            <Skeleton width="40%" />
+          </div>
+          <div className="col" style={{ gap: 'var(--sp-4)', justifyItems: 'center' }}>
+            <span className="lbl">Voice capture</span>
+            <div className="row" style={{ gap: 'var(--sp-5)' }}>
+              <IconButton label="Mic" size="lg" variant="tint" tone="accent" active={listening} onClick={() => setListening((v) => !v)}>
+                <Icon name="mic" size={22} />
+              </IconButton>
+              <Waveform active={listening} bars={26} height={44} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

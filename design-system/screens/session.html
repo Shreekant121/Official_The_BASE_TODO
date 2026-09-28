@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — New Session</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+  .ag-field::-webkit-calendar-picker-indicator { filter: invert(1) brightness(0.72); opacity: 0.8; cursor: pointer; }
+  .ag-field::-webkit-inner-spin-button { display: none; }
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page" data-screen-label="New Session">
+<div id="root">
+  <!-- Static first paint: the rail width and the two pane shells, so the
+       page never flashes an empty near-black field. -->
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page);display:grid;gap:var(--sp-8)">
+      <div style="height:64px;border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-7)">
+        <div style="height:60vh;border-radius:var(--r-card-lg);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+        <div style="height:60vh;border-radius:var(--r-card-lg);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/MorphCluster.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/forms/Checkbox.jsx',
+  '../components/data/ScoreDial.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/navigation/Stepper.jsx',
+  '../components/overlay/MorphMenu.jsx',
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/overlay/TaskSheet.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, MorphCluster, ScoreDial, Toast, MiniNav, Stepper, MorphMenu, TaskSheet } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  /* ------------------------------------------------------------------ *
+     THE SCREEN'S ONE JOB
+
+     Curate today's queue. Two panes, one verb between them: a task is
+     either available or committed. Everything else on this page —
+     search, filter, compose, the row actions, the sheet — exists so the
+     user never has to leave the page to make that one decision.
+
+     The queue carries a TIME BUDGET, which the old screen did not. A
+     list of three tasks is not a plan; three tasks against four hours
+     is. Smart Start fills against it, and the bar goes amber the moment
+     the queue over-commits the day.
+   * ------------------------------------------------------------------ */
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',     icon: 'layout-dashboard', href: 'home.html' },
+    { value: 'home',      label: 'Home',          icon: 'house',            href: 'home.html' },
+    { value: 'assistant', label: 'Assistant',     icon: 'sparkles',         href: 'atlas.html' },
+    { value: 'session',   label: 'New Session',   icon: 'zap' },
+    { value: 'score',     label: 'Score',         icon: 'award', badge: 6,  href: 'scoring.html' },
+    { value: 'alerts',    label: 'Notifications', icon: 'bell',             href: 'home.html' },
+    { value: 'settings',  label: 'Settings',      icon: 'settings',         href: 'settings.html' },
+  ];
+
+  const PROJECT = 'Shreekant Empire';
+  const SHEET_NOW = '2026-08-21T09:00';
+  const BUDGET = 240;                     /* minutes the session is allowed */
+  const SHARE_LISTS = ['\u26a1 Action Steps', '\ud83e\uddca Backburner', '\ud83d\udcda Reference Materials'];
+
+  const START_LISTS = [
+    '\u26a1 Action Steps', '\ud83e\uddca Backburner', '\ud83d\udcda Reference Materials',
+    'Build', 'Operations', 'Money', 'The Space',
+  ];
+
+  /* `d` is everything the row deliberately does not show — the sheet's
+     field set. Same contract as the project board. */
+  const START_TASKS = [
+    {
+      id: 'inc', title: 'File the incorporation paperwork', list: 'Operations', score: 11.0, est: 90,
+      d: { deadline: '2026-08-22T06:00', importance: 4, quadrant: 'do', value: 15000, reminder: '1 hour before', assignee: 'Me',
+        desc: 'Form INC-32 plus the MOA and AOA. The CA has the drafts; they need signing and uploading.',
+        subtasks: [{ id: 'i1', title: 'Collect the signatures', done: true }, { id: 'i2', title: 'Scan the MOA and AOA', done: false }] },
+    },
+    {
+      id: 'copy', title: 'Rewrite the landing page copy', list: 'Build', score: 7.5, est: 150,
+      d: { deadline: '2026-09-19T18:00', importance: 4, quadrant: 'schedule', value: 40000, quasi: true, reminder: '1 hour before',
+        desc: 'Lead with the outcome, not the process. Three sections, one call to action.', shared: ['\u26a1 Action Steps'] },
+    },
+    {
+      id: 'mca', title: 'Upload to the MCA portal', list: 'Operations', score: 4.0, est: 25, parent: 'inc',
+      d: { deadline: '2026-08-22T06:00', importance: 3, quadrant: 'do', reminder: 'At the deadline' },
+    },
+    {
+      id: 'account', title: 'Open the current account', list: 'Money', score: 7.0, est: 120,
+      blockedBy: 'File the incorporation paperwork',
+      d: { deadline: '2026-09-23T12:00', importance: 4, quadrant: 'schedule', value: 35000, reminder: 'At the deadline',
+        desc: 'Needs the certificate of incorporation, so it cannot start until the filing clears.' },
+    },
+    {
+      id: 'compliance', title: 'Quarterly compliance review', list: 'Operations', score: 7.0, est: 60,
+      d: { deadline: '2026-09-08T11:00', importance: 3, quadrant: 'schedule', value: 10000, reminder: '1 day before',
+        repeat: { every: 2, unit: 'weeks', days: [1, 4], ends: 'after', count: 8 }, occurrence: 1 },
+    },
+    {
+      id: 'lease', title: 'Countersign the studio lease', list: 'The Space', score: 1.0, est: 40,
+      d: { deadline: '2026-08-26T17:00', importance: 2, quadrant: 'schedule', value: 30000, reminder: 'None',
+        desc: 'The landlord signs first; this is the return leg.' },
+    },
+    {
+      id: 'acoustic', title: 'Get the acoustic treatment quoted', list: 'The Space', score: 3.5, est: 45,
+      blockedBy: 'Countersign the studio lease',
+      d: { importance: 3, quadrant: 'delegate', value: 60000, reminder: 'None' },
+    },
+    {
+      id: 'invite', title: 'Draft the launch-week invite list', list: 'Build', score: 5.0, est: 90,
+      d: { deadline: '2026-08-28T18:00', importance: 3, quadrant: 'schedule', reminder: '1 hour before',
+        desc: 'One paragraph, one date, one link. Nothing else.', shared: ['\ud83d\udcda Reference Materials'] },
+    },
+    {
+      id: 'reading', title: 'Section 44AD reading notes', list: '\ud83d\udcda Reference Materials', score: 2.0, est: 120,
+      d: { deadline: '2026-10-30T09:00', importance: 1, quadrant: 'eliminate', reminder: 'None' },
+    },
+    {
+      id: 'podcast', title: 'Pitch the podcast appearance', list: '\u26a1 Action Steps', score: 3.0, est: 30,
+      d: { importance: 2, quadrant: null, reminder: 'None' },
+    },
+  ];
+
+  const START_QUEUE = ['inc', 'mca'];
+
+  const mins = (m) => (m >= 60 ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '') : m + 'm');
+
+  const toSheet = (t, all) => Object.assign({
+    id: t.id, title: t.title, project: PROJECT, list: t.list,
+    status: 'todo', blockedBy: t.blockedBy || '', tags: [],
+    est: t.est, desc: '', deadline: '', start: '', notes: '',
+    importance: 0, quadrant: null, value: 0, quasi: false, reminder: 'None',
+    shared: [], links: [], subtasks: [], repeat: null, occurrence: null,
+    assignee: null, publicLink: null, visibleInShared: true, cover: null,
+  }, t.d || {}, {
+    subtasks: (t.d && t.d.subtasks ? t.d.subtasks : []).concat(
+      all.filter((x) => x.parent === t.id).map((x) => ({ id: x.id, title: x.title, done: false }))
+    ),
+  });
+
+  /* ------------------------------------------------------------------ *
+     PRIMITIVES
+   * ------------------------------------------------------------------ */
+
+  function Kicker({ icon, children, tone = 'var(--fg-3)', style }) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
+        font: 'var(--type-kicker)', textTransform: 'uppercase',
+        letterSpacing: 'var(--tracking-kicker)', color: tone, whiteSpace: 'nowrap', ...style,
+      }}>
+        {icon && <Icon name={icon} size={13} />}
+        {children}
+      </span>
+    );
+  }
+
+  function Well({ children, focus, pad = '0 var(--sp-5)', height = 44, radius = 'var(--r-control)', style }) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+        minHeight: height, padding: pad, borderRadius: radius,
+        backgroundImage: 'var(--glass-well)',
+        boxShadow: focus
+          ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+          : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+        transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+        ...style,
+      }}>
+        {children}
+      </div>
+    );
+  }
+
+  const fieldStyle = {
+    flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent',
+    color: 'var(--fg-1)', font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+    letterSpacing: 'var(--tracking-ui)', padding: 0,
+  };
+
+  function Chip({ children, icon, tone, active, onClick }) {
+    const [hover, setHover] = React.useState(false);
+    const Tag = onClick ? 'button' : 'span';
+    return (
+      <Tag
+        type={onClick ? 'button' : undefined}
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto',
+          height: 30, padding: '0 var(--sp-5)', border: 0, borderRadius: 'var(--r-pill)',
+          cursor: onClick ? 'pointer' : 'default',
+          backgroundImage: tone === 'amber'
+            ? 'var(--glass-tint-amber)'
+            : active ? 'var(--glass-fill-3)' : hover && onClick ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          boxShadow: active ? 'var(--glass-rim-2)' : 'var(--glass-rim-1)',
+          color: tone === 'amber' ? 'oklch(0.95 0.07 82)' : active ? 'var(--fg-1)' : 'var(--fg-2)',
+          font: 'var(--type-label)', fontSize: 'var(--text-xs)', whiteSpace: 'nowrap',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        {icon && <Icon name={icon} size={13} />}
+        {children}
+      </Tag>
+    );
+  }
+
+  /* The select target. Hollow ring when available, emerald tick once the
+     task is committed — the same object in two states, never two
+     different controls. */
+  function SelectDot({ on, onClick, label }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={on}
+        aria-label={label}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'grid', placeItems: 'center', flex: '0 0 auto',
+          width: 26, height: 26, padding: 0, border: 0, cursor: 'pointer',
+          borderRadius: '50%',
+          backgroundImage: on ? 'var(--glass-tint-accent)' : 'var(--glass-well)',
+          boxShadow: on
+            ? 'var(--glass-rim-2), var(--glow-accent-sm)'
+            : hover
+              ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline)'
+              : 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
+          color: on ? 'var(--accent)' : 'var(--fg-3)',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ strokeDasharray: 16, strokeDashoffset: on ? 0 : 16, transition: 'stroke-dashoffset var(--dur-base) var(--ease-glass)' }} />
+        </svg>
+      </button>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE AVAILABLE ROW
+
+     Four verbs live on this row and all four resolve IN the row: view
+     opens the sheet, edit turns the title into a field, subtask grows a
+     compose well underneath, delete arms a rose strip in the row's own
+     slot. Nothing here opens a dialog to ask a single question.
+   * ------------------------------------------------------------------ */
+
+  function TaskCard({
+    t, mode, draft, onDraft, onCommitEdit, onCancel,
+    onSelect, onOpen, onEdit, onSubtask, onArmDelete, onDelete, subDraft, onSubDraft, onCommitSub,
+  }) {
+    const [hover, setHover] = React.useState(false);
+    const editRef = React.useRef(null);
+    const subRef = React.useRef(null);
+
+    React.useEffect(() => {
+      if (mode === 'edit' && editRef.current) editRef.current.focus();
+      if (mode === 'subtask' && subRef.current) subRef.current.focus();
+    }, [mode]);
+
+    const armed = mode === 'delete';
+
+    return (
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-4)',
+          padding: 'var(--sp-5) var(--sp-6)',
+          marginLeft: t.parent ? 'var(--sp-8)' : 0,
+          borderRadius: 'var(--r-md)',
+          backgroundImage: armed
+            ? 'var(--glass-tint-rose)'
+            : hover || mode ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          backdropFilter: 'var(--glass-bd-sm)', WebkitBackdropFilter: 'var(--glass-bd-sm)',
+          boxShadow: hover || mode ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-rim-1)',
+          transform: hover && !mode ? 'translateX(2px)' : 'translateX(0)',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
+          <SelectDot on={false} onClick={onSelect} label={'Add ' + t.title + ' to today'} />
+
+          <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 'var(--sp-2)' }}>
+            {mode === 'edit' ? (
+              <Well focus height={38} pad="0 var(--sp-4)">
+                <input
+                  ref={editRef}
+                  className="ag-field"
+                  value={draft}
+                  onChange={(e) => onDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); onCommitEdit(); }
+                    if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+                  }}
+                  aria-label="Task name"
+                  style={Object.assign({}, fieldStyle, { fontSize: 'var(--text-md)' })}
+                />
+                <Kicker tone="var(--fg-4)">Enter</Kicker>
+              </Well>
+            ) : (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+                {t.parent && <span style={{ display: 'flex', color: 'var(--fg-4)', flex: '0 0 auto' }}><Icon name="corner-down-right" size={14} /></span>}
+                <span style={{
+                  font: 'var(--type-title)', fontSize: 'var(--text-md)', color: 'var(--fg-1)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0,
+                }}>
+                  {t.title}
+                </span>
+                <ScoreDial value={t.score} size="sm" />
+              </span>
+            )}
+
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+              <Kicker tone="var(--fg-4)">{t.list}{t.parent ? ' \u00b7 subtask' : ''}</Kicker>
+              <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)', fontVariantNumeric: 'tabular-nums' }}>
+                {mins(t.est)}
+              </span>
+              {t.blockedBy && (
+                <Kicker icon="lock" tone="var(--hue-amber)">Blocked by {t.blockedBy}</Kicker>
+              )}
+            </span>
+          </div>
+
+          {/* Idle rows carry no buttons — that is what keeps forty rows calm. */}
+          <div style={{
+            display: 'flex', gap: 'var(--sp-2)', flex: '0 0 auto',
+            opacity: hover || mode ? 1 : 0,
+            transform: hover || mode ? 'translateX(0)' : 'translateX(6px)',
+            pointerEvents: hover || mode ? 'auto' : 'none',
+            transition: 'opacity var(--dur-fast) var(--ease-glass), transform var(--dur-base) var(--ease-glass)',
+          }}>
+            {mode === 'edit' ? (
+              <React.Fragment>
+                <IconButton label="Cancel rename" size="sm" variant="ghost" onClick={onCancel}><Icon name="x" size={16} /></IconButton>
+                <IconButton label="Save name" size="sm" variant="tint" tone="accent" onClick={onCommitEdit}><Icon name="check" size={16} /></IconButton>
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <IconButton label={'View details of ' + t.title} size="sm" variant="ghost" onClick={onOpen}><Icon name="eye" size={16} /></IconButton>
+                <IconButton label={'Rename ' + t.title} size="sm" variant="ghost" onClick={onEdit}><Icon name="pencil" size={16} /></IconButton>
+                {!t.parent && <IconButton label={'Add a subtask to ' + t.title} size="sm" variant="ghost" onClick={onSubtask}><Icon name="plus" size={16} /></IconButton>}
+                <IconButton label={'Delete ' + t.title} size="sm" variant="ghost" onClick={onArmDelete}><Icon name="trash-2" size={16} /></IconButton>
+              </React.Fragment>
+            )}
+          </div>
+        </div>
+
+        {/* Subtask compose — grows inside the parent, so the new task's
+            parentage is visible while it is being typed. */}
+        {mode === 'subtask' && (
+          <div style={{ display: 'flex', gap: 'var(--sp-3)', animation: 'ag-condense var(--dur-base) var(--ease-glass) both' }}>
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--fg-4)', paddingLeft: 'var(--sp-2)' }}>
+              <Icon name="corner-down-right" size={15} />
+            </span>
+            <Well focus style={{ flex: 1, minWidth: 0 }} height={40}>
+              <input
+                ref={subRef}
+                className="ag-field"
+                value={subDraft}
+                onChange={(e) => onSubDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); onCommitSub(); }
+                  if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+                }}
+                placeholder={'Subtask of ' + t.title + '\u2026'}
+                aria-label="Subtask title"
+                style={fieldStyle}
+              />
+            </Well>
+            <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
+            <Button size="sm" variant="tint" tone="accent" onClick={onCommitSub}>Add</Button>
+          </div>
+        )}
+
+        {/* Delete confirms in the row's own slot. A modal here would
+            cover the subject and lose the decision. */}
+        {armed && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap', animation: 'ag-condense var(--dur-fast) var(--ease-glass) both' }}>
+            <span style={{ flex: 1, minWidth: 160, font: 'var(--type-caption)', color: 'oklch(0.95 0.06 20)' }}>
+              Delete this task? Its subtasks go with it.
+            </span>
+            <Button size="sm" variant="glass" onClick={onCancel}>Keep</Button>
+            <Button size="sm" variant="solid" tone="rose" onClick={onDelete}>Delete</Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE QUEUE ROW — order matters here, so the row's verbs are move and
+     drop, nothing else. Editing a committed task is still the sheet.
+   * ------------------------------------------------------------------ */
+
+  function QueueRow({ t, n, total, onRemove, onMove, onOpen }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-5)',
+          padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-md)',
+          backgroundImage: hover ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          backdropFilter: 'var(--glass-bd-sm)', WebkitBackdropFilter: 'var(--glass-bd-sm)',
+          boxShadow: hover ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-rim-1)',
+          animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)', width: 16, flex: '0 0 auto', fontVariantNumeric: 'tabular-nums' }}>
+          {n + 1}
+        </span>
+        <SelectDot on onClick={onRemove} label={'Remove ' + t.title + ' from today'} />
+
+        <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 'var(--sp-2)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+            {t.parent && <span style={{ display: 'flex', color: 'var(--fg-4)', flex: '0 0 auto' }}><Icon name="corner-down-right" size={14} /></span>}
+            <span style={{
+              font: 'var(--type-title)', fontSize: 'var(--text-md)', color: 'var(--fg-1)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0,
+            }}>
+              {t.title}
+            </span>
+            <ScoreDial value={t.score} size="sm" />
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            <Kicker tone="var(--fg-4)">{t.list}{t.parent ? ' \u00b7 subtask' : ''}</Kicker>
+            <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>
+              {mins(t.est)}
+            </span>
+          </span>
+        </div>
+
+        <div style={{
+          display: 'flex', gap: 'var(--sp-2)', flex: '0 0 auto',
+          opacity: hover ? 1 : 0, pointerEvents: hover ? 'auto' : 'none',
+          transform: hover ? 'translateX(0)' : 'translateX(6px)',
+          transition: 'opacity var(--dur-fast) var(--ease-glass), transform var(--dur-base) var(--ease-glass)',
+        }}>
+          <IconButton label="Move up" size="sm" variant="ghost" disabled={n === 0} onClick={() => onMove(-1)}><Icon name="arrow-up" size={16} /></IconButton>
+          <IconButton label="Move down" size="sm" variant="ghost" disabled={n === total - 1} onClick={() => onMove(1)}><Icon name="arrow-down" size={16} /></IconButton>
+          <IconButton label={'View details of ' + t.title} size="sm" variant="ghost" onClick={onOpen}><Icon name="eye" size={16} /></IconButton>
+        </div>
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE SCREEN
+   * ------------------------------------------------------------------ */
+
+  function Session() {
+    const [tasks, setTasks] = React.useState(START_TASKS);
+    const [lists, setLists] = React.useState(START_LISTS);
+    const [queue, setQueue] = React.useState(START_QUEUE);
+
+    const [search, setSearch] = React.useState('');
+    const [searchOpen, setSearchOpen] = React.useState(false);
+    const [filter, setFilter] = React.useState('all');
+    const [filterOpen, setFilterOpen] = React.useState(false);
+    /* The pane's four tools live inside one pill until asked for. */
+    const [toolsOpen, setToolsOpen] = React.useState(false);
+
+    const [compose, setCompose] = React.useState(null);      /* 'task' | 'list' | null */
+    const [taskDraft, setTaskDraft] = React.useState('');
+    const [taskList, setTaskList] = React.useState('\u26a1 Action Steps');
+    const [listDraft, setListDraft] = React.useState('');
+
+    const [row, setRow] = React.useState({ id: null, mode: null });
+    const [draft, setDraft] = React.useState('');
+    const [subDraft, setSubDraft] = React.useState('');
+
+    const [sheet, setSheet] = React.useState(null);
+    const [toast, setToast] = React.useState(null);
+    const [starred, setStarred] = React.useState(false);
+    const [wide, setWide] = React.useState(window.innerWidth >= 1180);
+
+    const searchRef = React.useRef(null);
+    const composeRef = React.useRef(null);
+
+    React.useEffect(() => {
+      const onResize = () => setWide(window.innerWidth >= 1180);
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    React.useEffect(() => { if (searchOpen && searchRef.current) searchRef.current.focus(); }, [searchOpen]);
+    React.useEffect(() => { if (compose && composeRef.current) composeRef.current.focus(); }, [compose]);
+
+    const say = (title, detail) => {
+      setToast({ title, detail });
+      window.setTimeout(() => setToast(null), 2600);
+    };
+
+    const byId = (id) => tasks.find((t) => t.id === id);
+    const inQueue = (id) => queue.indexOf(id) > -1;
+
+    const available = tasks.filter((t) => !inQueue(t.id));
+    const shown = available.filter((t) =>
+      (filter === 'all' || t.list === filter) &&
+      (!search.trim() || t.title.toLowerCase().indexOf(search.trim().toLowerCase()) > -1)
+    );
+    const counts = lists.map((l) => ({ name: l, n: available.filter((t) => t.list === l).length }));
+
+    const queued = queue.map(byId).filter(Boolean);
+    const committed = queued.reduce((n, t) => n + Number(t.est || 0), 0);
+    const over = committed > BUDGET;
+
+    /* ---- mutations ---- */
+
+    const add = (id) => { setQueue((q) => q.concat(id)); setRow({ id: null, mode: null }); };
+    const drop = (id) => setQueue((q) => q.filter((x) => x !== id));
+    const move = (id, d) => setQueue((q) => {
+      const i = q.indexOf(id); const j = i + d;
+      if (i < 0 || j < 0 || j >= q.length) return q;
+      const next = q.slice(); next[i] = q[j]; next[j] = q[i]; return next;
+    });
+
+    const rename = () => {
+      if (!draft.trim()) { setRow({ id: null, mode: null }); return; }
+      setTasks((cur) => cur.map((t) => (t.id === row.id ? Object.assign({}, t, { title: draft.trim() }) : t)));
+      setRow({ id: null, mode: null });
+      say('Renamed.', draft.trim());
+    };
+
+    const addSub = () => {
+      if (!subDraft.trim()) return;
+      const parent = byId(row.id);
+      const id = 's' + Date.now();
+      setTasks((cur) => {
+        const at = cur.findIndex((t) => t.id === parent.id);
+        const kid = { id, title: subDraft.trim(), list: parent.list, score: 0, est: 15, parent: parent.id, d: {} };
+        return cur.slice(0, at + 1).concat([kid], cur.slice(at + 1));
+      });
+      setSubDraft('');
+      setRow({ id: null, mode: null });
+      say('Subtask added.', 'Under ' + parent.title + '. Unscored.');
+    };
+
+    const remove = (id) => {
+      const t = byId(id);
+      setTasks((cur) => cur.filter((x) => x.id !== id && x.parent !== id));
+      setQueue((q) => q.filter((x) => x !== id));
+      setRow({ id: null, mode: null });
+      say('Deleted.', t ? t.title : '');
+    };
+
+    const addTask = () => {
+      const lines = taskDraft.split('\n').map((s) => s.trim()).filter(Boolean);
+      if (!lines.length) return;
+      const made = lines.map((title, n) => ({
+        id: 'n' + Date.now() + n, title, list: taskList, score: 0, est: 30, d: {},
+      }));
+      setTasks((cur) => made.concat(cur));
+      setTaskDraft('');
+      setCompose(null);
+      say(lines.length === 1 ? 'Task added.' : lines.length + ' tasks added.', 'In ' + taskList + '. Unscored.');
+    };
+
+    const addList = () => {
+      const name = listDraft.trim();
+      if (!name || lists.indexOf(name) > -1) { setCompose(null); setListDraft(''); return; }
+      setLists((cur) => cur.concat(name));
+      setTaskList(name);
+      setListDraft('');
+      setCompose(null);
+      say('List created.', name);
+    };
+
+    /* Fill the day, best score first, and stop at the budget rather than
+       at an arbitrary task count. Blocked tasks are skipped — committing
+       to work that cannot start is the failure this screen prevents. */
+    const smartStart = () => {
+      let total = committed;
+      const picks = [];
+      available.slice().sort((a, b) => b.score - a.score).forEach((t) => {
+        if (t.blockedBy || total + Number(t.est || 0) > BUDGET) return;
+        picks.push(t.id); total += Number(t.est || 0);
+      });
+      if (!picks.length) { say('Nothing fits.', mins(Math.max(0, BUDGET - committed)) + ' left in the budget.'); return; }
+      setQueue((q) => q.concat(picks));
+      say('Queue filled.', picks.length + ' added \u00b7 ' + mins(total) + ' committed');
+    };
+
+    const smartSort = () => {
+      setQueue((q) => q.slice().sort((a, b) => (byId(b).score || 0) - (byId(a).score || 0)));
+      say('Sorted by score.', 'Highest priority first.');
+    };
+
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+    const go = (v) => { const hit = NAV.find((n) => n.value === v); if (hit && hit.href) location.href = hit.href; };
+
+    const paneStyle = {
+      display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-6)', alignContent: 'start', minWidth: 0, maxWidth: '100%',
+      padding: 'var(--pad-card-lg)', borderRadius: 'var(--r-card-lg)',
+      backgroundImage: 'var(--glass-fill-2)',
+      backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+      boxShadow: 'var(--glass-shadow-pane)',
+    };
+
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'flex-start' }}>
+        <GlassFilters />
+
+        <div style={{ position: 'sticky', top: 'var(--sp-9)', flex: '0 0 auto', padding: wide ? 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' : 'var(--sp-6) 0 var(--sp-6) var(--sp-5)', zIndex: 40 }}>
+          <MiniNav orientation="vertical" items={navItems} value="session" onChange={go} />
+        </div>
+
+        <div style={{
+          flex: 1, minWidth: 0, display: 'grid', gap: 'var(--sp-8)',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-13)' : 'var(--sp-8) var(--gutter-page-sm) var(--sp-13)',
+        }}>
+          {/* ---- Session bar ---- */}
+          <header style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-6)', flexWrap: 'wrap',
+            padding: 'var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4)', borderRadius: 'var(--r-pill)',
+            backgroundImage: 'var(--glass-fill-2)',
+            backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+            boxShadow: 'var(--glass-shadow-pane)',
+          }}>
+            <a href="home.html" style={{ display: 'flex', border: 0 }} aria-label="Back to Home">
+              <IconButton label="Back to Home" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+            </a>
+            <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+              <span style={{ font: 'var(--type-system)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-system)', color: 'var(--fg-1)', whiteSpace: 'nowrap' }}>
+                New session
+              </span>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Curate today's queue. One task at a time comes later.</span>
+            </div>
+            <span style={{ flex: 1, minWidth: 'var(--sp-8)' }} />
+            <Stepper
+              current={0}
+              steps={[{ label: 'Select' }, { label: 'Deadlines' }, { label: 'Focus' }]}
+              style={{ margin: 0 }}
+            />
+          </header>
+
+          {/* ---- The two panes ---- */}
+          <div style={{
+            display: 'grid', gap: 'var(--gap-card)', alignItems: 'start',
+            gridTemplateColumns: wide ? 'minmax(0, 1fr) minmax(0, 1fr)' : '1fr',
+          }}>
+            {/* ============ AVAILABLE ============ */}
+            <div style={paneStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                  Available
+                </h2>
+                <Chip>{available.length} total</Chip>
+                <span style={{ flex: 1 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap', minWidth: 0 }}>
+                <MorphCluster
+                  open={toolsOpen}
+                  onOpenChange={setToolsOpen}
+                  align="end"
+                  label="Available task controls"
+                  trigger={<Button size="sm" variant="glass" iconLeft={<Icon name="sliders-horizontal" size={15} />}>Select</Button>}
+                >
+                  <IconButton
+                    label="Search tasks"
+                    size="sm"
+                    variant="ghost"
+                    active={searchOpen}
+                    onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) setSearch(''); }}
+                  >
+                    <Icon name="search" size={16} />
+                  </IconButton>
+                  <MorphMenu
+                    align="end"
+                    width={268}
+                    open={filterOpen}
+                    onOpenChange={setFilterOpen}
+                    trigger={
+                      <IconButton label="Filter by list" size="sm" variant="ghost" active={filter !== 'all'}>
+                        <Icon name="filter" size={16} />
+                      </IconButton>
+                    }
+                    header={{ title: 'Filter by list', meta: available.length + ' available \u00b7 ' + lists.length + ' lists' }}
+                    items={[{ label: 'All lists', icon: <Icon name="layers" size={18} />, meta: String(available.length), onSelect: () => setFilter('all') }]
+                      .concat(counts.map((c) => ({
+                        label: c.name, value: c.name,
+                        icon: <Icon name={filter === c.name ? 'check' : 'list'} size={18} />,
+                        meta: String(c.n),
+                        onSelect: () => setFilter(c.name),
+                      })))}
+                  />
+                  <Button
+                    size="sm"
+                    variant="glass"
+                    iconLeft={<Icon name="folder-plus" size={15} />}
+                    onClick={() => { setCompose(compose === 'list' ? null : 'list'); setListDraft(''); }}
+                  >
+                    New list
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="glass"
+                    iconLeft={<Icon name="plus" size={15} />}
+                    onClick={() => { setCompose(compose === 'task' ? null : 'task'); setTaskDraft(''); }}
+                  >
+                    Add task
+                  </Button>
+                  <Button size="sm" variant="frost" onClick={() => setToolsOpen(false)}>Done</Button>
+                </MorphCluster>
+                </div>
+              </div>
+
+              {searchOpen && (
+                <Well focus style={{ animation: 'ag-condense var(--dur-base) var(--ease-glass) both' }}>
+                  <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="search" size={16} /></span>
+                  <input
+                    ref={searchRef}
+                    className="ag-field"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
+                    placeholder="Search available tasks…"
+                    aria-label="Search available tasks"
+                    style={fieldStyle}
+                  />
+                  {search && <Kicker tone="var(--fg-4)">{shown.length} match</Kicker>}
+                </Well>
+              )}
+
+              {filter !== 'all' && (
+                <div style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'center' }}>
+                  <Kicker icon="filter">Filtered</Kicker>
+                  <Chip active onClick={() => setFilter('all')} icon="x">{filter}</Chip>
+                </div>
+              )}
+
+              {/* Compose strips. A single field never earns a dialog, so
+                  both of these grow where the button that asked for them
+                  sits. */}
+              {compose === 'list' && (
+                <Well focus pad="var(--sp-4) var(--sp-5)" height={0} radius="var(--r-lg)" style={{ animation: 'ag-condense var(--dur-base) var(--ease-glass) both' }}>
+                  <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="folder-plus" size={16} /></span>
+                  <input
+                    ref={composeRef}
+                    className="ag-field"
+                    value={listDraft}
+                    onChange={(e) => setListDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); addList(); }
+                      if (e.key === 'Escape') { setCompose(null); setListDraft(''); }
+                    }}
+                    placeholder="New list name…"
+                    aria-label="New list name"
+                    style={fieldStyle}
+                  />
+                  <Button size="sm" variant="ghost" onClick={() => setCompose(null)}>Cancel</Button>
+                  <Button size="sm" variant="tint" tone="accent" onClick={addList}>Create</Button>
+                </Well>
+              )}
+
+              {compose === 'task' && (
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-4)', padding: 'var(--sp-5) var(--sp-6)',
+                  borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-well)',
+                  boxShadow: 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline)',
+                  animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+                }}>
+                  <textarea
+                    ref={composeRef}
+                    className="ag-field"
+                    rows={2}
+                    value={taskDraft}
+                    onChange={(e) => setTaskDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addTask(); }
+                      if (e.key === 'Escape') { setCompose(null); setTaskDraft(''); }
+                    }}
+                    placeholder="What needs doing? Paste several lines to bulk-add."
+                    aria-label="New task"
+                    style={Object.assign({}, fieldStyle, { resize: 'none', lineHeight: 'var(--leading-normal)', width: '100%' })}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                    <Kicker icon="list">Into</Kicker>
+                    <div className="ag-scroll" style={{ display: 'flex', gap: 'var(--sp-3)', overflowX: 'auto', flex: 1, minWidth: 0, paddingBottom: 2 }}>
+                      {lists.map((l) => (
+                        <Chip key={l} active={taskList === l} onClick={() => setTaskList(l)}>{l}</Chip>
+                      ))}
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => { setCompose(null); setTaskDraft(''); }}>Cancel</Button>
+                    <Button size="sm" variant="tint" tone="accent" iconLeft={<Icon name="plus" size={15} />} onClick={addTask}>Add</Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="ag-scroll" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-3)', maxHeight: '58vh', overflowY: 'auto', margin: '0 calc(var(--sp-2) * -1)', padding: '0 var(--sp-2) 2px' }}>
+                {shown.map((t) => (
+                  <TaskCard
+                    key={t.id}
+                    t={t}
+                    mode={row.id === t.id ? row.mode : null}
+                    draft={draft}
+                    subDraft={subDraft}
+                    onDraft={setDraft}
+                    onSubDraft={setSubDraft}
+                    onCancel={() => setRow({ id: null, mode: null })}
+                    onSelect={() => add(t.id)}
+                    onOpen={() => setSheet(toSheet(t, tasks))}
+                    onEdit={() => { setDraft(t.title); setRow({ id: t.id, mode: 'edit' }); }}
+                    onCommitEdit={rename}
+                    onSubtask={() => { setSubDraft(''); setRow({ id: t.id, mode: 'subtask' }); }}
+                    onCommitSub={addSub}
+                    onArmDelete={() => setRow({ id: t.id, mode: 'delete' })}
+                    onDelete={() => remove(t.id)}
+                  />
+                ))}
+
+                {shown.length === 0 && (
+                  <div style={{ display: 'grid', gap: 'var(--sp-4)', justifyItems: 'start', padding: 'var(--sp-9) var(--sp-6)' }}>
+                    <Kicker icon="inbox" tone="var(--fg-4)">Nothing here</Kicker>
+                    <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                      {search || filter !== 'all'
+                        ? 'No available task matches. Clear the filter, or add one.'
+                        : 'Every task is committed to today.'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ============ TODAY ============ */}
+            <div style={paneStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                  Today
+                </h2>
+                <Chip active={queue.length > 0}>{queue.length} {queue.length === 1 ? 'task' : 'tasks'}</Chip>
+                <span style={{ flex: 1 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap', minWidth: 0 }}>
+                  <Button size="sm" variant="glass" iconLeft={<Icon name="zap" size={15} />} onClick={smartStart}>Smart start</Button>
+                  <Button size="sm" variant="glass" iconLeft={<Icon name="arrow-down-up" size={15} />} disabled={queue.length < 2} onClick={smartSort}>Smart sort</Button>
+                  <IconButton
+                    label={starred ? 'Saved as a set' : 'Save this set'}
+                    size="sm"
+                    variant="ghost"
+                    active={starred}
+                    onClick={() => { setStarred(!starred); say(starred ? 'Set unsaved.' : 'Set saved.', queue.length + ' tasks'); }}
+                  >
+                    <Icon name="star" size={16} />
+                  </IconButton>
+                </div>
+              </div>
+
+              {/* The budget. A queue without one is a wish list. */}
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
+                  <Kicker icon="timer" tone={over ? 'var(--hue-amber)' : 'var(--fg-3)'}>Committed</Kicker>
+                  <span style={{
+                    font: 'var(--type-numeric)', fontSize: 'var(--text-lg)', fontVariantNumeric: 'tabular-nums',
+                    color: over ? 'var(--hue-amber)' : 'var(--fg-1)',
+                  }}>
+                    {mins(committed)}
+                  </span>
+                  <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)' }}>of a {mins(BUDGET)} day</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ font: 'var(--type-caption)', color: over ? 'oklch(0.95 0.07 82)' : 'var(--fg-4)' }}>
+                    {over ? mins(committed - BUDGET) + ' over the day' : mins(BUDGET - committed) + ' free'}
+                  </span>
+                </div>
+                <div style={{ height: 8, padding: 2, borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden' }}>
+                  <span style={{
+                    display: 'block', height: '100%', borderRadius: 'var(--r-pill)',
+                    width: Math.min(100, (committed / BUDGET) * 100) + '%',
+                    background: over
+                      ? 'linear-gradient(90deg, oklch(0.75 0.15 82 / 0.6), var(--hue-amber))'
+                      : 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.55), var(--accent))',
+                    boxShadow: over ? '0 0 14px -2px var(--hue-amber)' : '0 0 14px -2px var(--accent)',
+                    transition: 'width var(--dur-slow) var(--ease-glass), background var(--dur-base) var(--ease-glass)',
+                  }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-3)', minHeight: 220, alignContent: 'start' }}>
+                {queued.map((t, n) => (
+                  <QueueRow
+                    key={t.id}
+                    t={t}
+                    n={n}
+                    total={queued.length}
+                    onRemove={() => drop(t.id)}
+                    onMove={(d) => move(t.id, d)}
+                    onOpen={() => setSheet(toSheet(t, tasks))}
+                  />
+                ))}
+
+                {queued.length === 0 && (
+                  <div style={{
+                    display: 'grid', gap: 'var(--sp-5)', justifyItems: 'start', alignContent: 'center',
+                    minHeight: 220, padding: 'var(--sp-8)', borderRadius: 'var(--r-lg)',
+                    border: '1px dashed var(--line-soft)',
+                  }}>
+                    <Kicker icon="inbox" tone="var(--fg-4)">Queue empty</Kicker>
+                    <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', textWrap: 'pretty', maxWidth: '34ch' }}>
+                      Select tasks on the left, or let Smart start fill {mins(BUDGET)} for you.
+                    </span>
+                    <Button variant="glass" iconLeft={<Icon name="zap" size={16} />} onClick={smartStart}>Smart start</Button>
+                  </div>
+                )}
+              </div>
+
+              <a
+                href="deadlines.html"
+                onClick={(e) => { if (!queue.length) e.preventDefault(); }}
+                style={{ display: 'block', border: 0 }}
+                aria-disabled={queue.length === 0}
+              >
+                <Button variant="frost" block disabled={queue.length === 0} iconRight={<Icon name="arrow-right" size={16} />}>
+                  Next: set deadlines
+                </Button>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {sheet && (
+          <TaskSheet
+            task={sheet}
+            now={SHEET_NOW}
+            lists={lists}
+            shareLists={SHARE_LISTS}
+            prereqs={tasks.map((t) => t.title)}
+            onClose={() => setSheet(null)}
+            onSave={(next) => {
+              setTasks((cur) => cur.map((t) => (t.id === next.id
+                ? Object.assign({}, t, { title: next.title, list: next.list, est: next.est, d: Object.assign({}, t.d, next) })
+                : t)));
+              setSheet(null);
+              say('Saved.', next.title);
+            }}
+            onDelete={(t) => { remove(t.id); setSheet(null); }}
+          />
+        )}
+
+        {toast && (
+          <div style={{ position: 'fixed', bottom: 'var(--sp-8)', left: '50%', transform: 'translateX(-50%)', zIndex: 90 }}>
+            <Toast icon={<Icon name="check" size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Session />);
+});
+</script>
+</body>
+</html>

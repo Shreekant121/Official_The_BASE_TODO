@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Home</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* Card actions: hidden at rest on pointer devices so a grid of cards
+     stays calm, but ALWAYS visible on touch (no hover exists there) and
+     whenever focus is inside, so keyboard focus never lands on an
+     invisible control. Pseudo-states need a stylesheet, not inline CSS. */
+  .card-actions { opacity: 0; transition: opacity var(--dur-fast) var(--ease-glass); }
+  article:hover .card-actions,
+  .card-actions:focus-within,
+  .card-actions[data-open="true"] { opacity: 1; }
+  @media (hover: none), (pointer: coarse) {
+    .card-actions { opacity: 1; }
+  }
+
+  /* Cover placeholder: fine diagonal hairlines behind the glass, never a
+     gradient and never a stock illustration. The user's own cover image
+     replaces the background here, desaturated, at the same size. */
+  .cover {
+    background-color: var(--void-1);
+    background-image: repeating-linear-gradient(135deg, oklch(1 0 0 / 0.045) 0 1px, transparent 1px 9px);
+  }
+
+  /* Placeholders are --fg-4 everywhere. Pseudo-elements need a sheet. */
+  .np-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .np-field:focus { outline: none; }
+
+  /* The sheet still scrolls; it just never shows a track. A visible
+     scrollbar inside 40px glass reads as a browser part, not a surface. */
+  .np-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .np-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="Home">
+<div id="root">
+  <!-- Static first paint: the shell of the page so glass is on screen
+       before React hydrates. Replaced on mount. -->
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-11) var(--gutter-page) var(--sp-13)">
+      <div style="display:flex;align-items:center;gap:var(--sp-4)">
+        <img src="../assets/mark-white.png" alt="" width="26" height="26" style="opacity:.95">
+        <span style="font:var(--type-title);color:var(--fg-1)">BASE</span>
+      </div>
+      <div style="height:168px;margin-top:var(--sp-9);border-radius:var(--r-card-lg);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/MorphCluster.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/data/ProgressRing.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/MorphMenu.jsx',
+  '../components/overlay/Dialog.jsx',
+  '../components/forms/Input.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, MorphCluster, StatusPill, ProgressRing, MiniNav, MorphMenu, Dialog, Input } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  /* Nav is destinations only. "New Session" lived in the old nav bar but
+     it is an action, not a place — it moves to the primary button in the
+     Right Now band, which is where the user actually decides to start.
+     Dashboard is included ahead of the page being built. */
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',   icon: 'layout-dashboard' },
+    { value: 'home',      label: 'Home',        icon: 'house' },
+    { value: 'assistant', label: 'Assistant',   icon: 'sparkles' },
+    { value: 'session',   label: 'New Session', icon: 'zap', href: 'session.html' },
+    { value: 'score',     label: 'Score',       icon: 'award', badge: 6 },
+    { value: 'alerts',    label: 'Notifications', icon: 'bell' },
+    { value: 'settings',  label: 'Settings',    icon: 'settings', href: 'settings.html' },
+  ];
+
+  const PROJECTS = [
+    {
+      id: 'empire', glyph: '📋', hue: 'var(--hue-violet)',
+      name: 'Shreekant Empire',
+      desc: 'The holding company — incorporation, compliance, and the first year of filings.',
+      lists: 3, tasks: 5, done: 1, budget: '₹1.6L', progress: 20,
+      status: 'running', statusLabel: 'In progress',
+      next: 'Draft the incorporation filing',
+    },
+    {
+      id: 'studio', glyph: '🛠️', hue: 'var(--hue-amber)',
+      name: 'Studio Launch',
+      desc: 'Everything that has to be true before the studio opens its doors.',
+      lists: 2, tasks: 3, done: 0, budget: '₹1.8L', progress: 0,
+      status: 'queued', statusLabel: 'Not started',
+      next: 'Sign the lease',
+    },
+    {
+      id: 'personal', glyph: '📌', hue: 'var(--hue-cyan)',
+      name: 'Personal',
+      desc: 'Errands, admin and everything that is nobody else’s problem.',
+      lists: 0, tasks: 0, done: 0, budget: null, progress: 0,
+      status: 'archived', statusLabel: 'Empty',
+      next: null,
+    },
+  ];
+
+  const DOT = { running: 'var(--status-running)', queued: 'var(--status-queued)', archived: 'var(--status-archived)' };
+
+  /* The accent set is the SYSTEM's five hues plus grey — not the ten-colour
+     rainbow the reference mock showed. Six hues locked to one lightness and
+     chroma is the whole point of the palette; a project that can be hot pink
+     would out-shout emerald, which is the only colour that means "live".
+     A hex field is kept for the one real case the mock had: a project that
+     has to match an external brand. */
+  const HUES = [
+    { id: 'emerald', label: 'Emerald', value: 'var(--accent)',      hex: '#10B981' },
+    { id: 'cyan',    label: 'Cyan',    value: 'var(--hue-cyan)',    hex: '#00A6C4' },
+    { id: 'violet',  label: 'Violet',  value: 'var(--hue-violet)',  hex: '#8C7BEC' },
+    { id: 'amber',   label: 'Amber',   value: 'var(--hue-amber)',   hex: '#D69A22' },
+    { id: 'rose',    label: 'Rose',    value: 'var(--hue-rose)',    hex: '#E4655F' },
+    { id: 'grey',    label: 'Grey',    value: 'var(--hue-grey)',    hex: '#A6A6AA' },
+  ];
+
+  /* Emoji is sanctioned in exactly one place in this system: a single leading
+     glyph identifying a user-named thing. The cards already carry one. */
+  const GLYPHS = ['📋', '🛠️', '📌', '⚡', '🧊', '📚', '🧾', '🏗️', '💠', '🗂️', '🧪', '🎯'];
+
+  /* Three actions, and only three — anything deeper belongs inside the
+     project. No key hints: Windows and Android product. */
+  function menuFor(p) {
+    return [
+      { label: 'Edit project', icon: <Icon name="square-pen" size={18} />, meta: <Icon name="chevron-right" size={16} /> },
+      { label: 'Share project', icon: <Icon name="share-2" size={18} />, meta: <Icon name="chevron-right" size={16} /> },
+      { divider: true },
+      {
+        label: 'Delete project', icon: <Icon name="trash-2" size={18} />, tone: 'danger',
+        confirm: {
+          label: 'Delete ' + p.name + '?',
+          hint: p.lists === 0 ? 'Nothing in it yet.' : p.lists + ' lists and ' + p.tasks + ' tasks go with it.',
+        },
+      },
+    ];
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  function Stat({ value, label }) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
+        <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{label}</span>
+      </span>
+    );
+  }
+
+  function ProjectCard({ p, wide }) {
+    const [hover, setHover] = React.useState(false);
+    const [menuOpen, setMenuOpen] = React.useState(false);
+    const empty = p.lists === 0;
+
+    /* The whole card is the door into the project. Anything that is itself
+       a control (the ⋯ menu, the empty-state button) keeps its own click. */
+    const open = (e) => {
+      if (e.target.closest('button, a, [role="menu"]')) return;
+      location.href = 'project.html?p=' + encodeURIComponent(p.id);
+    };
+
+    return (
+      <article
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={open}
+        onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) open(e); }}
+        role="link"
+        tabIndex={0}
+        aria-label={'Open ' + p.name}
+        style={{
+          cursor: 'pointer',
+          position: 'relative',
+          /* backdrop-filter makes every card its own stacking context, so
+             the open panel has to be lifted by the CARD, not the panel. */
+          zIndex: menuOpen ? 70 : 'auto',
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr',
+          minHeight: 396,
+          borderRadius: 'var(--r-card-lg)',
+          backgroundImage: hover ? 'var(--glass-fill-3)' : 'var(--glass-fill-2)',
+          backdropFilter: 'var(--glass-bd-md-refract)',
+          WebkitBackdropFilter: 'var(--glass-bd-md)',
+          boxShadow: [
+            'var(--glass-rim-2)', 'var(--glass-inner-1)',
+            hover ? 'var(--glass-cast-3)' : 'var(--glass-cast-2)',
+          ].join(', '),
+          transform: hover ? 'translateY(-3px)' : 'translateY(0)',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        {/* The cover sits behind the glass and stays desaturated, so a
+            wall of covers can never out-shout the numbers under them. */}
+        <div style={{ position: 'relative' }}>
+          <div className="cover" style={{
+            height: 156, borderRadius: 'var(--r-card-lg) var(--r-card-lg) 0 0', overflow: 'hidden',
+            boxShadow: 'inset 0 -1px 0 0 var(--line-faint)', display: 'grid', placeItems: 'center',
+          }}>
+            {p.cover ? (
+              /* Covers stay desaturated behind the glass — a wall of them can
+                 never out-shout the numbers underneath. */
+              <img src={p.cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(0.5) brightness(0.82)', display: 'block' }} />
+            ) : (
+              <span style={{ font: 'var(--type-kicker)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)' }}>
+                cover · 1200×400
+              </span>
+            )}
+          </div>
+
+          <div style={{ position: 'absolute', top: 'var(--sp-5)', left: 'var(--sp-6)', right: 'var(--sp-5)', display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: p.hue, flex: '0 0 auto' }} />
+            <StatusPill status={p.status} size="sm">{p.statusLabel}</StatusPill>
+            <span style={{ flex: 1 }} />
+            <span className="card-actions" data-open={menuOpen ? 'true' : 'false'}>
+              <MorphMenu
+                align="end"
+                width={292}
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
+                trigger={<IconButton label={'Actions for ' + p.name} variant="ghost"><Icon name="ellipsis" size={18} /></IconButton>}
+                header={{
+                  title: p.name,
+                  meta: [p.lists + ' lists', p.tasks + ' tasks', p.budget || 'no budget'].join('  ·  '),
+                  badge: <span style={{ width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto', background: DOT[p.status], boxShadow: p.status === 'running' ? '0 0 8px 0 var(--accent)' : 'none' }} />,
+                }}
+                items={menuFor(p)}
+              />
+            </span>
+          </div>
+
+          {/* The project's own glyph, on the cover's edge — the one place
+              an emoji is allowed to be an identity rather than a label. */}
+          <span aria-hidden="true" style={{
+            position: 'absolute', left: 'var(--sp-6)', bottom: -20,
+            display: 'grid', placeItems: 'center', width: 48, height: 48, fontSize: 23,
+            borderRadius: 'var(--r-md)', backgroundImage: 'var(--glass-fill-3)',
+            backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+            boxShadow: 'var(--glass-rim-2), var(--glass-cast-2)',
+          }}>
+            {p.glyph}
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr', gap: 'var(--sp-5)', padding: 'var(--sp-10) var(--pad-card) var(--pad-card)' }}>
+        <h3 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+          {p.name}
+        </h3>
+
+        <p className="clamp2" style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', alignSelf: 'start' }}>
+          {p.desc}
+        </p>
+
+        {empty ? (
+          <div style={{ display: 'grid', gap: 'var(--sp-4)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line-faint)' }}>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Nothing here yet.</span>
+            <Button iconLeft={<Icon name="plus" size={16} />} style={{ justifySelf: 'start' }}>Add first list</Button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+            {p.next && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', minWidth: 0 }}>
+                <Icon name="corner-down-right" size={14} />
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {p.next}
+                </span>
+              </div>
+            )}
+            <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span className="ag-kicker">{p.done} of {p.tasks} done</span>
+                <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: p.progress > 0 ? 'var(--accent)' : 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>
+                  {p.progress}%
+                </span>
+              </div>
+              <div style={{ height: 5, borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: p.progress + '%', borderRadius: 'var(--r-pill)',
+                  background: 'var(--accent)', boxShadow: '0 0 12px -1px var(--accent)',
+                  transition: 'width var(--dur-slow) var(--ease-glass)',
+                }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line-faint)', flexWrap: 'wrap' }}>
+              <Stat value={p.lists} label="lists" />
+              <Stat value={p.tasks} label="tasks" />
+              <span style={{ flex: 1 }} />
+              {p.budget && (
+                <span style={{
+                  font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-2)',
+                  padding: '4px var(--sp-4)', borderRadius: 'var(--r-pill)',
+                  backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {p.budget}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+        </div>
+      </article>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  /* The focus queue the picker draws from — highest priority first, each
+     with its own estimate, so "what fits in N hours" is a real answer and
+     not a fixed list. Blocked ones are held back and shown separately. */
+  const QUEUE = [
+    { id: 't1', name: 'Draft the incorporation filing', project: 'Shreekant Empire', mins: 45 },
+    { id: 't2', name: 'Sign the lease',                 project: 'Studio Launch',    mins: 30 },
+    { id: 't3', name: 'File the incorporation paperwork', project: 'Shreekant Empire', mins: 60 },
+    { id: 't4', name: 'Countersign the studio lease',   project: 'Studio Launch',    mins: 40 },
+    { id: 't5', name: 'Shortlist the CA',               project: 'Shreekant Empire', mins: 25 },
+    { id: 't6', name: 'Book the acoustics site survey', project: 'Studio Launch',    mins: 35 },
+  ];
+
+  const HELD = [
+    { id: 'h1', name: 'Open the current account',        waiting: 'File the incorporation paperwork', mins: 30 },
+    { id: 'h2', name: 'Get the acoustic treatment quoted', waiting: 'Countersign the studio lease',   mins: 45 },
+  ];
+
+  const PRESETS = [1, 2, 4, 8];
+
+  /* Today's session is not empty — starting a new one replaces it. The
+     number is what makes the warning worth reading. */
+  const SESSION_TASKS = 3;
+
+  function fmtDur(mins) {
+    if (mins < 60) return mins + 'm';
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return m ? h + 'h ' + m + 'm' : h + 'h';
+  }
+
+  /* Greedy fill in priority order — the product's own rule: highest
+     priority first, anything that doesn't fit is simply not today's. */
+  function fit(mins, forced) {
+    const picked = [];
+    let used = 0;
+    forced.forEach((t) => { picked.push(t); used += t.mins; });
+    QUEUE.forEach((t) => {
+      if (used + t.mins <= mins) { picked.push(t); used += t.mins; }
+    });
+    if (!picked.length) { picked.push(QUEUE[0]); used = QUEUE[0].mins; }
+    return { picked, used };
+  }
+
+  /* Smart Start. Opens out of the band's button and condenses shut — the
+     hours field is the only decision, everything under it is consequence. */
+  function SmartStartDialog({ open, initialHours, onClose }) {
+    const [hours, setHours] = React.useState(initialHours || '1');
+    const [expanded, setExpanded] = React.useState(true);
+    const [forced, setForced] = React.useState([]);
+    const [listOpen, setListOpen] = React.useState(false);
+
+    React.useEffect(() => {
+      if (open) return;
+      setHours(initialHours || '1'); setExpanded(true); setForced([]); setListOpen(false);
+    }, [open]);
+
+    const n = Math.max(0, Math.min(24, parseFloat(hours) || 0));
+    const budget = Math.round(n * 60);
+    const forcedTasks = HELD.filter((h) => forced.indexOf(h.id) > -1);
+    const { picked, used } = fit(budget, forcedTasks);
+    const held = HELD.filter((h) => forced.indexOf(h.id) < 0);
+    const valid = n > 0;
+
+    return (
+      <Dialog open={open} onClose={onClose} width={520} style={{ gap: 0, padding: 0, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+        <div className="np-scroll" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-8)', padding: 'var(--pad-sheet)', minWidth: 0, boxSizing: 'border-box', maxHeight: '86vh', overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          <header style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
+              <span aria-hidden="true" style={{
+                display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 auto',
+                borderRadius: '50%', backgroundImage: 'var(--glass-tint-accent)',
+                boxShadow: 'var(--glass-rim-2), var(--glow-accent-sm)',
+                color: 'oklch(0.93 0.07 162)',
+              }}>
+                <Icon name="zap" size={20} />
+              </span>
+              <h2 style={{ flex: 1, minWidth: 0, font: 'var(--type-title)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                Smart Start
+              </h2>
+              <IconButton label="Close" variant="ghost" onClick={onClose}><Icon name="x" size={18} /></IconButton>
+            </div>
+            <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+              How long have you got? Highest-priority tasks are pulled until the time is full.
+            </p>
+          </header>
+
+          <Section icon="clock" label="Hours available">
+            {/* The number is the instrument here, so it is set at metric
+                scale in mono inside a deep well — not a 15px form field. */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 'var(--sp-5)',
+              height: 78, padding: '0 var(--sp-7)', borderRadius: 'var(--r-lg)',
+              backgroundImage: 'var(--glass-well)',
+              boxShadow: 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+            }}>
+              <input
+                className="np-field"
+                data-ag-field=""
+                value={hours}
+                onChange={(e) => setHours(e.target.value.replace(/[^0-9.]/g, '').slice(0, 4))}
+                inputMode="decimal"
+                aria-label="Hours available"
+                style={{
+                  flex: 1, minWidth: 0, border: 0, background: 'transparent', outline: 'none',
+                  color: 'var(--fg-1)', font: 'var(--type-metric)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-3xl)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              />
+              <span style={{ font: 'var(--type-label)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>hours</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--sp-3)', marginTop: 'var(--sp-2)' }}>
+              {PRESETS.map((p) => {
+                const on = n === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setHours(String(p))}
+                    aria-pressed={on}
+                    style={{
+                      height: 44, border: 0, cursor: 'pointer', borderRadius: 'var(--r-control)',
+                      background: on ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+                      boxShadow: on ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+                      color: on ? 'oklch(0.93 0.07 162)' : 'var(--fg-3)',
+                      font: 'var(--type-numeric)', fontSize: 'var(--text-sm)',
+                      transition: 'var(--t-hover)',
+                    }}
+                  >
+                    {p}h
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+
+          <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+            {/* What the hours bought. Expands in place — the queue is the
+                whole promise, so it must be inspectable before starting. */}
+            <div style={{ borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setListOpen(!listOpen)}
+                aria-expanded={listOpen}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%',
+                  height: 52, padding: '0 var(--sp-6)', border: 0, background: 'transparent',
+                  cursor: 'pointer', color: 'var(--fg-1)', textAlign: 'left',
+                }}
+              >
+                <Icon name="list-checks" size={16} />
+                <span style={{ font: 'var(--type-label)', fontSize: 'var(--text-sm)' }}>
+                  {picked.length} {picked.length === 1 ? 'task' : 'tasks'} queued
+                </span>
+                <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtDur(used)} of work
+                </span>
+                <span style={{ flex: 1 }} />
+                <span style={{ display: 'flex', color: 'var(--fg-3)', transform: listOpen ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-base) var(--ease-glass)' }}>
+                  <Icon name="chevron-down" size={16} />
+                </span>
+              </button>
+              {listOpen && (
+                <div style={{ display: 'grid', padding: '0 var(--sp-6) var(--sp-5)', animation: 'ag-condense var(--dur-base) var(--ease-morph) both' }}>
+                  {picked.map((t, i) => (
+                    <div key={t.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+                      padding: 'var(--sp-4) 0', borderTop: '1px solid var(--line-faint)',
+                    }}>
+                      <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)', width: 16, flex: '0 0 auto' }}>{i + 1}</span>
+                      <span style={{ flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {t.name}
+                      </span>
+                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap' }}>{t.project}</span>
+                      <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>{fmtDur(t.mins)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Held back: blocked tasks, with the blocker named. Overriding
+                is allowed — it is the user's call, not the system's. */}
+            {held.length > 0 && (
+              <div style={{ borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', overflow: 'hidden' }}>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(!expanded)}
+                  aria-expanded={expanded}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%',
+                    height: 52, padding: '0 var(--sp-6)', border: 0, background: 'transparent',
+                    cursor: 'pointer', color: 'var(--fg-1)', textAlign: 'left',
+                  }}
+                >
+                  <Icon name="git-branch" size={16} />
+                  <span style={{ font: 'var(--type-label)', fontSize: 'var(--text-sm)' }}>{held.length} held back</span>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>waiting on unfinished work</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ display: 'flex', color: 'var(--fg-3)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-base) var(--ease-glass)' }}>
+                    <Icon name="chevron-down" size={16} />
+                  </span>
+                </button>
+                {expanded && (
+                  <div style={{ display: 'grid', gap: 'var(--sp-4)', padding: '0 var(--sp-6) var(--sp-6)', animation: 'ag-condense var(--dur-base) var(--ease-morph) both' }}>
+                    {held.map((h) => (
+                      <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line-faint)' }}>
+                        <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
+                          <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {h.name}
+                          </span>
+                          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            Waiting on: {h.waiting}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          iconLeft={<Icon name="zap" size={14} />}
+                          onClick={() => setForced((cur) => cur.concat(h.id))}
+                          style={{ flex: '0 0 auto' }}
+                        >
+                          Schedule anyway
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Amber, not rose: this is a consequence to read, not a failure. */}
+          <div style={{
+            display: 'flex', gap: 'var(--sp-4)', padding: 'var(--sp-5) var(--sp-6)',
+            borderRadius: 'var(--r-lg)', background: 'var(--glass-tint-amber)',
+            boxShadow: 'var(--glass-rim-1), inset 0 0 0 1px oklch(0.72 0.14 82 / 0.22)',
+          }}>
+            <span style={{ display: 'flex', color: 'var(--hue-amber)', flex: '0 0 auto', marginTop: 1 }}>
+              <Icon name="triangle-alert" size={16} />
+            </span>
+            <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'oklch(0.95 0.07 82)', textWrap: 'pretty' }}>
+              Today's session already has {SESSION_TASKS} tasks in it. Starting replaces them.
+            </p>
+          </div>
+
+          <Button variant="solid" size="lg" block disabled={!valid} iconLeft={<Icon name="zap" size={18} />} onClick={onClose}>
+            Replace &amp; Start Focusing
+          </Button>
+        </div>
+      </Dialog>
+    );
+  }
+
+  /* Every shortcut the app answers to, grouped by what they do. Sequences
+     read "G then H" because that is how the product teaches them. */
+  const SHORTCUTS = [
+    { group: 'Navigate', rows: [
+      { label: 'Go to Dashboard',     keys: ['G', 'then', 'D'] },
+      { label: 'Go to Home',          keys: ['G', 'then', 'H'] },
+      { label: 'Go to Assistant',     keys: ['G', 'then', 'A'] },
+      { label: 'Go to Score',         keys: ['G', 'then', 'S'] },
+      { label: 'Go to Notifications', keys: ['G', 'then', 'N'] },
+    ] },
+    { group: 'Act', rows: [
+      { label: 'Smart Start',  keys: ['S'] },
+      { label: 'New project',  keys: ['P'] },
+      { label: 'Search',       keys: ['/'] },
+    ] },
+    { group: 'Anywhere', rows: [
+      { label: 'Close this sheet', keys: ['Esc'] },
+      { label: 'Toggle this help', keys: ['?'] },
+    ] },
+  ];
+
+  /* A keycap is a raised object, so it takes a fill and a rim — never the
+     well treatment, which would read as something you type into. */
+  function Cap({ children, quiet }) {
+    if (quiet) {
+      return (
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: '0 2px' }}>{children}</span>
+      );
+    }
+    return (
+      <span style={{
+        display: 'grid', placeItems: 'center', minWidth: 28, height: 28, padding: '0 var(--sp-3)',
+        borderRadius: 'var(--r-sm)', backgroundImage: 'var(--glass-fill-2)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+        font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-1)',
+      }}>
+        {children}
+      </span>
+    );
+  }
+
+  /* Shortcuts. Opens on "?" from anywhere that isn't a text field, and the
+     same key closes it — the sheet is a toggle, as the row itself says. */
+  function ShortcutsDialog({ open, onClose }) {
+    return (
+      <Dialog open={open} onClose={onClose} width={480} style={{ gap: 0, padding: 0, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+        <div className="np-scroll" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-8)', padding: 'var(--pad-sheet)', minWidth: 0, boxSizing: 'border-box', maxHeight: '86vh', overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
+            <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-3)' }}>
+              <Icon name="keyboard" size={20} />
+            </span>
+            <h2 style={{ flex: 1, minWidth: 0, font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+              Shortcuts
+            </h2>
+            <IconButton label="Close" variant="ghost" onClick={onClose}><Icon name="x" size={18} /></IconButton>
+          </header>
+
+          {SHORTCUTS.map((sec) => (
+            <div key={sec.group} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-4)' }}>
+              <span className="ag-kicker" style={{ color: 'var(--fg-4)' }}>{sec.group}</span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', padding: '0 var(--sp-6)' }}>
+                {sec.rows.map((r, i) => (
+                  <div key={r.label} style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minHeight: 46,
+                    padding: 'var(--sp-3) 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--line-faint)',
+                  }}>
+                    <span style={{ flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {r.label}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flex: '0 0 auto' }}>
+                      {r.keys.map((k, j) => <Cap key={j} quiet={k === 'then'}>{k}</Cap>)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+            Sequences are typed in order, not held together.
+          </p>
+        </div>
+      </Dialog>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  /* The Smart Start band. One pill, and it separates into the only
+     decision the band can carry — how long you have. Picking an hour
+     opens the picker already answered; "Choose tasks" goes to Selection
+     instead. The invitation stays the only text. */
+  function SmartStart({ onStart }) {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <section
+        style={{
+          display: 'grid',
+          gap: 'var(--sp-7)',
+          justifyItems: 'start',
+          padding: 'var(--pad-card-lg)',
+          borderRadius: 'var(--r-card-lg)',
+          backgroundImage: 'var(--glass-fill-2)',
+          backdropFilter: 'var(--glass-bd-lg-refract)',
+          WebkitBackdropFilter: 'var(--glass-bd-lg)',
+          boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2), var(--glow-accent-sm)',
+        }}
+      >
+        <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+          <span className="ag-kicker" style={{ color: 'var(--accent)' }}>Start here</span>
+          <h2 style={{ font: 'var(--type-metric)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+            Strict focus. One task at a time.
+          </h2>
+        </div>
+        <MorphCluster
+          open={open}
+          onOpenChange={setOpen}
+          tone="accent"
+          gap="var(--sp-4)"
+          label="Start a session"
+          trigger={<Button variant="solid" size="lg" iconLeft={<Icon name="zap" size={18} />}>Smart Start</Button>}
+        >
+          {PRESETS.map((h) => (
+            <Button
+              key={h}
+              variant="glass"
+              size="lg"
+              onClick={() => { setOpen(false); onStart(String(h)); }}
+            >
+              {h}h
+            </Button>
+          ))}
+          <Button
+            variant="frost"
+            size="lg"
+            iconRight={<Icon name="arrow-right" size={16} />}
+            onClick={() => { window.location.href = 'session.html'; }}
+          >
+            Choose tasks
+          </Button>
+        </MorphCluster>
+      </section>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  function Dashboard() {
+    return (
+      <section style={{ display: 'grid', placeItems: 'center', minHeight: 380, padding: 'var(--pad-card-lg)', borderRadius: 'var(--r-card-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', textAlign: 'center' }}>
+        <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-5)', maxWidth: 420 }}>
+          <span style={{ display: 'grid', placeItems: 'center', width: 56, height: 56, borderRadius: 'var(--r-tile)', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)', color: 'var(--fg-3)' }}>
+            <Icon name="layout-dashboard" size={24} />
+          </span>
+          <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', color: 'var(--fg-1)' }}>Dashboard</h2>
+          <p style={{ font: 'var(--type-body)', color: 'var(--fg-3)' }}>
+            Reserved. Focus time, overruns and pace across every project will live here.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  /* A well, not a box: anything you type into looks carved in. Input.jsx
+     covers single-line fields; a textarea needs the same recipe by hand. */
+  function Field({ multiline, rows = 3, value, onChange, placeholder, onKeyDown, autoFocus, mono, ariaLabel }) {
+    const [focus, setFocus] = React.useState(false);
+    const Tag = multiline ? 'textarea' : 'input';
+    return (
+      <div style={{
+        padding: multiline ? 'var(--sp-5) var(--sp-6)' : 0,
+        borderRadius: multiline ? 'var(--r-lg)' : 'var(--r-control)',
+        backgroundImage: 'var(--glass-well)',
+        boxShadow: focus
+          ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+          : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+        transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+      }}>
+        <Tag
+          className="np-field"
+          rows={multiline ? rows : undefined}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          aria-label={ariaLabel}
+          style={{
+            display: 'block', width: '100%', border: 0, background: 'transparent', resize: 'none',
+            color: 'var(--fg-1)', font: mono ? 'var(--type-numeric)' : 'var(--type-body)',
+            fontSize: 'var(--text-md)', letterSpacing: 'var(--tracking-ui)',
+            lineHeight: multiline ? 1.55 : undefined,
+            padding: multiline ? 0 : '0 var(--sp-6)', height: multiline ? undefined : 46,
+          }}
+        />
+      </div>
+    );
+  }
+
+  function Section({ icon, label, children }) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-4)' }}>
+        <span className="ag-kicker" style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--fg-3)' }}>
+          <Icon name={icon} size={14} />
+          {label}
+        </span>
+        {children}
+      </div>
+    );
+  }
+
+  /* New project. Opens from either "New project" affordance and morphs out
+     of it — the Dialog condenses rather than sliding, per the motion law. */
+  function NewProject({ open, onClose, onCreate }) {
+    const [batch, setBatch] = React.useState(false);
+    const [name, setName] = React.useState('');
+    const [bulk, setBulk] = React.useState('');
+    const [desc, setDesc] = React.useState('');
+    const [glyph, setGlyph] = React.useState(GLYPHS[0]);
+    const [glyphOpen, setGlyphOpen] = React.useState(false);
+    const [hue, setHue] = React.useState('emerald');
+    const [hex, setHex] = React.useState('');
+    const [cover, setCover] = React.useState(null);
+    const [coverName, setCoverName] = React.useState('');
+    const [dropping, setDropping] = React.useState(false);
+    const file = React.useRef(null);
+
+    /* One fresh sheet per opening — a half-filled form on reopen is a bug. */
+    React.useEffect(() => {
+      if (open) return;
+      setBatch(false); setName(''); setBulk(''); setDesc(''); setGlyph(GLYPHS[0]);
+      setGlyphOpen(false); setHue('emerald'); setHex(''); setCover(null); setCoverName('');
+    }, [open]);
+
+    const names = batch
+      ? bulk.split('\n').map((s) => s.trim()).filter(Boolean)
+      : [name.trim()].filter(Boolean);
+    const valid = names.length > 0;
+    const customOk = /^#?[0-9a-f]{6}$/i.test(hex.trim());
+    const swatch = hue === 'custom' && customOk
+      ? (hex.trim()[0] === '#' ? hex.trim() : '#' + hex.trim())
+      : (HUES.find((h) => h.id === hue) || HUES[0]).value;
+
+    function readFile(f) {
+      if (!f || !/^image\//.test(f.type)) return;
+      setCoverName(f.name);
+      const r = new FileReader();
+      r.onload = () => setCover(r.result);
+      r.readAsDataURL(f);
+    }
+
+    function submit() {
+      if (!valid) return;
+      onCreate(names.map((n) => ({
+        id: 'p' + Math.random().toString(36).slice(2, 8),
+        glyph, hue: swatch, name: n,
+        desc: desc.trim() || 'No description yet.',
+        lists: 0, tasks: 0, done: 0, budget: null, progress: 0,
+        status: 'queued', statusLabel: 'Not started', next: null, cover,
+      })));
+      onClose();
+    }
+
+    return (
+      <Dialog open={open} onClose={onClose} width={560} style={{ gap: 0, padding: 0 }}>
+        <div className="np-scroll" style={{ display: 'grid', gap: 'var(--sp-8)', padding: 'var(--pad-sheet)', maxHeight: '84vh', overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          <header style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-5)' }}>
+            <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 0 }}>
+              <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                New project
+              </h2>
+              <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>
+                Name it now. Lists and tasks come after.
+              </p>
+            </div>
+            <IconButton label="Close" variant="ghost" onClick={onClose}><Icon name="x" size={18} /></IconButton>
+          </header>
+
+          {/* Batch mode: the same sheet, one name per line. A separate
+              "bulk add" screen would duplicate every other field here. */}
+          <button
+            type="button"
+            onClick={() => setBatch(!batch)}
+            aria-pressed={batch}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', justifySelf: 'start',
+              height: 34, padding: '0 var(--sp-5)', border: 0, cursor: 'pointer',
+              borderRadius: 'var(--r-pill)',
+              background: batch ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+              boxShadow: batch ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+              color: batch ? 'oklch(0.93 0.07 162)' : 'var(--fg-3)',
+              font: 'var(--type-label)', fontSize: 'var(--text-sm)',
+              transition: 'var(--t-hover)',
+            }}
+          >
+            <Icon name="layers" size={15} />
+            Add multiple at once
+          </button>
+
+          <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+              <button
+                type="button"
+                onClick={() => setGlyphOpen(!glyphOpen)}
+                aria-label="Choose project glyph"
+                aria-expanded={glyphOpen}
+                style={{
+                  flex: '0 0 auto', display: 'grid', placeItems: 'center', width: 48, height: 48,
+                  fontSize: 23, border: 0, cursor: 'pointer', borderRadius: 'var(--r-md)',
+                  backgroundImage: 'var(--glass-fill-3)',
+                  boxShadow: glyphOpen ? 'var(--glass-rim-2), 0 0 0 1px var(--accent-hairline)' : 'var(--glass-rim-2), var(--glass-cast-2)',
+                  transition: 'var(--t-hover)',
+                }}
+              >
+                {glyph}
+              </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {batch ? (
+                  <Field multiline rows={4} value={bulk} onChange={setBulk} ariaLabel="Project names, one per line" placeholder={'One project per line\nStudio Launch\nQ3 Filings'} />
+                ) : (
+                  <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} placeholder="Project name" aria-label="Project name" />
+                )}
+              </div>
+            </div>
+
+            {/* Grows out of the tile instead of floating over the sheet. */}
+            {glyphOpen && (
+              <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3)', padding: 'var(--sp-4)',
+                borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-well)',
+                boxShadow: 'var(--glass-well-shadow)',
+                animation: 'ag-condense var(--dur-base) var(--ease-morph) both',
+              }}>
+                {GLYPHS.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => { setGlyph(g); setGlyphOpen(false); }}
+                    aria-label={'Glyph ' + g}
+                    style={{
+                      display: 'grid', placeItems: 'center', width: 40, height: 40, fontSize: 19,
+                      border: 0, cursor: 'pointer', borderRadius: 'var(--r-sm)',
+                      background: g === glyph ? 'var(--glass-fill-3)' : 'transparent',
+                      boxShadow: g === glyph ? 'var(--glass-rim-2)' : 'none',
+                    }}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <Field multiline value={desc} onChange={setDesc} ariaLabel="Short description" placeholder="Short description — what has to be true when it's done. (optional)" />
+          </div>
+
+          <Section icon="palette" label="Accent colour">
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--sp-4)' }}>
+              {HUES.map((h) => {
+                const on = hue === h.id;
+                return (
+                  <button
+                    key={h.id}
+                    type="button"
+                    onClick={() => setHue(h.id)}
+                    aria-label={h.label}
+                    aria-pressed={on}
+                    style={{
+                      width: 30, height: 30, padding: 0, border: 0, cursor: 'pointer', borderRadius: '50%',
+                      background: h.value,
+                      boxShadow: on
+                        ? 'inset 0 1px 0 oklch(1 0 0 / 0.35), 0 0 0 2px var(--void-0), 0 0 0 4px ' + h.value
+                        : 'inset 0 1px 0 oklch(1 0 0 / 0.35), 0 1px 4px oklch(0 0 0 / 0.5)',
+                      transform: on ? 'scale(1)' : 'scale(0.94)',
+                      transition: 'var(--t-hover)',
+                    }}
+                  />
+                );
+              })}
+              <span style={{ width: 1, height: 22, background: 'var(--line-soft)' }} />
+              <label style={{
+                display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 34,
+                padding: '0 var(--sp-4) 0 var(--sp-3)', borderRadius: 'var(--r-pill)',
+                backgroundImage: 'var(--glass-well)',
+                boxShadow: hue === 'custom' && customOk
+                  ? 'var(--glass-well-shadow), 0 0 0 1px var(--line-strong)'
+                  : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+              }}>
+                <span aria-hidden="true" style={{
+                  width: 22, height: 22, borderRadius: '50%',
+                  background: customOk ? (hex.trim()[0] === '#' ? hex.trim() : '#' + hex.trim()) : 'var(--void-3)',
+                  boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.3)',
+                }} />
+                <input
+                  className="np-field"
+                  value={hex}
+                  onChange={(e) => { setHex(e.target.value); if (/^#?[0-9a-f]{6}$/i.test(e.target.value.trim())) setHue('custom'); }}
+                  placeholder="#hex"
+                  aria-label="Custom accent hex"
+                  maxLength={7}
+                  style={{
+                    width: 74, border: 0, background: 'transparent', color: 'var(--fg-1)',
+                    font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', textTransform: 'lowercase',
+                  }}
+                />
+              </label>
+            </div>
+          </Section>
+
+          <Section icon="image" label="Cover image">
+            {cover ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', padding: 'var(--sp-4)', borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)' }}>
+                <img src={cover} alt="" style={{ width: 108, height: 36, objectFit: 'cover', borderRadius: 'var(--r-sm)', filter: 'saturate(0.5) brightness(0.85)', flex: '0 0 auto' }} />
+                <span style={{ flex: 1, minWidth: 0, font: 'var(--type-caption)', color: 'var(--fg-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{coverName}</span>
+                <IconButton label="Remove cover" variant="ghost" onClick={() => { setCover(null); setCoverName(''); }}><Icon name="x" size={16} /></IconButton>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => file.current && file.current.click()}
+                onDragOver={(e) => { e.preventDefault(); setDropping(true); }}
+                onDragLeave={() => setDropping(false)}
+                onDrop={(e) => { e.preventDefault(); setDropping(false); readFile(e.dataTransfer.files[0]); }}
+                style={{
+                  display: 'grid', placeItems: 'center', gap: 'var(--sp-3)', width: '100%',
+                  minHeight: 88, padding: 'var(--sp-6)', cursor: 'pointer',
+                  borderRadius: 'var(--r-lg)',
+                  border: '1px dashed ' + (dropping ? 'var(--accent-hairline)' : 'var(--line-strong)'),
+                  background: dropping ? 'var(--accent-wash)' : 'transparent',
+                  color: dropping ? 'var(--fg-1)' : 'var(--fg-3)',
+                  font: 'var(--type-label)', transition: 'var(--t-hover)',
+                }}
+              >
+                <Icon name="image-up" size={20} />
+                Upload cover image
+              </button>
+            )}
+            <input ref={file} type="file" accept="image/*" onChange={(e) => readFile(e.target.files[0])} style={{ display: 'none' }} />
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+              Landscape, 1200×400. Under 5 MB. Compressed on upload.
+            </span>
+          </Section>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--line-faint)' }}>
+            {batch && (
+              <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>
+                {names.length} queued
+              </span>
+            )}
+            <span style={{ flex: 1 }} />
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button variant="solid" disabled={!valid} onClick={submit} iconLeft={<Icon name="plus" size={16} />}>
+              {batch && names.length > 1 ? 'Create ' + names.length + ' projects' : 'Create project'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  function Home() {
+    const [view, setView] = React.useState('home');
+    const [wide, setWide] = React.useState(window.innerWidth >= 900);
+    const [projects, setProjects] = React.useState(PROJECTS);
+    const [creating, setCreating] = React.useState(false);
+    const [starting, setStarting] = React.useState(null);
+    const [helping, setHelping] = React.useState(false);
+
+    React.useEffect(() => {
+      const on = () => setWide(window.innerWidth >= 900);
+      window.addEventListener('resize', on);
+      return () => window.removeEventListener('resize', on);
+    }, []);
+
+    /* "?" toggles the help sheet — but never while the user is typing, and
+       never on top of another sheet. */
+    React.useEffect(() => {
+      const key = (e) => {
+        if (e.key !== '?' || e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e.target;
+        if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))) return;
+        if (creating || starting !== null) return;
+        e.preventDefault();
+        setHelping((v) => !v);
+      };
+      window.addEventListener('keydown', key);
+      return () => window.removeEventListener('keydown', key);
+    }, [creating, starting]);
+
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+
+    /* Assistant is its own screen, not a view of Home. */
+    const go = (v) => {
+      if (v === 'assistant') { location.href = 'atlas.html'; return; }
+      if (v === 'score') { location.href = 'scoring.html'; return; }
+      if (v === 'session') { location.href = 'session.html'; return; }
+      setView(v);
+    };
+
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'flex-start' }}>
+        <GlassFilters />
+
+        {/* Desktop rail — floats, never frames */}
+        {wide && (
+          <div style={{ position: 'sticky', top: 'var(--sp-9)', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value={view} onChange={go} />
+          </div>
+        )}
+
+        <div style={{ flex: 1, minWidth: 0, padding: wide ? 'var(--sp-11) var(--gutter-page) var(--sp-13)' : 'var(--sp-9) var(--gutter-page-sm) 140px' }}>
+          {/* Header */}
+          <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap', marginBottom: 'var(--sp-11)' }}>
+            <img src="../assets/mark-white.png" alt="" width="26" height="26" style={{ opacity: 0.95, display: 'block' }} />
+            <span style={{ font: 'var(--type-title)', color: 'var(--fg-1)' }}>BASE</span>
+            <span style={{ flex: 1 }} />
+            <IconButton label="Search tasks and commands" variant="ghost"><Icon name="search" size={18} /></IconButton>
+            <IconButton label="Keyboard shortcuts" variant="ghost" onClick={() => setHelping(true)}><Icon name="keyboard" size={18} /></IconButton>
+            <MorphMenu
+              align="end"
+              width={220}
+              trigger={
+                <button type="button" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)', height: 44,
+                  padding: '0 var(--sp-5) 0 var(--sp-3)', border: 0, cursor: 'pointer',
+                  borderRadius: 'var(--r-pill)',
+                  backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
+                  color: 'var(--fg-1)', font: 'var(--type-label)',
+                }}>
+                  <span style={{ display: 'grid', placeItems: 'center', width: 30, height: 30, borderRadius: '50%', backgroundImage: 'var(--glass-tint-accent)', boxShadow: 'var(--glass-rim-2)', font: 'var(--type-numeric)', fontSize: 'var(--text-xs)' }}>S</span>
+                  Shreekant
+                  <Icon name="chevron-down" size={15} />
+                </button>
+              }
+              items={[
+                { label: 'Account', icon: <Icon name="user" size={16} /> },
+                { label: 'Google Tasks', icon: <Icon name="refresh-cw" size={16} />, shortcut: 'Synced', onSelect: () => showProgress({ label: 'Syncing tasks', doneLabel: 'Synced' }) },
+                { divider: true },
+                { label: 'Sign out', icon: <Icon name="log-out" size={16} />, tone: 'danger' },
+              ]}
+            />
+          </header>
+
+          {view === 'home' ? (
+            <div style={{ display: 'grid', gap: 'var(--gap-section)' }}>
+              <SmartStart onStart={(h) => setStarting(h)} />
+
+              <section style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'grid', gap: 'var(--sp-2)' }}>
+                    <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', color: 'var(--fg-1)' }}>Your projects</h2>
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{projects.length} projects · 8 tasks open</span>
+                  </div>
+                  <span style={{ flex: 1 }} />
+                  <Button iconLeft={<Icon name="plus" size={16} />} onClick={() => setCreating(true)}>New project</Button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(316px, 1fr))', gap: 'var(--gap-card)' }}>
+                  {projects.map((p) => <ProjectCard key={p.id} p={p} wide={wide} />)}
+
+                  <button
+                    type="button"
+                    onClick={() => setCreating(true)}
+                    style={{
+                      display: 'grid', placeItems: 'center', gap: 'var(--sp-4)',
+                      minHeight: 250, padding: 'var(--pad-card)', cursor: 'pointer',
+                      borderRadius: 'var(--r-card-lg)',
+                      border: '1px dashed var(--line-strong)',
+                      background: 'transparent', color: 'var(--fg-3)',
+                      transition: 'var(--t-hover)',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--glass-fill-1)'; e.currentTarget.style.color = 'var(--fg-1)'; e.currentTarget.style.borderColor = 'var(--accent-hairline)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-3)'; e.currentTarget.style.borderColor = 'var(--line-strong)'; }}
+                  >
+                    <span style={{ display: 'grid', placeItems: 'center', width: 46, height: 46, borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)' }}>
+                      <Icon name="plus" size={20} />
+                    </span>
+                    <span style={{ font: 'var(--type-label)', whiteSpace: 'nowrap' }}>New project</span>
+                  </button>
+                </div>
+              </section>
+            </div>
+          ) : view === 'dashboard' ? (
+            <Dashboard />
+          ) : (
+            <section style={{ display: 'grid', placeItems: 'center', minHeight: 320, font: 'var(--type-body)', color: 'var(--fg-3)' }}>
+              {NAV.find((n) => n.value === view).label} lives here.
+            </section>
+          )}
+        </div>
+
+        <SmartStartDialog key={starting || 'none'} open={starting !== null} initialHours={starting} onClose={() => setStarting(null)} />
+
+        <ShortcutsDialog open={helping} onClose={() => setHelping(false)} />
+
+        <NewProject
+          open={creating}
+          onClose={() => setCreating(false)}
+          onCreate={(made) => setProjects((cur) => made.concat(cur))}
+        />
+
+        {/* Tablet — the rail moves to a floating bottom bar */}
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-6)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <MiniNav items={navItems} value={view} onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Home />);
+});
+</script>
+</body>
+</html>

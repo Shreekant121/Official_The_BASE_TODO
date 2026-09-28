@@ -1,0 +1,87 @@
+<!-- @dsCard group="Components" viewport="700x380" name="Overlay" subtitle="The trigger becomes the menu; dialogs and ⌘K condense into view" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overlay</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../core/Icon.jsx',
+  '../actions/Button.jsx',
+  '../actions/IconButton.jsx',
+  '../overlay/MorphMenu.jsx',
+  '../overlay/Dialog.jsx',
+  '../overlay/CommandPalette.jsx'
+]).then(function (AG) {
+  const { Icon, Button, IconButton, MorphMenu, Dialog, CommandPalette } = AG;
+
+  function Demo() {
+    const [dlg, setDlg] = React.useState(false);
+    const [pal, setPal] = React.useState(false);
+
+    const items = [
+      { label: 'Reallocate time', icon: <Icon name="clock" size={16} />, shortcut: '⌘T' },
+      { label: 'Move to Backburner', icon: <Icon name="snowflake" size={16} /> },
+      { label: 'Duplicate task', icon: <Icon name="copy" size={16} /> },
+      { divider: true },
+      { label: 'Delete task', icon: <Icon name="trash-2" size={16} />, tone: 'danger' },
+    ];
+
+    return (
+      <div className="pad col" style={{ gap: 'var(--sp-7)' }}>
+        <div className="row" style={{ gap: 'var(--sp-6)' }}>
+          <MorphMenu trigger={<IconButton label="More"><Icon name="ellipsis" size={18} /></IconButton>} items={items} />
+          <MorphMenu align="end" width={230} trigger={<Button iconRight={<Icon name="chevron-down" size={16} />}>Task actions</Button>} items={items} />
+          <Button variant="solid" onClick={() => setDlg(true)}>Open dialog</Button>
+          <Button onClick={() => setPal(true)} iconLeft={<Icon name="search" size={16} />}>Command palette</Button>
+        </div>
+
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', maxWidth: 460 }}>
+          The menu grows from its trigger's corner — scale, radius and blur animate together. Remove any one and it becomes an ordinary popover.
+        </span>
+
+        <Dialog
+          open={dlg}
+          title="Disconnect Google Tasks?"
+          description="Your saved sets stay on this device. Syncing stops immediately."
+          onClose={() => setDlg(false)}
+          actions={<><Button variant="ghost" onClick={() => setDlg(false)}>Cancel</Button><Button variant="solid" tone="rose" onClick={() => setDlg(false)}>Disconnect</Button></>}
+        />
+
+        <CommandPalette
+          open={pal}
+          onClose={() => setPal(false)}
+          commands={[
+            { label: 'Start focus session', icon: <Icon name="play" size={16} />, group: 'Session', shortcut: '⌘⏎' },
+            { label: 'Allocate time to all tasks', icon: <Icon name="clock" size={16} />, group: 'Session' },
+            { label: 'Draft the Q3 brief', icon: <Icon name="circle" size={16} />, group: 'Tasks' },
+            { label: 'Review the pricing deck', icon: <Icon name="circle" size={16} />, group: 'Tasks' },
+            { label: 'Disconnect Google Tasks', icon: <Icon name="log-out" size={16} />, group: 'Account' },
+          ]}
+        />
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

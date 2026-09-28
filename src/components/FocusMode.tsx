@@ -1,0 +1,1274 @@
+/**
+ * Focus Mode — RECONCILED against `design-system/screens/focus.html` (UI-32).
+ *
+ * UI-11 built this screen from the tokens alone; the mockup could not be
+ * pulled for twelve consecutive sessions and UI-21 finally mirrored it. The
+ * source opens with a comment naming its own subject and then listing the
+ * four things the old screen got wrong. All four were ours, and all four are
+ * fixed here.
+ *
+ *   > Everything is decided. This screen holds exactly one task in front of
+ *   > you and counts. The product's whole question collapses to two numerals:
+ *   > how long on THIS, how long on the SESSION.
+ *
+ * **1. The panels dock, they do not cover.** *"Details and Subtasks opened
+ * sheets that blurred and covered the task they described — you lost the
+ * thing you were working on to read about it."* Ours were exactly that: a
+ * full-height drawer off the right edge over a blurred scrim. They are
+ * `FocusDockPanel`s now — the stage stays put, the panel grows out of the
+ * pill that opened it, and on a window too narrow to dock it stacks
+ * underneath instead. That file carries the argument; `FocusSubtasksPanel`
+ * and `FocusDetailsPanel` are its two bodies.
+ *
+ * **2. Defer advances, and the toast only confirms.** Already true here, and
+ * unchanged. What moved is where the control sits — see 4.
+ *
+ * **3. The session budget is a live bar.** *"It is a live bar here, segmented
+ * by task, so '04:00:00 remaining' has a shape."* Ours was the static label
+ * the mockup complains about: a `Countdown` in the header and nothing else.
+ * `FocusSessionStrip` replaces it, and Smart Sort moves into it because
+ * re-ordering the queue is an operation on that bar.
+ *
+ * **4. One frost verb, one glass verb, one ghost escape.** *"Three
+ * same-weight buttons competed… and Defer sits a step below because it is a
+ * decision, not a control."* Ours had four weights — Resume was a `solid`
+ * accent button, and Defer was a full-size amber `tint` sitting in the row of
+ * things you can OPEN. Resume/Pause is plain glass at every state now, and
+ * Defer is a small tint a step under the controls with the next task named
+ * beneath it. +5m / +15m moved too: they adjust the clock, so they live on
+ * the clock's own line rather than beside Done.
+ *
+ * **THE RING IS GONE.** UI-24 ported `Countdown`'s `total` track and left this
+ * note behind: *"`screens/focus.html:785` is the proof it is the focus clock's
+ * real shape — `<Countdown seconds total running size="lg" />`, no ring around
+ * it. FocusMode still wraps this in a `ProgressRing` and is not rewired here;
+ * that screen is UI-32's."* This is UI-32. The 400px ring is replaced by the
+ * component's own 4px rail, which says the same thing at a tenth of the size
+ * and stops a 780px pane being mostly empty circle.
+ *
+ * **THE CLOCK IS WHITE.** It was emerald while running. `Countdown`'s real
+ * file emits `--text-glow-white` on a `--fg-1` numeral — the glow is the
+ * numeral's own colour — and this screen carries "live" in three other places
+ * already: the status pill, the stage's `--glow-accent-sm`, and the strip's
+ * running segment. A fourth would be the accent ceasing to mean anything.
+ * An overrun still forces rose, and the pill now says **Overrunning** rather
+ * than continuing to say "Running", which is the state `StatusPill` has a
+ * token for and the screen never used.
+ *
+ * **`--focal`, not the plain grid.** `<body class="ag-page ag-page--focal">`
+ * in the mockup, and `backdrop.css` defines that variant as *"one pool of
+ * light behind a single object"*. This screen is one object.
+ *
+ * BUILD-1 — THE SESSION IS NO LONGER THIS SCREEN'S TO OWN
+ * -------------------------------------------------------
+ * UI-32 could say that every store call, hook and effect was where it had
+ * always been. That is no longer true of one group of them, and the change is
+ * the whole of BUILD-1: **the clock, the run state and the focus time-log
+ * moved into `store/useFocusRun.ts`**, because Shreekant asked for a session
+ * that keeps counting — and keeps playing its noise — while he looks at a
+ * project. `isRunning`, `timeLeft`, `sessionTimeLeft`, `segmentRef`,
+ * `startSegment`/`endSegment`, the bank-on-task-change effect and the
+ * `visibilitychange`/`pagehide` checkpoints were all state and effects in this
+ * file, which is to say they all ended at the moment he navigated. This screen
+ * now *drives* a session it does not contain: it seeds the run from the queue,
+ * presses play and pause, and reads both numerals back.
+ *
+ * Everything else is where UI-32 left it, comments included: the `details`
+ * memo that resolves the live backlog record behind a queue snapshot (and a
+ * subtask proxy's root task with it), `useWakeLock(isRunning)`,
+ * `updateBacklogTask` for Done, `addAvoidedCount` for Defer, the shared
+ * scoring pass for Smart Sort, and `deleteBacklogTask` doing its own cleanup
+ * on delete.
+ *
+ * FIVE THINGS THE MOCKUP HAS THAT WE DELIBERATELY DO NOT
+ * -----------------------------------------------------
+ * - **"End session", with its rose confirm strip.** The prototype's ghost X
+ *   ends the whole session; ours skips one task, which is a real queue
+ *   operation with a store behind it and the only way past a task you cannot
+ *   start. Leaving the session is what the Back control and the nav are for,
+ *   and neither needs confirming because nothing is lost — the focus log has
+ *   already banked the time. The ghost slot is the same; the verb is ours.
+ * - **A wall-clock "ended 12:47" stamp** on the end pane. Nothing stores when
+ *   a session began, and a stamp read off `new Date()` at render time would
+ *   be a different number every time the pane repainted.
+ * - **`ScoreDial` inside the details panel.** The stage already shows it, two
+ *   inches away, and the mockup draws both because its panel is a specimen.
+ * - **The "Runs after X" lock**, which needs the dependency model the
+ *   functional queue still owns.
+ * - **`Toast` for every action.** The source announces Done, Defer, Smart Sort
+ *   and Capture. Ours keeps the one that reports something you cannot see —
+ *   Defer, whose task went to the back of a queue you are not looking at.
+ *   `Toast.prompt.md`: *"it disappears, so it can only ever confirm"*, and
+ *   confirming a thing that visibly just happened is noise.
+ *
+ * ON THE 88px TIMER. `--type-timer` is 88px at **weight 300** and the light
+ * weight is the point — a bold countdown reads as a threat, and this is a
+ * focus tool. It steps down to `--text-5xl` (64px, same weight) below the
+ * 960px breakpoint, because a seven-character clock at 88px is ~370px wide and
+ * would not fit on a tablet.
+ *
+ * V3 (V3-4, step 8) — FOCUS IS ON V3. Design: `design-system/Focus.dc.html`.
+ * The whole screen sits in one `<V3Scope>` (`FocusMode`, the default export,
+ * renders `FocusScreen` inside it), so its glass, type, colour, icons and
+ * motion are V3, and so is everything it opens — Capture, the task sheet, the toast. The clock takes
+ * V3's numeral face (Inter) from the tokens; nothing here sets it.
+ *
+ * **His two calls, 2026-09-24, both for keeping what is here:**
+ *   - **No ring.** The design wraps the clock in a 360px ring around a round
+ *     glass face. The numerals and `Countdown`'s thin rail stay, exactly as
+ *     UI-32 left them ("THE RING IS GONE", above).
+ *   - **Today's buttons, in today's places.** The design's row is Defer ·
+ *     round Play/Pause · Mark done, with no Skip and no +5m / +15m. The four
+ *     controls stay where they are and only change material: Mark done is gel
+ *     (V3's one primary, as on Home and the board), and so is "New session"
+ *     on the end pane, which is that pane's primary.
+ * What else V3 moved, on this screen only: the BASE mark heads the rail
+ * (`RailMark`, as Home and the board); Back is a round glass button; the
+ * score's "Priority" reads in sentence case through `--kicker-transform`
+ * (the header's "FOCUS" keeps its capitals: it is the system voice, which
+ * v4's readme keeps uppercase); the stage condenses on `useMotion()`'s curve. The
+ * page stays `--focal` — V3 redraws that as one centred emerald pool, which
+ * is what the design puts behind this stage.
+ * **Not built, because V3 changes no features:** the design's inline capture
+ * bar (the + still opens Capture), its Subtasks / Details / Queue tabs (the
+ * landscape column keeps both panes open, his FIX-10 call), the Space / D /
+ * → shortcuts line, and a toast for Done.
+ */
+import { useState, useLayoutEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  useStore, countSubtasksRecursive, AVOIDED_MAX,
+  findSubtaskWithRoot, getBlockingTasks, taskFocusSeconds, taskLockReason,
+  type Subtask,
+} from '../store/useStore';
+import {
+  useFocusRun, subjectOf, taskSecondsLeft, sessionSecondsLeft,
+} from '../store/useFocusRun';
+import { useNow } from '../lib/useNow';
+import { usePriorityScores } from '../store/usePriorityScores';
+import { RedAlertBadge } from './task-fields/RedAlertBadge';
+import { AvoidedMark, EmergencyMark } from './task-fields/TaskMarks';
+import { BlockedLine } from './project/parts';
+import { motion, AnimatePresence } from 'framer-motion';
+import CaptureModal from './CaptureModal';
+import FocusDetailsPanel from './FocusDetailsPanel';
+import FocusSubtasksPanel from './FocusSubtasksPanel';
+import FocusSideColumn from './FocusSideColumn';
+import { FocusSessionStrip, type SessionSegment } from './FocusSessionStrip';
+import { formatHms, formatSpan } from '../lib/timeSpan';
+import { Z } from '../lib/zLayers';
+import TaskDetailPanel from './TaskDetailPanel';
+import { useWakeLock } from '../lib/useWakeLock';
+import {
+  Button, Countdown, Icon, IconButton, MetaKicker, MiniNav, ScoreDial, StatusPill, Stepper,
+  Toast, useMedia, useMotion, V3Scope, WIDE,
+} from '../ui';
+import { useNavModel } from './navModel';
+import { RailMark } from './BrandMark';
+
+/**
+ * Where the panels stop docking and start stacking. `focus.html` switches on
+ * `window.innerWidth >= 1180`, and the arithmetic is why it is not the
+ * system's usual 960: a 780px stage plus a 404px panel is 1184px of content
+ * before the rail and the page gutters are paid for.
+ */
+const DOCK = '(min-width: 1180px)';
+
+/** The stage's own width. Everything else on the screen centres on it. */
+const STAGE_WIDTH = 780;
+
+/*
+ * FIX-10 — LANDSCAPE FITS, IT DOES NOT SCROLL.
+ *
+ * Shreekant, 2026-09-22: Focus scrolled on the tablet held sideways and he did
+ * not want it to; measured, it scrolled at every landscape size tried — 237px
+ * at 1280×720, and 57px on the laptop at 1440×900 with nothing open. His call
+ * was **two columns in landscape** (task left, subtasks and notes right,
+ * `FocusSideColumn`), on the laptop as well as the tablet, and **show less**
+ * when even that does not fit.
+ *
+ * So a landscape window wide enough for the rail is a fixed-height screen:
+ * header, strip, then one row that takes exactly what is left, the stage and
+ * the column sharing it. What does not fit is taken off in a ladder keyed on
+ * HEIGHT, because height is what runs out:
+ *   - under `ROOMY` the stepper leaves the header — its three hints repeat
+ *     what the strip already says — and the stage drops a rung (the 64px
+ *     clock, `--text-3xl` title, tighter insets);
+ *   - under `SHORT` it drops another (the 36px clock, `--text-2xl`).
+ * The Details / Subtasks pills leave the stage at every rung: both panels are
+ * always open in the column, so the pills would open nothing.
+ *
+ * Portrait is untouched — 820×1180 already fits, and the dock and the stacked
+ * panels are still what it uses. `DOCK` below is now reached only by a window
+ * that is at least 1180 wide and taller than it is wide.
+ */
+const SPLIT = '(min-width: 960px) and (orientation: landscape)';
+const ROOMY = '(min-height: 860px)';
+const SHORT = '(max-height: 680px)';
+
+/** One closed task, for the strip's done segments and the end pane's list. */
+interface SessionLogEntry {
+  id: string;
+  title: string;
+  /** What it was given. Sizes its segment in the strip. */
+  allocated: number;
+  /** What it actually took. */
+  used: number;
+}
+
+/**
+ * The pill that opens a docked panel. It is the panel's origin, so it stays
+ * lit while the panel is open — `readme.md`'s motion law is that everything
+ * which opens morphs out of the thing that triggered it, and a source that
+ * goes dark leaves the panel having come from nowhere.
+ */
+function DockPill({
+  icon, label, count, open, onClick, title,
+}: {
+  icon: 'file-text' | 'list-tree';
+  label: string;
+  count?: string;
+  open: boolean;
+  onClick: () => void;
+  title: string;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={open}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)',
+        height: 44, padding: '0 var(--sp-6)', border: 0, cursor: 'pointer',
+        borderRadius: 'var(--r-pill)',
+        backgroundImage: open ? 'var(--glass-fill-3)' : hover ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+        boxShadow: open ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+        color: open ? 'var(--fg-1)' : 'var(--fg-2)',
+        font: 'var(--type-label)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap',
+        transition: 'var(--t-hover)',
+      }}
+    >
+      <Icon name={icon} size={17} />
+      {label}
+      {count && (
+        <span
+          style={{
+            font: 'var(--type-numeric)', fontSize: 'var(--text-xs)',
+            color: open ? 'var(--fg-3)' : 'var(--fg-4)', fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * The switch (V3-4). A component of its own rather than a wrapper inside
+ * `FocusScreen`'s two returns, because `useMotion()` reads the scope from
+ * context — called in the component that renders the provider, it would
+ * answer with the old curves.
+ */
+export default function FocusMode() {
+  return (
+    <V3Scope>
+      <FocusScreen />
+    </V3Scope>
+  );
+}
+
+function FocusScreen() {
+  const navigate = useNavigate();
+  const nav = useNavModel();
+  const motionTokens = useMotion();
+  const wide = useMedia(WIDE);
+  const canDock = useMedia(DOCK);
+  const split = useMedia(SPLIT);
+  const roomy = useMedia(ROOMY);
+  const short = useMedia(SHORT);
+  /** Split, and one rung down — see `SPLIT`. */
+  const tight = split && !roomy;
+  const {
+    tasks, setTasks, sessionDuration, backlogTasks,
+    updateBacklogTask, deleteBacklogTask, addAvoidedCount,
+  } = useStore();
+  const scores = usePriorityScores();
+  const activeTask = tasks[0];
+  const activeDuration = activeTask ? taskFocusSeconds(activeTask) : 0;
+  /*
+   * Item 19 — this task cannot be marked done, and why.
+   *
+   * **Against the backlog, not against the queue.** `activeTask` is a snapshot
+   * taken when the day was built; its prerequisites' *completion* is live, and
+   * the ordinary way out of this lock is to finish the blocker — which, if the
+   * blocker is also in today's queue, you do on this very screen a minute
+   * earlier. Read out of the queue, the lock would survive the thing that was
+   * meant to lift it.
+   *
+   * The flag it checks is the other way round: `scheduledAnyway` lives on the
+   * queue copy and `taskLockReason` reads it off the task it is handed, so a
+   * task you pressed "Schedule anyway" on arrives here already unlocked. That
+   * is the promise — an override is not re-imposed one screen later.
+   */
+  const activeBlockers = activeTask ? getBlockingTasks(backlogTasks, activeTask) : [];
+  const lockReason = activeTask ? taskLockReason(backlogTasks, activeTask) : undefined;
+
+  /*
+   * BUILD-1 — THE CLOCK IS NOT THIS COMPONENT'S ANY MORE.
+   *
+   * `isRunning`, `timeLeft` and `sessionTimeLeft` were `useState` here, which
+   * meant a session existed only while this screen was mounted: leaving for a
+   * project stopped the clock, and coming back re-seeded it from the task's
+   * allocation as though nothing had happened. Shreekant asked for the
+   * opposite on 2026-09-15 — the run keeps counting, the noise keeps playing
+   * and the time keeps being logged while he is elsewhere — so the session
+   * lives in `useFocusRun` and this screen reads and drives it.
+   *
+   * The two readouts are derived from wall-clock deadlines rather than from a
+   * counter, which is why `useNow` only has to repaint: see that store's
+   * header for what a throttled interval did to a locked tablet.
+   */
+  const run = useFocusRun();
+  const isRunning = run.running;
+  const now = useNow(isRunning);
+  const timeLeft = taskSecondsLeft(run, now);
+  const sessionTimeLeft = sessionSecondsLeft(run, now);
+  /** Which panel is docked out, if any. One at a time, as in the mockup. */
+  const [dock, setDock] = useState<'details' | 'subs' | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  /**
+   * The Avoided count the deferral just landed on, or `null` for no toast.
+   *
+   * **A number rather than a boolean, and that is not a refinement — it is the
+   * only correct shape.** The press moves the deferred task to the back of the
+   * queue, so by the time the toast paints, `activeTask` is the *next* task and
+   * reading the count off it would report a stranger's number. It is captured
+   * at the moment of the write instead.
+   */
+  const [quasiNeedToast, setQuasiNeedToast] = useState<number | null>(null);
+  /** Smart Sort has run on this queue — the strip's button holds its tint. */
+  const [sorted, setSorted] = useState(false);
+  /** What this session has closed, in the order it closed it. */
+  const [log, setLog] = useState<SessionLogEntry[]>([]);
+
+  // The focus queue holds *snapshots* taken when tasks were selected for today,
+  // so their description / notes / links can already be stale (and a subtask
+  // proxy never carried notes or links at all). Resolve the live backlog record
+  // for the details panel, plus the record an "Edit" should actually write to.
+  const details = useMemo(() => {
+    if (!activeTask) return null;
+    if (activeTask.isSubtaskProxy) {
+      const found = findSubtaskWithRoot(backlogTasks, activeTask.id);
+      if (!found) return { task: activeTask, parent: null, editTask: null };
+      return {
+        task: { ...activeTask, description: found.subtask.description },
+        parent: found.rootTask,
+        editTask: found.rootTask,
+      };
+    }
+    const live = backlogTasks.find((t) => t.id === activeTask.id);
+    return { task: live ?? activeTask, parent: null, editTask: live ?? null };
+  }, [activeTask, backlogTasks]);
+
+  const editTask = details?.editTask ?? null;
+  /**
+   * The record the subtask panel reads and writes. The queue's snapshot of a
+   * task carries a copy of `subtasks` that a write-through never reaches —
+   * `updateBacklogTask` mirrors into the queue by task id, and a subtask's id
+   * is not the task's — so both the checklist and the pill's count have to
+   * come off the live backlog record or they immediately disagree.
+   */
+  const liveTask = details?.task ?? activeTask;
+
+  /**
+   * Ticking a step writes through to the real subtask wherever it lives.
+   * `SUBTASK_PROXY_FIELDS` already carries `status`, so `updateBacklogTask`
+   * takes an id it cannot find at the top level and walks the trees for it.
+   * This used to be a local `string[]` that was never persisted anywhere.
+   */
+  const toggleSubtask = (sub: Subtask, done: boolean) => {
+    updateBacklogTask(sub.id, { status: done ? 'completed' : 'needsAction' });
+  };
+
+  // Seed the run from the queue, and re-seed it whenever the active task
+  // changes *or* its duration does. Tracking the duration and not just the id
+  // is what makes a time set on a task card or on the Set Deadlines page land
+  // here: that edit reaches the queue through `updateBacklogTask` without ever
+  // changing which task is active. Comparing the resolved number rather than
+  // the task object means a Firestore snapshot that rebuilds an identical
+  // queue never restarts a running countdown, and the +5m/+15m buttons (which
+  // move the deadline alone) survive untouched — `attach` makes all three of
+  // those judgements and this screen only supplies the facts.
+  //
+  // A LAYOUT effect, not an ordinary one: it runs before the browser paints,
+  // so a new task's clock is never shown for a frame holding the previous
+  // task's number. That is what the render-time `setSeeded` adjustment this
+  // replaces was buying, and a store cannot be written during a render.
+  //
+  // `FocusRunHost` makes the same call while this screen is unmounted, which
+  // is the half that keeps a queue reordered from another device honest.
+  useLayoutEffect(() => {
+    if (!activeTask) return;
+    run.attach(subjectOf(activeTask), activeDuration, sessionDuration);
+    // `run` is a store slice and changes identity on every tick; the three
+    // facts below are the whole input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTask, activeDuration, sessionDuration]);
+
+  // Neither countdown is clamped at zero. A session that has run over and a
+  // task that has run over are facts the log already records, and `Countdown`
+  // renders an overrun as `+MM:SS` in rose — so the readout can say so instead
+  // of parking on 00:00 while the clock underneath carries on. The strip
+  // follows the same rule for the window.
+
+  // Keep the screen awake only while the timer is actively counting down;
+  // releases automatically on pause/done/skip (isRunning flips false) and on
+  // leaving focus mode (unmount).
+  useWakeLock(isRunning);
+
+  // ─── Focus time-log ───────────────────────────────────────────────────────
+  // The stretch of work being timed used to be a ref in this component, banked
+  // on unmount. BUILD-1 moved it into `useFocusRun` beside the clock, because
+  // a session that now survives a route change would otherwise have stopped
+  // being *recorded* at the exact moment it started being interesting: the
+  // unmount that closed the stretch is the navigation he is allowed to make.
+  //
+  // What did not change is how it is measured — against `Date.now()`, never
+  // against the countdown, because a backgrounded browser throttles timers and
+  // because the countdown is also moved by the +5m/+15m buttons. The
+  // last-chance banking on `visibilitychange`/`pagehide` moved with it, to
+  // `FocusRunHost`, which is mounted whether or not this screen is.
+
+  const handleToggleRunning = () => {
+    run.toggle();
+  };
+
+  /*
+   * Done / Skip / Defer all move the queue on, and all three read it out of
+   * the store rather than out of this render's `tasks`.
+   *
+   * The timer card leaves through `AnimatePresence mode="wait"`, which keeps
+   * the OUTGOING card mounted — handlers and all — until its exit finishes,
+   * and those handlers are closed over the queue as it was before the press.
+   * Press Skip twice inside that quarter-second and the second press used to
+   * re-run the first one: same slice, same result, one task skipped instead of
+   * two. Reading the live head at press time is what makes the second press
+   * count, and it is the same reason `endSegment` measures against
+   * `Date.now()` rather than the state it is looking at.
+   */
+  const liveHead = () => useStore.getState().tasks;
+
+  const handleDone = () => {
+    const queue = liveHead();
+    const current = queue[0];
+    if (!current) return;
+    /* The button is disabled, so this can only be reached by a keyboard
+       shortcut or a stale closure — but "Mark done" is the one control on this
+       screen that writes a completion, and it reads the LIVE head rather than
+       the render's, so it has to re-check against the live head too. Same
+       reading as the button's: backlog for the blockers, the queue copy for
+       the override. */
+    if (taskLockReason(useStore.getState().backlogTasks, current)) return;
+    const allocated = taskFocusSeconds(current);
+    /* Stopping the run banks the stretch AND freezes the clock, so the figure
+       read out of the store on the next line is this task's own final one —
+       which is what `timeLeftRef` used to be for: `AnimatePresence` keeps the
+       outgoing card's handlers alive through the dissolve, and a closure over
+       a render's `timeLeft` would report the minutes of the task after it. */
+    run.pause();
+    updateBacklogTask(current.id, { status: 'completed' });
+    // The strip's done segment and the end pane's line for this task.
+    const left = useFocusRun.getState().taskLeft;
+    setLog((prev) => [
+      ...prev,
+      { id: current.id, title: current.title, allocated, used: Math.max(0, allocated - left) },
+    ]);
+    setDock(null);
+    setTasks(queue.slice(1));
+  };
+
+  const handleSkip = () => {
+    const queue = liveHead();
+    if (queue.length === 0) return;
+    run.pause();
+    setDock(null);
+    setTasks(queue.slice(1));
+  };
+
+  const handleQuasiNeed = () => {
+    const queue = liveHead();
+    const current = queue[0];
+    if (!current) return;
+    run.pause();
+    addAvoidedCount(current.id);
+    // Move current task to end of queue
+    const remaining = queue.slice(1);
+    /* The queue's own copy of the task, bumped the same way the store bumps
+       the real one — **including the cap** (item 17). These two arithmetics
+       have to match: the row in the queue and the row on the board would
+       otherwise disagree about how many times you had dodged one task. */
+    const landedOn = Math.min(AVOIDED_MAX, (current.avoidedCount ?? 0) + 1);
+    const updated = { ...current, avoidedCount: landedOn };
+    setDock(null);
+    setTasks([...remaining, updated]);
+    setQuasiNeedToast(landedOn);
+    setTimeout(() => setQuasiNeedToast(null), 2500);
+  };
+
+  const handleSmartSort = () => {
+    const sorted_ = [...tasks].sort((a, b) => scores.scoreOf(b) - scores.scoreOf(a));
+    setTasks(sorted_);
+    setSorted(true);
+  };
+
+  /**
+   * The floating nav bar, for windows narrower than the rail's breakpoint.
+   * Both exits from this screen render it, which is why it is a variable.
+   */
+  const floatingBar = !wide && (
+    <div
+      style={{
+        position: 'fixed', left: 0, right: 0, bottom: 'calc(var(--sp-5) + var(--safe-b))',
+        display: 'grid', placeItems: 'center',
+        zIndex: Z.nav, pointerEvents: 'none',
+      }}
+    >
+      <span style={{ pointerEvents: 'auto' }}>
+        <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+      </span>
+    </div>
+  );
+
+  const totalUsed = log.reduce((n, entry) => n + entry.used, 0);
+  /** Everything this session committed to, closed and outstanding alike. */
+  const plannedSeconds =
+    log.reduce((n, entry) => n + entry.allocated, 0)
+    + tasks.reduce((n, task) => n + taskFocusSeconds(task), 0);
+
+  if (!activeTask) {
+    return (
+      /*
+       * SESSION COMPLETE — the mockup's own end pane, which REPORTS rather
+       * than merely announcing. UI-11 built this on the Score screen's
+       * DoneScreen because there was nothing else to build it on; the source
+       * has a pane of its own, and what it puts in it is the session: the
+       * time the closed tasks actually took, as the loudest number, then one
+       * line per task with its own figure beside it.
+       *
+       * A queue can also empty without closing anything — three skips, or a
+       * delete — which the prototype has no way to reach and therefore never
+       * answers. That state keeps its old name and, deliberately, none of the
+       * report's furniture: no glowing zero, and no emission at all, because
+       * `elevation.css` gives glow to what is live or finished and this is
+       * neither.
+       */
+      <div className="ag-page ag-page--focal" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
+        {wide && (
+          <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+          </div>
+        )}
+
+        <div
+          style={{
+            flex: 1, minWidth: 0, overflowY: 'auto', display: 'grid', placeItems: 'center',
+            boxSizing: 'border-box',
+            padding: wide ? 'var(--sp-9) var(--gutter-page)' : 'var(--sp-8) var(--gutter-page-sm) 128px',
+          }}
+        >
+          <div
+            style={{
+              width: '100%', maxWidth: 640,
+              display: 'grid', gap: 'var(--sp-7)', justifyItems: 'center',
+              padding: 'var(--sp-10) var(--pad-card-lg)',
+              borderRadius: 'var(--r-card-lg)',
+              backgroundImage: 'var(--glass-fill-2)',
+              backdropFilter: 'var(--glass-bd-lg)',
+              WebkitBackdropFilter: 'var(--glass-bd-lg)',
+              boxShadow: log.length > 0
+                ? 'var(--glass-shadow-pane), var(--glow-accent-sm)'
+                : 'var(--glass-shadow-pane)',
+              animation: 'var(--kf-condense) var(--dur-slow) var(--ease-glass) both',
+            }}
+          >
+            <MetaKicker
+              icon="flag-triangle-right"
+              tone={log.length > 0 ? 'var(--accent)' : 'var(--fg-3)'}
+            >
+              {log.length > 0 ? 'Session complete' : 'Session ended'}
+            </MetaKicker>
+
+            {log.length > 0 ? (
+              <h1
+                style={{
+                  font: 'var(--type-numeric)', fontSize: 'var(--text-5xl)', color: 'var(--fg-1)',
+                  fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+                  textShadow: '0 0 34px oklch(0.70 0.15 162 / 0.45)',
+                }}
+              >
+                {formatSpan(totalUsed)}
+              </h1>
+            ) : (
+              <h1
+                style={{
+                  font: 'var(--type-display)', fontSize: 'var(--text-3xl)',
+                  letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)',
+                }}
+              >
+                Queue cleared
+              </h1>
+            )}
+
+            <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+              {log.length > 0
+                ? `${log.length} ${log.length === 1 ? 'task' : 'tasks'} closed. Time spent on each, below.`
+                : 'Nothing was closed. Every task left this session unfinished.'}
+            </p>
+
+            {log.length > 0 && (
+              <div style={{ display: 'grid', gap: 'var(--sp-2)', width: '100%' }}>
+                {log.map((entry) => (
+                  <div
+                    key={entry.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 44,
+                      padding: '0 var(--sp-5)', borderRadius: 'var(--r-sm)',
+                      backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                    }}
+                  >
+                    <span style={{ display: 'flex', color: 'var(--accent)', flex: '0 0 auto' }}>
+                      <Icon name="check" size={15} />
+                    </span>
+                    <span
+                      className="flex-1 min-w-0 truncate"
+                      style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)' }}
+                    >
+                      {entry.title}
+                    </span>
+                    <span
+                      style={{
+                        font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)',
+                        fontVariantNumeric: 'tabular-nums', flex: '0 0 auto',
+                      }}
+                    >
+                      {formatSpan(entry.used)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--sp-4)' }}>
+              <Button variant="ghost" onClick={() => navigate('/')} iconLeft={<Icon name="house" size={16} />}>
+                Home
+              </Button>
+              <Button
+                variant="gel"
+                onClick={() => navigate('/select')}
+                iconRight={<Icon name="arrow-right" size={16} />}
+              >
+                New session
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {floatingBar}
+      </div>
+    );
+  }
+
+  const reading = scores.read(activeTask);
+  const score = reading.score;
+  const subCounts = liveTask.subtasks && liveTask.subtasks.length > 0
+    ? countSubtasksRecursive(liveTask.subtasks)
+    : null;
+  const overrun = timeLeft < 0;
+  const spent = Math.max(0, activeDuration - timeLeft);
+  const quasiNeeded = (activeTask.avoidedCount ?? 0) > 0;
+  /* The counter saturates (item 17), so the Defer button stops promising a
+     point it can no longer add. The press still does the useful half — the
+     task goes to the back of the queue — which is why it is not disabled. */
+  const avoidedAtCap = (activeTask.avoidedCount ?? 0) >= AVOIDED_MAX;
+  const dockOpen = dock !== null;
+
+  /*
+   * FIX-2 — THE THIRD RUNG OF THIS SCREEN'S SIZE LADDER.
+   *
+   * Below `DOCK` there is no room to dock, so the panel stacks UNDER the stage
+   * (see `FocusDockPanel`'s header) — and at 820×1180 the stage is 559px tall,
+   * which put the stacked panel's foot 139px below the fold. The panel that
+   * promises it "covers nothing" was itself the thing you could not see.
+   *
+   * So when a dock opens on a window too narrow to dock it, the stage steps
+   * down a rung and both share the one viewport. It is the same move the
+   * screen already makes once — every measurement below already has a `wide`
+   * branch and a narrow one — with a third reading for "narrow, and the panel
+   * is the thing being read". The stage is context then, not the subject.
+   *
+   * Measured rather than guessed: 139px were owed and it reclaims 157 — the
+   * stage 110 of them, the tighter column gaps the rest — putting the panel's
+   * foot at 1034 with the 128px floating-nav reserve still clear beneath it.
+   * **It is not for the docked case.** Above `DOCK` the panel sits beside the
+   * stage and costs it no height at all, and desktop is byte-for-byte what it
+   * was.
+   *
+   * What it does NOT do is cap the panel: a task with a dozen subtasks still
+   * runs past the fold and the page scrolls, exactly as it already does on the
+   * docked side at 1440×900. Condensing the stage cannot answer a list of
+   * arbitrary length, and making this one panel scroll inside itself would
+   * split the two arrangements' behaviour for no gain.
+   */
+  const condensed = !split && !canDock && dockOpen;
+  /** Any reason the stage is a rung down: a stacked panel, or a landscape window under `ROOMY`. */
+  const small = condensed || tight;
+
+  /*
+   * The strip's segments: what has closed, then what is left, the head of the
+   * queue carrying the fill. Each is sized by its allocation, so the bar is a
+   * picture of the plan rather than of the count.
+   */
+  const segments: SessionSegment[] = [
+    ...log.map((entry) => ({
+      id: `closed-${entry.id}`,
+      title: entry.title,
+      seconds: entry.allocated,
+      state: 'done' as const,
+      progress: 1,
+    })),
+    ...tasks.map((task, index) => {
+      const seconds = taskFocusSeconds(task);
+      return {
+        id: task.id,
+        title: task.title,
+        seconds,
+        state: index === 0 ? ('live' as const) : ('queued' as const),
+        progress: index === 0 && seconds > 0 ? Math.min(1, spent / seconds) : 0,
+      };
+    }),
+  ];
+
+  const detailsPanel = (
+    <FocusDetailsPanel
+      open={dock === 'details'}
+      docked={canDock}
+      onClose={() => setDock(null)}
+      task={details?.task ?? activeTask}
+      parentTask={details?.parent}
+      onEdit={editTask ? () => { setDock(null); setIsEditing(true); } : undefined}
+    />
+  );
+
+  const subtasksPanel = (
+    <FocusSubtasksPanel
+      open={dock === 'subs'}
+      docked={canDock}
+      onClose={() => setDock(null)}
+      task={liveTask}
+      onToggle={toggleSubtask}
+      editable={editTask !== null}
+    />
+  );
+
+  return (
+    <div className="ag-page ag-page--focal" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
+      {wide && (
+        <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+        </div>
+      )}
+
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflowY: 'auto',
+          boxSizing: 'border-box',
+          ...(split
+            ? { display: 'flex', flexDirection: 'column', padding: `0 var(--gutter-page) ${tight ? 'var(--sp-5)' : 'var(--sp-7)'}` }
+            : { padding: wide ? '0 var(--gutter-page) var(--sp-13)' : '0 var(--gutter-page-sm) 128px' }),
+        }}
+      >
+        <div
+          style={
+            split
+              ? {
+                  /* Header, strip, and a row that takes exactly what is left.
+                     The floor is where a window has become too short to share
+                     at all: past it the page scrolls again rather than crushing
+                     the clock. Nothing he owns is that short. */
+                  display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)',
+                  gap: tight ? 'var(--sp-5)' : 'var(--sp-7)', justifyItems: 'center',
+                  flex: 1, minHeight: 460,
+                }
+              : { display: 'grid', gap: condensed ? 'var(--sp-5)' : 'var(--sp-8)', justifyItems: 'center' }
+          }
+        >
+          {/*
+            The header, sticky INSIDE the page scroller, so the stage slides
+            past behind its glass. `zIndex` is load-bearing and it is the
+            lesson UI-7 paid for on Notifications: every glass surface has a
+            `backdrop-filter`, which makes it a stacking context, and stacking
+            contexts without a z-index paint in DOM order — so this header,
+            being the first child, would be painted over by the card that
+            scrolls up to meet it.
+          */}
+          <header
+            style={{
+              width: '100%',
+              position: 'sticky',
+              top: 'var(--sp-5)',
+              zIndex: 2,
+              marginTop: condensed || tight ? 'var(--sp-5)' : wide ? 'var(--sp-7)' : 'var(--sp-8)',
+              /* FIX-10: a rounded rectangle, not a pill — his "more of a
+                 rectangle with curved edges". The strip under it matches. */
+              borderRadius: 'var(--r-md)',
+              padding: 'var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--sp-6)',
+              flexWrap: 'wrap',
+              backgroundImage: 'var(--glass-fill-2)',
+              backdropFilter: 'var(--glass-bd-lg)',
+              WebkitBackdropFilter: 'var(--glass-bd-lg)',
+              boxShadow: 'var(--glass-shadow-pane)',
+              animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
+            }}
+          >
+            {/* Round glass since V3-4, as the board's Back (V3-3). */}
+            <IconButton label="Back to set deadlines" onClick={() => navigate('/deadlines')}>
+              <Icon name="arrow-left" size={18} />
+            </IconButton>
+
+            {/* The system voice, as on the two steps before this one — and
+                the explanatory line under it is `readme.md`'s own example of
+                that register, quoted there as "the best line in the product". */}
+            <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+              <h1
+                style={{
+                  /* Uppercase in V3 too: this is the system voice, not a
+                     kicker, and v4's readme keeps that voice in capitals — its
+                     0.30em tracking only reads as a word in them. */
+                  font: 'var(--type-system)', textTransform: 'uppercase',
+                  letterSpacing: 'var(--tracking-system)', color: 'var(--fg-1)', whiteSpace: 'nowrap',
+                }}
+              >
+                Focus
+              </h1>
+              <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                Strict focus. One task at a time.
+              </p>
+            </div>
+
+            <span style={{ flex: 1, minWidth: 'var(--sp-8)' }} />
+
+            {wide && !tight && (
+              /* Step three of New Session, which the other two already draw.
+                 `hint` is where the real value lives — a stepper with only
+                 labels is decoration, and `Stepper.prompt.md` says so. */
+              <Stepper
+                current={2}
+                steps={[
+                  { label: 'Select', hint: `${log.length + tasks.length} chosen` },
+                  { label: 'Deadlines', hint: formatSpan(plannedSeconds) },
+                  { label: 'Focus', hint: `${log.length} done` },
+                ]}
+                style={{ margin: 0 }}
+              />
+            )}
+
+            {/* In landscape the corner button would sit on the side column's
+                foot, so it moves up here, where the stepper leaves room. */}
+            {split && (
+              <IconButton label="Capture an idea or task" title="Capture an idea or task" onClick={() => setIsCapturing(true)}>
+                <Icon name="plus" size={20} />
+              </IconButton>
+            )}
+          </header>
+
+          <div
+            style={{
+              width: '100%',
+              maxWidth: split ? 'none' : dockOpen && canDock ? 1200 : 860,
+              transition: 'max-width var(--dur-morph) var(--ease-morph)',
+            }}
+          >
+            <FocusSessionStrip
+              segments={segments}
+              secondsLeft={sessionTimeLeft}
+              doneCount={log.length}
+              total={log.length + tasks.length}
+              sorted={sorted}
+              onSort={tasks.length > 1 ? handleSmartSort : undefined}
+            />
+          </div>
+
+          {/* ══════════════ THE STAGE, and what docks beside it ══════════════ */}
+          <div
+            style={
+              split
+                ? { display: 'flex', alignItems: 'stretch', gap: 'var(--sp-5)', width: '100%', minHeight: 0 }
+                : { display: 'flex', alignItems: 'flex-start', justifyContent: 'center', width: '100%' }
+            }
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTask.id}
+                /* Panes in this system arrive by CONDENSING, never by sliding
+                   in from off-screen (motion.css). */
+                initial={{ opacity: 0, scale: 0.94, y: 6, filter: 'blur(8px)' }}
+                animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, scale: 0.97, filter: 'blur(6px)' }}
+                transition={{ duration: motionTokens.dur.base, ease: motionTokens.ease.glass }}
+                style={{
+                  width: '100%',
+                  maxWidth: split ? 'none' : STAGE_WIDTH,
+                  minWidth: 0,
+                  /* In landscape the stage fills its half of the row and
+                     centres what it holds; the scroll is a last resort for a
+                     window under the floor above, never the normal case. */
+                  ...(split ? { flex: 1, alignContent: 'center', overflowY: 'auto' } : {}),
+                  borderRadius: 'var(--r-card-lg)',
+                  padding: condensed
+                    ? 'var(--sp-5)'
+                    : split
+                      ? short ? 'var(--sp-5) var(--sp-6)' : tight ? 'var(--sp-6) var(--pad-card)' : 'var(--sp-9) var(--pad-card-lg)'
+                      : wide ? 'var(--sp-10) var(--pad-card-lg) var(--sp-9)' : 'var(--pad-card)',
+                  display: 'grid',
+                  justifyItems: 'center',
+                  gap: small ? 'var(--sp-5)' : 'var(--sp-7)',
+                  textAlign: 'center',
+                  backgroundImage: 'var(--glass-fill-2)',
+                  backdropFilter: 'var(--glass-bd-lg)',
+                  WebkitBackdropFilter: 'var(--glass-bd-lg)',
+                  /* Emission says what the stage IS: overrunning, live, or
+                     resting. `elevation.css` — a resting surface never glows. */
+                  boxShadow: overrun
+                    ? 'var(--glass-shadow-pane), var(--glow-rose-md)'
+                    : isRunning
+                      ? 'var(--glass-shadow-pane), var(--glow-accent-sm)'
+                      : 'var(--glass-shadow-pane)',
+                }}
+              >
+                <div style={{ display: 'grid', justifyItems: 'center', gap: small ? 'var(--sp-4)' : 'var(--sp-5)', width: '100%' }}>
+                  <div className="flex flex-wrap items-center justify-center" style={{ gap: small ? 'var(--sp-3)' : 'var(--sp-4)' }}>
+                    {/* Three states, not two. `StatusPill.prompt.md` ships
+                        `overrun` for exactly this and the screen never used
+                        it, so a task ten minutes past its allocation went on
+                        calling itself "Running". */}
+                    <StatusPill status={overrun ? 'overrun' : isRunning ? 'running' : 'queued'}>
+                      {overrun ? 'Overrunning' : isRunning ? 'Running' : 'Paused'}
+                    </StatusPill>
+
+                    <RedAlertBadge redAlert={reading.redAlert} />
+                    {score > 0 && (
+                      <ScoreDial value={score} max={scores.peak} alert={reading.redAlert} size="sm" label="Priority" />
+                    )}
+
+                    {activeTask.listName && (
+                      <MetaKicker tone="var(--fg-4)">{activeTask.listName}</MetaKicker>
+                    )}
+
+                    {/* The bonus is real and stored; nothing ever showed it.
+                        **Item 17 gave it the count and one name.** It used to
+                        read "Quasi-need" with no number, in amber, on the one
+                        screen that could produce it — while the factor bar
+                        called the same field "Avoided" and scored it out of 5.
+                        The shared mark says `Avoided ×3` here and on every row
+                        that shows the task, so the screen that *causes* the
+                        deferral and the screens that live with it are saying
+                        one thing. Amber went with the old name: this is a
+                        count of what you did, not a decision waiting on you,
+                        and `zap` now belongs to the Emergency flag. */}
+                    {quasiNeeded && <AvoidedMark count={activeTask.avoidedCount} />}
+
+                    {/* The flag, where you are looking at the task it is on.
+                        No control: Focus Mode is for doing the work, and
+                        re-judging it mid-timer is what the ⋯ menu on the board
+                        is for. */}
+                    <EmergencyMark
+                      level={activeTask.emergencyBoost}
+                      lapsed={(activeTask.emergencyBoost ?? 0) > 0 && reading.variables.emergency === 0}
+                    />
+
+                    {/* Amber, not rose: a field you never filled in needs a
+                        decision, it is not a live problem. Same call UI-9 and
+                        UI-10 made for their "Needs …" chips. */}
+                    {activeDuration === 0 && (
+                      <StatusPill status="review" size="sm" dot={false}>Needs time</StatusPill>
+                    )}
+
+                    {/* What is holding this task up, on the screen where you
+                        would otherwise be about to work on it, and in the same
+                        neutral component every row uses. It shows whenever
+                        something is unfinished — including on a task you put
+                        here with "Schedule anyway", where it is a statement of
+                        fact rather than a refusal, because you already
+                        answered the refusal. */}
+                    {activeBlockers.length > 0 && (
+                      <BlockedLine
+                        on={activeBlockers[0].title}
+                        extra={activeBlockers.length - 1}
+                        title={lockReason ?? `Blocked by: ${activeBlockers.map((t) => t.title).join(', ')}`}
+                      />
+                    )}
+                  </div>
+
+                  <h2
+                    className="ag-clamp-2"
+                    style={{
+                      maxWidth: '18ch',
+                      font: 'var(--type-display)',
+                      fontSize: condensed || (split && short)
+                        ? 'var(--text-2xl)'
+                        : wide && !tight ? 'var(--text-4xl)' : 'var(--text-3xl)',
+                      letterSpacing: 'var(--tracking-display)',
+                      color: 'var(--fg-1)',
+                      textWrap: 'balance',
+                    }}
+                  >
+                    {activeTask.title}
+                  </h2>
+                </div>
+
+                {/* What you can OPEN about this task, next to its name. Both
+                    pills are always here — "this one has no steps" is a fact
+                    worth being able to check without leaving the screen. */}
+                {!split && (
+                <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--sp-4)' }}>
+                  <DockPill
+                    icon="file-text"
+                    label="Details"
+                    open={dock === 'details'}
+                    title="Description, notes and reference links"
+                    onClick={() => setDock(dock === 'details' ? null : 'details')}
+                  />
+                  <DockPill
+                    icon="list-tree"
+                    label="Subtasks"
+                    count={subCounts ? `${subCounts.done} / ${subCounts.total}` : undefined}
+                    open={dock === 'subs'}
+                    title={subCounts ? `${subCounts.total} subtasks` : 'No breakdown on this task'}
+                    onClick={() => setDock(dock === 'subs' ? null : 'subs')}
+                  />
+                </div>
+                )}
+
+                {/* The two numerals this screen exists for. */}
+                <div style={{ display: 'grid', justifyItems: 'center', gap: small ? 'var(--sp-4)' : 'var(--sp-5)', width: '100%', paddingTop: small ? 0 : 'var(--sp-3)' }}>
+                  <Countdown
+                    seconds={timeLeft}
+                    total={activeDuration || undefined}
+                    format="clock"
+                    /* One rung down while a panel is open, like everything
+                       else on the card — `lg` is 64px of numeral and `md` is
+                       36. It goes straight back up when the panel closes. */
+                    size={condensed || (split && short) ? 'md' : wide && !tight ? 'timer' : 'lg'}
+                    running={isRunning}
+                    note={
+                      activeDuration > 0 && overrun
+                        ? 'over the time you gave this task'
+                        : undefined
+                    }
+                  />
+
+                  <span className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--sp-5)' }}>
+                    <MetaKicker tone="var(--fg-4)">
+                      {overrun ? `Over by ${formatHms(-timeLeft)}` : `${formatHms(spent)} elapsed`}
+                    </MetaKicker>
+                    <span aria-hidden="true" style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--fg-4)' }} />
+                    <MetaKicker tone="var(--fg-4)">{formatSpan(activeDuration)} allocated</MetaKicker>
+                    {/* On the clock's own line, because they move the clock. */}
+                    <span className="flex items-center" style={{ gap: 'var(--sp-3)' }}>
+                      <Button size="sm" variant="ghost" onClick={() => run.addTaskSeconds(300)} title="Add five minutes">
+                        +5m
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => run.addTaskSeconds(900)} title="Add fifteen minutes">
+                        +15m
+                      </Button>
+                    </span>
+                  </span>
+                </div>
+
+                {/* Controls. One ghost escape, one glass verb, one frost verb —
+                    and no `solid`: the mockup gives this row three weights and
+                    a fourth would leave none of them meaning anything. */}
+                <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--sp-5)' }}>
+                  <IconButton label="Skip this task" title="Skip this task" size="lg" variant="ghost" onClick={handleSkip}>
+                    <Icon name="x" size={20} />
+                  </IconButton>
+
+                  <Button
+                    variant="glass"
+                    size="lg"
+                    onClick={handleToggleRunning}
+                    iconLeft={<Icon name={isRunning ? 'pause' : 'play'} size={18} />}
+                  >
+                    {isRunning ? 'Pause' : 'Resume'}
+                  </Button>
+
+                  {/* Item 19. Skip and Defer are deliberately left alone: a
+                      task you cannot finish is exactly the one you want to move
+                      past, and taking away every verb on the screen would leave
+                      a locked task able to stop the whole session. */}
+                  {/* Gel since V3-4 — V3's one primary, and finishing the task
+                      is this screen's. It draws as `solid` outside a scope. */}
+                  <Button
+                    variant="gel"
+                    size="lg"
+                    onClick={handleDone}
+                    disabled={lockReason !== undefined}
+                    title={lockReason}
+                    iconLeft={<Icon name={lockReason ? 'lock' : 'check'} size={18} />}
+                  >
+                    Mark done
+                  </Button>
+                </div>
+
+                {/* Defer is a decision, not a control, so it sits a step below
+                    them — and names what runs next, since that is the thing
+                    the press actually changes. */}
+                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-3)' }}>
+                  <Button
+                    size="sm"
+                    variant="tint"
+                    tone="amber"
+                    onClick={handleQuasiNeed}
+                    title={
+                      avoidedAtCap
+                        ? `Push this to the end of the queue. It has already been avoided ${AVOIDED_MAX} times, which is as high as the counter goes, so the score will not move again.`
+                        : 'Push this to the end of the queue and score it one point higher next time'
+                    }
+                    /* `skip-forward`, not `zap` — item 17 gave the lightning to
+                       the Emergency flag, and a defer is the opposite gesture.
+                       The words are the counter's own name for the same reason
+                       every other surface's are: one field, one vocabulary. */
+                    iconLeft={<Icon name="skip-forward" size={15} />}
+                  >
+                    {avoidedAtCap ? `Defer — already avoided ×${AVOIDED_MAX}` : 'Defer — +1 avoided'}
+                  </Button>
+                  {/* The last thing the ladder takes off: on a window under
+                      `SHORT` the strip's run order already says what is next. */}
+                  {tasks.length > 1 && !(split && short) && (
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+                      Next: {tasks[1].title} · {formatSpan(taskFocusSeconds(tasks[1]))}
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+
+            {!split && canDock && detailsPanel}
+            {!split && canDock && subtasksPanel}
+
+            {split && (
+              <FocusSideColumn
+                key={activeTask.id}
+                task={liveTask}
+                detailsTask={details?.task ?? activeTask}
+                parentTask={details?.parent}
+                onToggle={toggleSubtask}
+                editable={editTask !== null}
+                onEdit={editTask ? () => setIsEditing(true) : undefined}
+                compact={tight}
+              />
+            )}
+          </div>
+
+          {/* Too narrow to dock, so the panel stacks under the stage rather
+              than covering it — the mockup's own answer at its own breakpoint. */}
+          {!split && !canDock && dockOpen && (
+            <div style={{ width: '100%', maxWidth: STAGE_WIDTH }}>
+              {dock === 'details' ? detailsPanel : subtasksPanel}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {floatingBar}
+
+      {!split && (
+        <div style={{ position: 'fixed', right: 'calc(var(--sp-9) + var(--safe-r))', bottom: 'calc(var(--sp-9) + var(--safe-b))', zIndex: Z.chrome }}>
+          <IconButton
+            label="Capture an idea or task"
+            title="Capture an idea or task"
+            size="lg"
+            onClick={() => setIsCapturing(true)}
+          >
+            <Icon name="plus" size={22} />
+          </IconButton>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {isEditing && editTask && (
+          <TaskDetailPanel
+            task={editTask}
+            onClose={() => setIsEditing(false)}
+            // Bank the stretch worked so far, as the delete below does.
+            onBeforeArchive={() => run.pause()}
+            onSave={(updates) => {
+              // The queue carries its own copy of the task; `updateBacklogTask`
+              // mirrors the edit into it so the timer card doesn't keep showing
+              // the pre-edit title/score/duration for the rest of the session.
+              updateBacklogTask(editTask.id, updates);
+              setIsEditing(false);
+            }}
+            onDelete={() => {
+              // Stop timing a task that no longer exists, and bank the stretch
+              // worked so far before the queue entry disappears.
+              run.pause();
+              // Clears the queue row and the subtask-proxy row itself now —
+              // this used to be patched up here by hand, which is exactly the
+              // cleanup the other five delete sites each got wrong.
+              deleteBacklogTask(editTask.id);
+              setIsEditing(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Quasi-need toast. Centred by its wrapper, not by a translate on the
+          animated element — Framer Motion writes that element's `transform`
+          every frame and would erase a `-translate-x-1/2` utility. It clears
+          the floating nav on a narrow window, which is where that nav sits. */}
+      <div
+        style={{
+          position: 'fixed', left: 0, right: 0, bottom: wide ? 'calc(var(--sp-9) + var(--safe-b))' : 'calc(112px + var(--safe-b))',
+          display: 'grid', placeItems: 'center', padding: '0 var(--gutter-page-sm)',
+          zIndex: Z.toast, pointerEvents: 'none',
+        }}
+      >
+        <AnimatePresence>
+          {quasiNeedToast !== null && (
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.96 }}
+              style={{ pointerEvents: 'auto' }}
+            >
+              <Toast
+                tone="review"
+                icon={<Icon name="skip-forward" size={16} />}
+                title="Deferred"
+                detail={
+                  quasiNeedToast >= AVOIDED_MAX
+                    ? `Avoided ×${AVOIDED_MAX} — the counter stops here · moved to the end of the queue`
+                    : `Avoided ×${quasiNeedToast} · moved to the end of the queue`
+                }
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <CaptureModal isOpen={isCapturing} onClose={() => setIsCapturing(false)} />
+    </div>
+  );
+}

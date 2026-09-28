@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Notifications</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+</style>
+</head>
+<body class="ag-page" data-screen-label="Notifications">
+<div id="root">
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:1120px;margin:0 auto;height:56px"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/feedback/NotificationCard.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/MorphMenu.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, Switch, NotificationCard, Toast, MiniNav, MorphMenu } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  const NAV = [
+    { value: 'home',      label: 'Home',          icon: 'house',      href: 'home.html' },
+    { value: 'assistant', label: 'Assistant',     icon: 'sparkles',   href: 'atlas.html' },
+    { value: 'session',   label: 'New Session',   icon: 'zap',        href: 'session.html' },
+    { value: 'score',     label: 'Score',         icon: 'award', badge: 6, href: 'scoring.html' },
+    { value: 'alerts',    label: 'Notifications', icon: 'bell' },
+    { value: 'settings',  label: 'Settings',      icon: 'settings',   href: 'settings.html' },
+  ];
+
+  const NOW = '16:40';
+
+  /* Today only. A task with a date already draws a block on the calendar;
+     a second stream of "due tomorrow" warnings would be noise. Each row
+     carries the arithmetic that produced its time: due − estimate. */
+  const TODAY = [
+    { id: 't1', at: '13:15', title: 'Draft the pitch outline', project: 'Shreekant Empire',
+      due: '14:15', est: 60, state: 'missed' },
+    { id: 't2', at: '16:45', title: 'Reply to the landlord', project: 'Studio Launch',
+      due: '17:25', est: 40, state: 'snoozed', left: 35 },
+    { id: 't3', at: '17:15', title: 'Draft the incorporation filing', project: 'Shreekant Empire',
+      due: '18:00', est: 45, state: 'next' },
+    { id: 't4', at: '20:30', title: 'Sign the lease', project: 'Studio Launch',
+      due: '21:00', est: 30, state: 'queued' },
+  ];
+
+  const HISTORY = [
+    { id: 'h1', icon: 'clock', tone: 'overrun', unread: true, time: '14:02',
+      title: '3 tasks started without you',
+      body: 'One summary, delivered when the tablet woke at 14:02. The three alerts themselves were not re-fired — 09:20 Shortlist the CA, 11:30 Reply to the landlord, 13:15 Draft the pitch outline. 2 h 05 min of allocated time went unclaimed.',
+      action: 'Re-plan today' },
+    { id: 'h2', icon: 'alarm-clock', tone: 'review', unread: true, time: '16:40',
+      title: 'Reply to the landlord snoozed once',
+      body: 'Fired at 16:40 and pushed to 16:45. The 5 minutes came out of the block, so 35 of 40 min remain. No second snooze is offered.',
+      action: 'Open in Focus' },
+    { id: 'h3', icon: 'timer', tone: 'overrun', unread: false, time: '11:14',
+      title: 'Quarterly numbers ran 4 minutes over',
+      body: 'Used 49 of 45 allocated minutes. The overrun was taken from the next block in today’s queue.',
+      action: 'Adjust allocation' },
+    { id: 'h4', icon: 'circle-check', tone: 'accent', unread: false, time: '09:20',
+      title: 'Shortlist the CA opened from the lock screen',
+      body: 'Started with 25 min on the clock and closed 12 minutes under. The list has two tasks left.',
+      action: 'Open task' },
+  ];
+
+  function useMedia(q) {
+    const [on, setOn] = React.useState(function () { return window.matchMedia(q).matches; });
+    React.useEffect(function () {
+      const mq = window.matchMedia(q);
+      const fn = function (e) { setOn(e.matches); };
+      mq.addEventListener('change', fn);
+      return function () { mq.removeEventListener('change', fn); };
+    }, [q]);
+    return on;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Pieces                                                            */
+
+  function Kicker({ children, count }) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-3)', padding: '0 var(--sp-2)' }}>
+        <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)' }}>
+          {children}
+        </span>
+        {count != null && (
+          <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)' }}>{count}</span>
+        )}
+      </div>
+    );
+  }
+
+  function Card({ children, pad = 'var(--pad-card)', style }) {
+    return (
+      <section style={{
+        borderRadius: 'var(--r-card)', padding: pad,
+        backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+        animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+        ...style,
+      }}>{children}</section>
+    );
+  }
+
+  /* A carved trough for anything the system owns and we only report on. */
+  function Well({ children, style }) {
+    return (
+      <div style={{
+        borderRadius: 'var(--r-lg)', padding: 'var(--sp-6)',
+        background: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+        ...style,
+      }}>{children}</div>
+    );
+  }
+
+  function Pill({ children, tone = 'neutral' }) {
+    const map = {
+      next:    ['var(--glass-tint-accent)', 'oklch(0.93 0.07 162)', 'var(--glass-rim-2), var(--glow-accent-sm)'],
+      snoozed: ['var(--glass-tint-amber)',  'var(--status-review)', 'var(--glass-rim-2)'],
+      missed:  ['var(--glass-fill-1)',      'var(--fg-4)',          'var(--glass-rim-1)'],
+      neutral: ['var(--glass-fill-1)',      'var(--fg-3)',          'var(--glass-rim-1)'],
+    };
+    const [bg, fg, sh] = map[tone] || map.neutral;
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 var(--sp-4)',
+        borderRadius: 'var(--r-pill)', backgroundImage: bg, boxShadow: sh, color: fg,
+        font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase',
+        whiteSpace: 'nowrap', flex: '0 0 auto',
+      }}>{children}</span>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* THE NEW PART — what is going to fire, before it happens.          */
+
+  function FireRow({ item, muted, delay }) {
+    const [hover, setHover] = React.useState(false);
+    const past = item.state === 'missed';
+    const next = item.state === 'next';
+    const snoozed = item.state === 'snoozed';
+
+    return (
+      <div
+        onMouseEnter={function () { setHover(true); }}
+        onMouseLeave={function () { setHover(false); }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minHeight: 76,
+          padding: 'var(--sp-4) var(--sp-6)', borderRadius: 'var(--r-lg)', boxSizing: 'border-box',
+          backgroundImage: next ? 'var(--glass-fill-2)' : hover ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          boxShadow: next
+            ? 'var(--glass-rim-2), var(--glass-cast-2), var(--glow-accent-sm)'
+            : hover ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+          opacity: muted || past ? 0.5 : 1,
+          transform: hover && !past ? 'translateY(-1px)' : 'none',
+          transition: 'var(--t-hover)',
+          animation: 'ag-condense var(--dur-slow) var(--ease-glass) both', animationDelay: delay + 'ms',
+        }}
+      >
+        <div style={{ display: 'grid', gap: 1, width: 58, flex: '0 0 auto' }}>
+          <span style={{ font: 'var(--type-numeric)', color: next ? 'var(--accent)' : 'var(--fg-1)', fontVariantNumeric: 'tabular-nums' }}>{item.at}</span>
+          <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)' }}>fires</span>
+        </div>
+
+        <span style={{ width: 1, alignSelf: 'stretch', margin: 'var(--sp-3) 0', background: 'var(--line-faint)', flex: '0 0 auto' }} />
+
+        <div style={{ display: 'grid', gap: 3, flex: 1, minWidth: 0 }}>
+          <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</span>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-3)', minWidth: 0 }}>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.project}</span>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>·</span>
+            {/* the arithmetic, so the fire time is never a mystery */}
+            <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--fg-3)', whiteSpace: 'nowrap' }}>
+              {item.due} − {item.est} min
+            </span>
+          </span>
+          {snoozed && (
+            <span style={{ font: 'var(--type-caption)', color: 'var(--status-review)' }}>
+              Snoozed once. Back at {item.at} with {item.left} of {item.est} min left.
+            </span>
+          )}
+          {past && (
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+              Not re-fired. Counted in the 14:02 summary.
+            </span>
+          )}
+        </div>
+
+        {next && <Pill tone="next">In 35 min</Pill>}
+        {snoozed && <Pill tone="snoozed">Snoozed</Pill>}
+        {past && <Pill tone="missed">Missed</Pill>}
+
+        {!past && (
+          <MorphMenu
+            align="end"
+            width={236}
+            trigger={<IconButton label={'Options for ' + item.title} variant="ghost" size="sm"><Icon name="ellipsis" size={16} /></IconButton>}
+            items={[
+              { value: 'focus', label: 'Start now in Focus', icon: <Icon name="play" size={16} /> },
+              { value: 'task',  label: 'Open the task',       icon: <Icon name="square-check" size={16} /> },
+              { divider: true },
+              { value: 'skip',  label: 'Do not fire today',   icon: <Icon name="bell-off" size={16} />, tone: 'danger' },
+            ]}
+          />
+        )}
+      </div>
+    );
+  }
+
+  function NowLine({ at }) {
+    return (
+      <div aria-hidden="true" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-2) var(--sp-2)' }}>
+        <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--accent)', width: 58, flex: '0 0 auto', fontVariantNumeric: 'tabular-nums' }}>{at}</span>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', boxShadow: 'var(--glow-accent-sm)', flex: '0 0 auto', animation: 'ag-pulse 2.4s var(--ease-glass) infinite' }} />
+        <span style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, var(--accent-hairline), transparent)' }} />
+        <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--accent)' }}>Now</span>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* The honest limit. Stated, not discovered.                         */
+
+  function DozeNote() {
+    return (
+      <Well>
+        <div style={{ display: 'flex', gap: 'var(--sp-5)', alignItems: 'flex-start' }}>
+          <span style={{ display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto', marginTop: 2 }}>
+            <Icon name="moon" size={18} />
+          </span>
+          <div style={{ display: 'grid', gap: 'var(--sp-3)', minWidth: 0 }}>
+            <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>These times are when BASE asks</span>
+            <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty', maxWidth: '62ch' }}>
+              Android decides when to deliver. While the tablet is dozing, a 17:15 alert can land at 17:20,
+              or not until you wake the screen. Nothing else shifts: the deadline, the estimate and the
+              timer are unaffected, and anything that arrives late is reported here instead of re-fired.
+            </p>
+            <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty', maxWidth: '62ch' }}>
+              Exempting Brave from battery optimisation makes late delivery rare. It cannot make it impossible.
+            </p>
+            <span style={{ display: 'flex', marginTop: 'var(--sp-2)' }}>
+              <Button variant="ghost" size="sm" iconLeft={<Icon name="battery-charging" size={16} />}>
+                How to exempt Brave
+              </Button>
+            </span>
+          </div>
+        </div>
+      </Well>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Permission off in the browser. The tablet runs Brave.             */
+
+  function Blocked({ onAllow, busy }) {
+    const STEPS = [
+      'Tap the lock icon to the left of the address bar.',
+      'Set Notifications to Allow.',
+      'Reload this page.',
+    ];
+    return (
+      <Card style={{ boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-3)' }}>
+        <div style={{ display: 'grid', gap: 'var(--sp-6)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
+            <span aria-hidden="true" style={{
+              display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 auto', borderRadius: '50%',
+              backgroundImage: 'var(--glass-tint-amber)', boxShadow: 'var(--glass-rim-2)', color: 'var(--status-review)',
+            }}>
+              <Icon name="bell-off" size={20} />
+            </span>
+            <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+              <h2 style={{ font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                Notifications are switched off in Brave
+              </h2>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                Nothing reaches the lock screen. The schedule below still runs inside the app.
+              </span>
+            </div>
+          </div>
+
+          <Button variant="frost" size="lg" block loading={busy} iconLeft={<Icon name="bell" size={18} />} onClick={onAllow}>
+            Allow notifications
+          </Button>
+
+          <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+              If Brave has already been told no, the prompt will not appear again. Set it by hand:
+            </span>
+            <Well style={{ padding: 'var(--sp-5) var(--sp-6)' }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                {STEPS.map(function (s, i) {
+                  return (
+                    <div key={s} style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'baseline', minWidth: 0 }}>
+                      <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--accent)', flex: '0 0 auto' }}>
+                        {'0' + (i + 1)}
+                      </span>
+                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', textWrap: 'pretty' }}>{s}</span>
+                    </div>
+                  );
+                })}
+                <div style={{ height: 1, background: 'var(--line-faint)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--fg-3)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    brave://settings/content/notifications
+                  </span>
+                  <IconButton label="Copy the Brave settings path" variant="ghost" size="sm"><Icon name="copy" size={16} /></IconButton>
+                </div>
+              </div>
+            </Well>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Delivery — two channels, one line of truth each.                  */
+
+  function Delivery({ allowed, calendar, onConnect, onDisconnect, busy }) {
+    function Channel({ icon, name, detail, ok, right }) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+          <span style={{
+            width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto',
+            background: ok ? 'var(--accent)' : 'var(--status-review)',
+            boxShadow: ok ? 'var(--glow-accent-sm)' : 'none',
+          }} />
+          <span style={{ display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto' }}><Icon name={icon} size={16} /></span>
+          <div style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+            <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detail}</span>
+          </div>
+          {right}
+        </div>
+      );
+    }
+
+    return (
+      <Card>
+        <div style={{ display: 'grid', gap: 'var(--sp-6)' }}>
+          <Kicker>Delivery</Kicker>
+
+          <Channel
+            icon="tablet-smartphone"
+            name="Brave on this tablet"
+            detail={allowed ? 'Allowed. Alerts reach the lock screen with the app closed.' : 'Blocked. In-app only.'}
+            ok={allowed}
+          />
+
+          <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+          <Channel
+            icon="calendar-clock"
+            name="Google Calendar"
+            detail={calendar ? 'you@example.com · BASE Notifications' : 'Not connected. A second copy of each block, on your phone.'}
+            ok={calendar}
+            right={calendar ? (
+              <MorphMenu
+                align="end"
+                width={248}
+                trigger={<IconButton label="Google Calendar options" variant="ghost" size="sm"><Icon name="ellipsis" size={16} /></IconButton>}
+                items={[
+                  { value: 'sync', label: 'Sync now', icon: <Icon name="refresh-cw" size={16} />, flash: 'Synced', onSelect: () => showProgress({ label: 'Syncing calendar', doneLabel: 'Synced', duration: 2400 }) },
+                  { value: 'open', label: 'Open in Google Calendar', icon: <Icon name="external-link" size={16} /> },
+                  { divider: true },
+                  { value: 'dc', label: 'Disconnect', icon: <Icon name="link-2-off" size={16} />, tone: 'danger',
+                    confirm: { label: 'Disconnect Google Calendar?', hint: 'The schedule stays. The mirror on your phone stops.', action: 'Disconnect', onConfirm: onDisconnect } },
+                ]}
+              />
+            ) : null}
+          />
+
+          {!calendar && (
+            <Button variant="glass" block loading={busy} iconLeft={<Icon name="link" size={16} />} onClick={onConnect}>
+              Connect Google
+            </Button>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+
+  function Notifications() {
+    const wide = useMedia('(min-width: 1080px)');
+    const params = new URLSearchParams(location.search);
+
+    const [perm, setPerm] = React.useState(params.get('perm') === 'blocked' ? 'blocked' : 'allowed');
+    const [calendar, setCalendar] = React.useState(true);
+    const [busy, setBusy] = React.useState(false);
+    const [enabled, setEnabled] = React.useState(true);
+    const [quiet, setQuiet] = React.useState(true);
+    const [summary, setSummary] = React.useState(true);
+    const [history, setHistory] = React.useState(HISTORY);
+    const [toast, setToast] = React.useState(null);
+
+    React.useEffect(function () {
+      if (!toast) return;
+      const t = setTimeout(function () { setToast(null); }, 3400);
+      return function () { clearTimeout(t); };
+    }, [toast]);
+
+    const allowed = perm === 'allowed';
+    const navItems = NAV.map(function (n) { return { value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }; });
+    function go(v) {
+      const item = NAV.find(function (n) { return n.value === v; });
+      if (item && item.href) location.href = item.href;
+    }
+
+    const unread = history.filter(function (h) { return h.unread; }).length;
+    const upcoming = TODAY.filter(function (t) { return t.state !== 'missed'; });
+    const before = TODAY.filter(function (t) { return t.at < NOW; });
+    const after = TODAY.filter(function (t) { return t.at >= NOW; });
+
+    function allow() {
+      setBusy(true);
+      setTimeout(function () {
+        setBusy(false); setPerm('allowed');
+        setToast({ icon: 'bell', title: 'Notifications allowed', detail: 'The next alert fires at 16:45.' });
+      }, 900);
+    }
+
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'stretch' }}>
+        <GlassFilters />
+
+        {wide && (
+          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="alerts" onChange={go} />
+          </div>
+        )}
+
+        <div style={{
+          flex: 1, minWidth: 0, boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-13)' : 'var(--sp-8) var(--gutter-page-sm) 132px',
+        }}>
+          <div style={{ width: '100%', maxWidth: 1160, margin: '0 auto', display: 'grid', gap: 'var(--sp-9)' }}>
+
+            <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+              <a href="home.html" style={{ display: 'flex', border: 0 }} aria-label="Back to Home">
+                <IconButton label="Back to Home" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+              </a>
+              <span aria-hidden="true" style={{
+                display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 auto', borderRadius: '50%',
+                backgroundImage: enabled && allowed ? 'var(--glass-tint-accent)' : 'var(--glass-fill-2)',
+                boxShadow: enabled && allowed ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-2)',
+                color: enabled && allowed ? 'oklch(0.93 0.07 162)' : 'var(--fg-3)',
+                transition: 'var(--t-hover)',
+              }}>
+                <Icon name={enabled && allowed ? 'bell' : 'bell-off'} size={20} />
+              </span>
+              <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                <h1 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                  Notifications
+                </h1>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                  {!enabled
+                    ? 'Paused. Nothing fires until you turn this back on.'
+                    : upcoming.length + ' still to fire today · ' + (allowed ? 'lock screen and in-app' : 'in-app only')}
+                </span>
+              </div>
+              <span style={{ flex: 1 }} />
+              <a href="notification.html" style={{ display: 'flex', border: 0 }}>
+                <Button variant="ghost" iconLeft={<Icon name="smartphone" size={16} />}>The alert itself</Button>
+              </a>
+              {unread > 0 && (
+                <Button variant="ghost" iconLeft={<Icon name="check-check" size={16} />}
+                  onClick={function () { setHistory(function (h) { return h.map(function (x) { return Object.assign({}, x, { unread: false }); }); }); }}>
+                  Mark all read
+                </Button>
+              )}
+            </header>
+
+            {!allowed && <Blocked onAllow={allow} busy={busy} />}
+
+            <div style={{
+              display: 'grid', gap: 'var(--sp-8)',
+              gridTemplateColumns: wide ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)',
+              alignItems: 'start',
+            }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-9)', minWidth: 0 }}>
+
+                {/* ---- FIRING TODAY — the point of the screen ---- */}
+                <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+                  <Kicker count={upcoming.length + ' to come'}>Firing today</Kicker>
+
+                  <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                    {before.map(function (r, i) {
+                      return <FireRow key={r.id} item={r} muted={!enabled} delay={i * 44} />;
+                    })}
+                    <NowLine at={NOW} />
+                    {after.map(function (r, i) {
+                      return <FireRow key={r.id} item={r} muted={!enabled} delay={(before.length + i) * 44} />;
+                    })}
+                  </div>
+
+                  <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: '0 var(--sp-2)', textWrap: 'pretty', maxWidth: '68ch' }}>
+                    Only tasks starting today appear. Each fires once, at its deadline minus its estimate — the moment
+                    the work has to begin. Tapping it opens the task in Focus with the timer already running.
+                  </p>
+
+                  <DozeNote />
+                </div>
+
+                {/* ---- HISTORY ---- */}
+                <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+                  <Kicker count={unread > 0 ? unread + ' unread' : null}>Already fired</Kicker>
+                  {history.length === 0 ? (
+                    <Well style={{ display: 'grid', placeItems: 'center', gap: 'var(--sp-3)', textAlign: 'center', padding: 'var(--sp-11) var(--sp-7)', borderRadius: 'var(--r-card)' }}>
+                      <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="bell" size={20} /></span>
+                      <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)' }}>Nothing has fired today.</span>
+                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', maxWidth: '40ch', textWrap: 'pretty' }}>
+                        The first alert lands at 16:45.
+                      </span>
+                    </Well>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                      {history.map(function (h) {
+                        return (
+                          <NotificationCard
+                            key={h.id}
+                            icon={<Icon name={h.icon} size={18} />}
+                            title={h.title}
+                            time={h.time}
+                            body={h.body}
+                            tone={h.tone}
+                            unread={h.unread}
+                            actions={
+                              <>
+                                <Button size="sm" variant="tint" tone="accent">{h.action}</Button>
+                                <Button size="sm" variant="ghost" onClick={function () { setHistory(function (cur) { return cur.filter(function (x) { return x.id !== h.id; }); }); }}>Dismiss</Button>
+                              </>
+                            }
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ---- rail: delivery and behaviour ---- */}
+              <div style={{ display: 'grid', gap: 'var(--sp-5)', minWidth: 0, position: wide ? 'sticky' : 'static', top: 'var(--sp-9)' }}>
+                <Delivery
+                  allowed={allowed}
+                  calendar={calendar}
+                  busy={busy}
+                  onConnect={function () { showProgress({ label: 'Connecting', doneLabel: 'Connected' }); setCalendar(true); setToast({ icon: 'link', title: 'Google Calendar connected', detail: 'Blocks now mirror to “BASE Notifications”.' }); }}
+                  onDisconnect={function () { setCalendar(false); setToast({ icon: 'link-2-off', title: 'Google Calendar disconnected', detail: 'The schedule stays. The mirror stops.' }); }}
+                />
+
+                <Card>
+                  <div style={{ display: 'grid', gap: 'var(--sp-6)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                      <div style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+                        <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Notifications</span>
+                        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>{enabled ? 'On' : 'Paused'}</span>
+                      </div>
+                      <Switch checked={enabled} onChange={setEnabled} />
+                    </div>
+
+                    <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+                    {/* Not a setting. A lead time you could tune would just be
+                        a second deadline, so it is reported, not offered. */}
+                    <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                      <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)' }}>
+                        Fires at
+                      </span>
+                      <Well style={{ padding: 'var(--sp-5) var(--sp-6)', display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                        <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-1)' }}>deadline − estimate</span>
+                        <span style={{ flex: 1 }} />
+                        <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="lock" size={14} /></span>
+                      </Well>
+                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+                        Not adjustable. A lead time you could tune is just a second deadline.
+                      </span>
+                    </div>
+
+                    <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                      <div style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+                        <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Silent in focus</span>
+                        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>Hold the next alert until the session ends.</span>
+                      </div>
+                      <Switch checked={quiet} disabled={!enabled} onChange={setQuiet} />
+                    </div>
+
+                    <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                      <div style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+                        <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Missed summary</span>
+                        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>One line when you next wake the tablet.</span>
+                      </div>
+                      <Switch checked={summary} disabled={!enabled} onChange={setSummary} />
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            </div>
+
+            {/* The state harness — a spec affordance, kept out of the
+                reading line, matching the one on Voice. */}
+            <footer style={{ display: 'flex', justifyContent: 'center', paddingTop: 'var(--sp-5)' }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-3)',
+                borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+              }}>
+                <SegmentedControl
+                  options={[{ value: 'allowed', label: 'Allowed' }, { value: 'blocked', label: 'Blocked in Brave' }]}
+                  value={perm}
+                  onChange={setPerm}
+                />
+              </div>
+            </footer>
+
+          </div>
+        </div>
+
+        {toast && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: wide ? 'var(--sp-9)' : 'var(--sp-13)', display: 'grid', placeItems: 'center', zIndex: 60, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <Toast icon={<Icon name={toast.icon} size={16} />} title={toast.title} detail={toast.detail} onDismiss={function () { setToast(null); }} />
+            </span>
+          </div>
+        )}
+
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <MiniNav items={navItems} value="alerts" onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Notifications />);
+});
+</script>
+</body>
+</html>

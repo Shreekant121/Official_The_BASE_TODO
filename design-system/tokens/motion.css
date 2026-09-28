@@ -1,0 +1,111 @@
+/* ---------------------------------------------------------------
+   MOTION — quiet, fast, continuous. Motion confirms what happened;
+   it never performs. Things arrive with a short fade and a few
+   pixels of rise, from the side of the trigger they belong to.
+   One surface moves as one object. Presses sink, releases land
+   with a single soft settle (--ease-settle) — satisfying, never bouncy.
+
+     --ease-glass   the house curve: gentle ease-out. Almost everything.
+     --ease-morph   alias of the house curve (kept for compatibility).
+     --ease-spring  kept as a name, but no longer overshoots — toggles
+                    and handles settle with the same soft ease-out.
+   --------------------------------------------------------------- */
+:root {
+  --ease-glass:  cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-morph:  cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.25, 0.80, 0.30, 1);
+  --ease-in-out: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  --ease-exit:   cubic-bezier(0.40, 0.00, 1.00, 1.00);
+  /* NEW — a release that lands. ~4% overshoot, one settle. For press
+     release, toggles, the tab-bar blob, morph arrivals. */
+  --ease-settle: cubic-bezier(0.34, 1.32, 0.64, 1);
+  /* NEW — long, silky, for colour and light moving (gel drift, glints). */
+  --ease-silk:   cubic-bezier(0.65, 0, 0.35, 1);
+
+  --dur-instant: 80ms;
+  --dur-fast:    140ms;
+  --dur-base:    200ms;
+  --dur-slow:    280ms;
+  --dur-morph:   240ms;
+  --dur-sheet:   320ms;
+  --dur-ambient: 40s;
+
+  --stagger: 24ms;
+
+  --t-hover: background-color var(--dur-fast) var(--ease-glass), box-shadow var(--dur-fast) var(--ease-glass), transform var(--dur-fast) var(--ease-glass), opacity var(--dur-fast) var(--ease-glass);
+  --t-morph: all var(--dur-morph) var(--ease-morph);
+  --t-press: transform var(--dur-fast) var(--ease-glass), box-shadow var(--dur-fast) var(--ease-glass), filter var(--dur-fast) var(--ease-glass);
+  --t-release: transform var(--dur-slow) var(--ease-settle), box-shadow var(--dur-slow) var(--ease-glass), filter var(--dur-slow) var(--ease-glass);
+}
+
+/* NEW — colour through a gel or a loading surface, slow and continuous */
+@keyframes ag-hue-drift { from { background-position: 0% 50%; } to { background-position: 200% 50%; } }
+/* NEW — a single glint across a gel on success, never on hover */
+@keyframes ag-glint { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(260%) skewX(-18deg); } }
+/* NEW — arrival with a soft settle, for sheets and morph targets */
+@keyframes ag-land { 0% { opacity: 0; transform: translateY(8px) scale(0.98); } 100% { opacity: 1; transform: none; } }
+/* NEW — breathing halo for live and AI objects */
+@keyframes ag-breathe { 0%, 100% { transform: scale(1); opacity: 0.55; } 50% { transform: scale(1.12); opacity: 0.9; } }
+
+/* Panes, messages, toasts: fade + 4px rise. */
+@keyframes ag-condense {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ag-dissolve {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Menus and popovers: fade + 4px drop from the trigger side. */
+@keyframes ag-unfurl {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Backdrop mesh: barely perceptible. */
+@keyframes ag-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(1%, -1%, 0); }
+}
+
+/* Live indicators: opacity only, no scaling. */
+@keyframes ag-pulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+/* A single soft ring for live sources (voice, sync). */
+@keyframes ag-ripple {
+  from { opacity: 0.35; transform: scale(1); }
+  to   { opacity: 0;    transform: scale(1.6); }
+}
+
+@keyframes ag-shimmer {
+  from { background-position: -160% 0; }
+  to   { background-position: 260% 0; }
+}
+
+@keyframes ag-bar {
+  0%, 100% { transform: scaleY(0.4); }
+  50%      { transform: scaleY(1); }
+}
+
+@keyframes ag-travel {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(340%); }
+}
+
+@keyframes ag-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 1ms; --dur-fast: 1ms; --dur-base: 1ms;
+    --dur-slow: 1ms; --dur-morph: 1ms; --dur-sheet: 1ms;
+  }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

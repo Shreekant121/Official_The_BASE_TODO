@@ -1,0 +1,33 @@
+/* ---------------------------------------------------------------
+   FONTS — "Apple-flavoured, systems-native" was the brief. Apple-
+   flavoured is the *look*; it is not the hardware. There is no Apple
+   device in this project (`CLAUDE.md`, "His two devices"), so what the
+   stack in `typography.css` actually resolves to on the two machines
+   that matter is:
+
+     - **Windows laptop** → Segoe UI Variable Display.
+     - **Android tablet** → Roboto, via `system-ui`. The whole Apple head
+       of the stack (`-apple-system`, `BlinkMacSystemFont`, SF Pro) and
+       the Segoe entries all fail to match there and are skipped.
+
+   Both are the real system face, so the brief still holds: no download,
+   no flash, native metrics. **Do not "fix" the Apple entries out of the
+   stack** — they are the correct first choice on hardware that has them
+   and cost nothing on hardware that does not.
+
+   ONE CONSEQUENCE WORTH KNOWING: the two devices render in different
+   typefaces, but `npm run shots` runs both viewports on the Windows
+   laptop, so the "tablet" baselines are drawn in Segoe and not in the
+   Roboto the tablet will actually use. A text-metric change that only
+   shows up in Roboto cannot be caught by a baseline — it needs a look at
+   the real tablet.
+
+   Geist is loaded only as a cross-platform stand-in for machines with
+   neither, and Helvetica Neue backs that up. Numerals fall to the
+   system mono (SF Mono / Cascadia) before touching a webfont.
+
+   NOTE: the live app currently specifies Inter. This system moves off
+   it deliberately — flag if you want Inter kept.
+   --------------------------------------------------------------- */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300..700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap");

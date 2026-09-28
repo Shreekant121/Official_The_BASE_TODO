@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Booking</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="Booking — links and rules">
+<div id="root">
+  <div style="display:flex;height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:1320px;margin:0 auto;height:120px;border-radius:var(--r-card);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/data/SparkBars.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/MorphMenu.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, StatusPill, SparkBars, Toast, Switch, MiniNav, MorphMenu } = AG;
+
+  const NAV = [
+    { value: 'home',     label: 'Home',         icon: 'house',          href: 'home.html' },
+    { value: 'atlas',    label: 'Atlas',        icon: 'sparkles',       href: 'atlas.html' },
+    { value: 'inbox',    label: 'Inbox triage', icon: 'inbox',          href: 'inbox.html' },
+    { value: 'people',   label: 'Contacts',     icon: 'users',          href: 'contacts.html' },
+    { value: 'booking',  label: 'Booking',      icon: 'calendar-clock' },
+    { value: 'catalog',  label: 'The catalog',  icon: 'book-open',      href: 'catalog.html' },
+    { value: 'log',      label: 'Action log',   icon: 'scroll-text',    href: 'log.html' },
+    { value: 'settings', label: 'Settings',     icon: 'settings',       href: 'settings.html' },
+  ];
+
+  /* Your clock is IST. Offsets are minutes from IST, September. */
+  const REGIONS = [
+    { value: 'in',   label: 'India',    city: 'Mumbai',   off: 0,    abbr: 'IST' },
+    { value: 'gulf', label: 'Gulf',     city: 'Dubai',    off: -90,  abbr: 'GST' },
+    { value: 'eu',   label: 'Europe',   city: 'London',   off: -270, abbr: 'BST' },
+    { value: 'am',   label: 'Americas', city: 'New York', off: -570, abbr: 'EDT' },
+  ];
+  const RG = {}; REGIONS.forEach(function (r) { RG[r.value] = r; });
+
+  const TIER_HUE = ['var(--accent)', 'var(--hue-cyan)', 'var(--hue-violet)', 'var(--hue-amber)'];
+  const TIER_TINT = ['var(--glass-tint-accent)', 'var(--glass-tint-cyan)', 'var(--glass-tint-violet)', 'var(--glass-tint-amber)'];
+  const WD = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  /* The steering. Tiers are offered in order. "Open to" sees a tier
+     always; "Overflow to" sees it only once the release rule is met. */
+  const TIERS = [
+    { id: 't1', name: 'Core hours', days: [2, 3, 4], from: 660, to: 780, open: ['in', 'gulf'], overflow: [], rule: null, on: true },
+    { id: 't2', name: 'Afternoons', days: [1, 2, 3, 4, 5], from: 900, to: 1050, open: ['eu'], overflow: ['in', 'gulf'], rule: 'Core hours 75% booked, or inside 48 h', on: true },
+    { id: 't3', name: 'Evenings',   days: [1, 2, 3, 4], from: 1170, to: 1260, open: ['am'], overflow: [], rule: null, on: true },
+  ];
+
+  /* What you are free — the ceiling. Tiers can only carve inside it. */
+  const RULES = [
+    { wd: 1, label: 'Monday',    ranges: [[600, 780], [870, 1080], [1170, 1260]], on: true },
+    { wd: 2, label: 'Tuesday',   ranges: [[600, 780], [870, 1080], [1170, 1260]], on: true },
+    { wd: 3, label: 'Wednesday', ranges: [[600, 780], [870, 1080], [1170, 1260]], on: true },
+    { wd: 4, label: 'Thursday',  ranges: [[600, 780], [870, 1080], [1170, 1260]], on: true },
+    { wd: 5, label: 'Friday',    ranges: [[600, 780], [870, 1080]], on: true },
+    { wd: 6, label: 'Saturday',  ranges: [[600, 720]], on: true },
+    { wd: 0, label: 'Sunday',    ranges: [], on: false },
+  ];
+
+  const WEEK = [
+    { d: 'Thu', n: 24, wd: 4, soon: true }, { d: 'Fri', n: 25, wd: 5, soon: true }, { d: 'Sat', n: 26, wd: 6 },
+    { d: 'Sun', n: 27, wd: 0 }, { d: 'Mon', n: 28, wd: 1 }, { d: 'Tue', n: 29, wd: 2 }, { d: 'Wed', n: 30, wd: 3 },
+  ];
+  const BOOKED = { '29-660': 1, '29-720': 1, '30-690': 1, '24-720': 1, '29-1200': 1, '25-930': 1 };
+  const BUSY = { '28-960': 1, '28-990': 1, '24-900': 1, '24-930': 1 };
+  const ROWS = []; for (let t = 570; t <= 1260; t += 30) ROWS.push(t);
+
+  const LINKS = [
+    {
+      id: 'intro', name: 'Intro call', slug: 'intro', on: true, kind: 'Reusable',
+      dur: '30', before: 10, after: 15, notice: 12, horizon: 21, cap: 3, cutoff: 12,
+      views: 142, booked: 31, cancelled: 3, moved: 5, landed: [26, 3, 2, 0], weeks: [2, 3, 4, 3, 5, 4, 6, 4],
+    },
+    {
+      id: 'review', name: 'Project review', slug: 'review', on: true, kind: 'Reusable',
+      dur: '60', before: 15, after: 30, notice: 24, horizon: 14, cap: 2, cutoff: 24,
+      views: 58, booked: 19, cancelled: 1, moved: 4, landed: [13, 5, 1, 0], weeks: [1, 2, 3, 2, 2, 3, 4, 2],
+    },
+    {
+      id: 'check', name: 'Quick check-in', slug: 'check-in', on: true, kind: 'Reusable',
+      dur: '15', before: 5, after: 5, notice: 4, horizon: 7, cap: 6, cutoff: 2,
+      views: 40, booked: 22, cancelled: 0, moved: 2, landed: [20, 2, 0, 0], weeks: [3, 2, 4, 3, 2, 3, 3, 2],
+    },
+    {
+      id: 'mehta', name: 'Onboarding — Mehta Textiles', slug: 'mehta-onboarding', on: true, kind: 'One booking, then closes',
+      dur: '45', before: 15, after: 15, notice: 24, horizon: 14, cap: 1, cutoff: 24,
+      views: 2, booked: 0, cancelled: 0, moved: 0, landed: [0, 0, 0, 0], weeks: [0, 0, 0, 0, 0, 0, 0, 2],
+    },
+    {
+      id: 'workshop', name: 'Spring workshop', slug: 'workshop', on: false, kind: 'Reusable', offSince: '31 Aug', offHits: 12,
+      dur: '60', before: 15, after: 15, notice: 48, horizon: 30, cap: 1, cutoff: 48,
+      views: 96, booked: 14, cancelled: 2, moved: 1, landed: [9, 4, 1, 0], weeks: [4, 5, 3, 2, 0, 0, 0, 0],
+    },
+  ];
+
+  const hm = function (m) { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+  const pct = function (a, b) { return b ? Math.round((a / b) * 100) : 0; };
+
+  const Kicker = ({ children, color = 'var(--fg-4)', style }) => (
+    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color, ...style }}>{children}</span>
+  );
+  const Mono = ({ children, color = 'var(--fg-1)', size = 'var(--text-sm)', style }) => (
+    <span style={{ font: 'var(--type-numeric)', fontSize: size, color, fontVariantNumeric: 'tabular-nums', ...style }}>{children}</span>
+  );
+  const Section = ({ title, meta, children, style }) => (
+    <div style={{ display: 'grid', gap: 'var(--sp-5)', alignContent: 'start', ...style }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+        <Kicker color="var(--fg-3)" style={{ flex: '0 0 auto' }}>{title}</Kicker>
+        <span style={{ flex: 1, height: 1, background: 'var(--line-faint)' }} />
+        {meta && <Kicker style={{ flex: '0 0 auto' }}>{meta}</Kicker>}
+      </div>
+      {children}
+    </div>
+  );
+
+  /* A number you set: a well, the value in mono, two ways to move it. */
+  function NumStep({ label, value, unit, step = 5, min = 0, max = 240, onChange }) {
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-3)', minWidth: 0 }}>
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{label}</span>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', height: 44, padding: '0 var(--sp-2)',
+          borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+        }}>
+          <IconButton label={'Less ' + label} variant="ghost" size="sm" onClick={() => onChange(Math.max(min, value - step))}><Icon name="minus" size={14} /></IconButton>
+          <span style={{ flex: 1, textAlign: 'center', whiteSpace: 'nowrap' }}>
+            <Mono size="var(--text-base)">{value}</Mono> <Mono color="var(--fg-4)" size="var(--text-xs)">{unit}</Mono>
+          </span>
+          <IconButton label={'More ' + label} variant="ghost" size="sm" onClick={() => onChange(Math.min(max, value + step))}><Icon name="plus" size={14} /></IconButton>
+        </div>
+      </div>
+    );
+  }
+
+  function Chip({ children, on, hue }) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 var(--sp-4)', borderRadius: 'var(--r-pill)',
+        backgroundImage: on ? 'var(--glass-fill-2)' : 'none', boxShadow: on ? 'var(--glass-rim-1)' : 'inset 0 0 0 1px var(--line-faint)',
+        color: on ? (hue || 'var(--fg-1)') : 'var(--fg-4)', font: 'var(--type-caption)', whiteSpace: 'nowrap',
+      }}>{children}</span>
+    );
+  }
+
+  function LinkRow({ link, on, onPick, i }) {
+    const [hover, setHover] = React.useState(false);
+    const target = pct(link.landed[0], link.booked);
+    return (
+      <button type="button" onClick={onPick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'grid', gap: 'var(--sp-3)', width: '100%', padding: 'var(--sp-5) var(--sp-6)', border: 0, cursor: 'pointer', textAlign: 'left', backgroundColor: 'transparent',
+          borderRadius: 'var(--r-card)',
+          backgroundImage: on ? 'var(--glass-fill-2)' : hover ? 'var(--glass-fill-1)' : 'none',
+          boxShadow: on ? 'var(--glass-rim-2), var(--glass-cast-1)' : hover ? 'var(--glass-rim-1)' : 'inset 0 0 0 1px var(--line-faint)',
+          transition: 'var(--t-hover)', animation: 'ag-condense var(--dur-base) var(--ease-glass) both', animationDelay: (i * 24) + 'ms',
+        }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <span style={{ flex: 1, minWidth: 0, font: 'var(--type-label)', color: link.on ? 'var(--fg-1)' : 'var(--fg-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{link.name}</span>
+          {link.on ? <StatusPill status="running" size="sm">on</StatusPill> : <StatusPill status="archived" size="sm" dot={false}>off</StatusPill>}
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+          <Mono color="var(--fg-3)" size="var(--text-xs)">{link.dur} min</Mono>
+          <Mono color="var(--fg-3)" size="var(--text-xs)">{link.booked} / {link.views}</Mono>
+          <span style={{ flex: 1 }} />
+          {link.booked > 0
+            ? <Mono size="var(--text-xs)" color={target >= 75 ? 'var(--accent)' : 'var(--status-review)'}>{target}% on target</Mono>
+            : <Mono size="var(--text-xs)" color="var(--fg-4)">no bookings</Mono>}
+        </span>
+      </button>
+    );
+  }
+
+  /* The week, as the chosen client would see it. The point of the
+     whole screen: what is free is not the same as what is offered. */
+  function WeekPreview({ tiers, region, dur, onRegion }) {
+    const R = RG[region];
+    const t1 = tiers[0];
+    let t1n = 0, t1b = 0;
+    WEEK.forEach((day) => ROWS.forEach((t) => { if (t1 && t1.on && t1.days.includes(day.wd) && t >= t1.from && t < t1.to) { t1n++; if (BOOKED[day.n + '-' + t]) t1b++; } }));
+    const released = t1n ? t1b / t1n >= 0.75 : false;
+
+    function free(wd, t) { const r = RULES.find((x) => x.wd === wd); return r && r.on && r.ranges.some(([a, b]) => t >= a && t + 30 <= b); }
+    function tierAt(wd, t) { for (let i = 0; i < tiers.length; i++) { const x = tiers[i]; if (x.on && x.days.includes(wd) && t >= x.from && t < x.to) return i; } return -1; }
+    function cell(day, t) {
+      if (!free(day.wd, t)) return { k: 'none' };
+      const key = day.n + '-' + t;
+      if (BUSY[key]) return { k: 'busy' };
+      if (BOOKED[key]) return { k: 'booked' };
+      const ti = tierAt(day.wd, t);
+      if (ti < 0) return { k: 'free' };
+      const x = tiers[ti];
+      const local = t + R.off;
+      if (local < 480 || local + Number(dur) > 1200) return { k: 'night', ti };
+      if (x.open.includes(region)) return { k: 'offered', ti };
+      if (x.overflow.includes(region)) return (released || day.soon) ? { k: 'offered', ti } : { k: 'held', ti };
+      return { k: 'other', ti };
+    }
+
+    let offered = 0, held = 0;
+    const grid = WEEK.map((day) => ROWS.map((t) => { const c = cell(day, t); if (c.k === 'offered') offered++; if (c.k === 'held') held++; return c; }));
+
+    function Cell({ c }) {
+      const base = { height: 15, borderRadius: 5, transition: 'background-color var(--dur-base) var(--ease-glass), box-shadow var(--dur-base) var(--ease-glass), opacity var(--dur-base) var(--ease-glass)' };
+      if (c.k === 'none') return <span style={base} />;
+      if (c.k === 'busy') return <span title="Calendar event" style={{ ...base, backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)' }} />;
+      if (c.k === 'booked') return <span title="Booked" style={{ ...base, background: 'oklch(1 0 0 / 0.78)', boxShadow: '0 0 8px oklch(1 0 0 / 0.25)' }} />;
+      if (c.k === 'free') return <span title="Free, never offered" style={{ ...base, boxShadow: 'inset 0 0 0 1px var(--line-soft)' }} />;
+      const hue = TIER_HUE[c.ti];
+      if (c.k === 'offered') return <span title="Offered" style={{ ...base, background: 'color-mix(in oklch, ' + hue + ' 70%, transparent)', boxShadow: '0 0 10px -3px ' + hue + ', inset 0 1px 0 oklch(1 0 0 / 0.35)' }} />;
+      if (c.k === 'held') return <span title="Held until release" style={{ ...base, boxShadow: 'inset 0 0 0 1px color-mix(in oklch, ' + hue + ' 70%, transparent)' }} />;
+      return <span title={c.k === 'night' ? 'Outside their 08:00–20:00' : 'Not offered to this region'} style={{ ...base, background: 'color-mix(in oklch, ' + hue + ' 12%, transparent)' }} />;
+    }
+
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+        <SegmentedControl size="sm" value={region} onChange={onRegion}
+          options={REGIONS.map((r) => ({ value: r.value, label: r.city }))} style={{ width: '100%' }} />
+        <div style={{
+          display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)', borderRadius: 'var(--r-card)',
+          backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '44px repeat(7, minmax(0,1fr)) 44px', columnGap: 6, rowGap: 3 }}>
+            <Kicker style={{ fontSize: 10 }}>IST</Kicker>
+            {WEEK.map((d) => (
+              <span key={d.n} style={{ display: 'grid', justifyItems: 'center', gap: 1, paddingBottom: 'var(--sp-2)' }}>
+                <Kicker color={d.soon ? 'var(--fg-2)' : 'var(--fg-4)'} style={{ fontSize: 10 }}>{d.d}</Kicker>
+                <Mono size="var(--text-xs)" color={d.soon ? 'var(--fg-1)' : 'var(--fg-3)'}>{d.n}</Mono>
+              </span>
+            ))}
+            <Kicker style={{ fontSize: 10, textAlign: 'right' }}>{R.abbr}</Kicker>
+            {ROWS.map((t, ri) => (
+              <React.Fragment key={t}>
+                <Mono size="10px" color="var(--fg-4)" style={{ lineHeight: '15px', visibility: t % 60 === 0 ? 'visible' : 'hidden' }}>{hm(t)}</Mono>
+                {WEEK.map((d, di) => <Cell key={d.n} c={grid[di][ri]} />)}
+                <Mono size="10px" color="var(--fg-4)" style={{ lineHeight: '15px', textAlign: 'right', visibility: t % 60 === 0 ? 'visible' : 'hidden' }}>{hm(t + R.off)}</Mono>
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3) var(--sp-5)' }}>
+            {[
+              ['Offered', { background: 'color-mix(in oklch, var(--accent) 70%, transparent)' }],
+              ['Held', { boxShadow: 'inset 0 0 0 1px color-mix(in oklch, var(--hue-cyan) 70%, transparent)' }],
+              ['Not for them', { background: 'color-mix(in oklch, var(--hue-violet) 12%, transparent)' }],
+              ['Free, never offered', { boxShadow: 'inset 0 0 0 1px var(--line-soft)' }],
+              ['Booked', { background: 'oklch(1 0 0 / 0.78)' }],
+              ['Calendar', { backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)' }],
+            ].map(([l, s]) => (
+              <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+                <span style={{ width: 14, height: 10, borderRadius: 3, ...s }} />
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{l}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', margin: 0, textWrap: 'pretty' }}>
+          A client in {R.city} sees <Mono>{offered}</Mono> times this week.
+          {held > 0 ? <span> <Mono>{held}</Mono> more are held until Core hours fill — <Mono>{t1b} / {t1n}</Mono> booked now.</span> : null}
+        </p>
+      </div>
+    );
+  }
+
+  function TierRow({ tier, i, count, onToggle, onMove }) {
+    const hue = TIER_HUE[i];
+    return (
+      <div style={{
+        display: 'grid', gap: 'var(--sp-4)', padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-card)',
+        backgroundImage: tier.on ? TIER_TINT[i] : 'none', boxShadow: tier.on ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'inset 0 0 0 1px var(--line-faint)',
+        opacity: tier.on ? 1 : 0.6, transition: 'opacity var(--dur-base) var(--ease-glass), background-image var(--dur-base) var(--ease-glass)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <span style={{
+            display: 'grid', placeItems: 'center', width: 28, height: 28, flex: '0 0 auto', borderRadius: '50%',
+            backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
+          }}><Mono size="var(--text-xs)" color={hue}>{i + 1}</Mono></span>
+          <span style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+            <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>{tier.name}</span>
+            <Mono size="var(--text-xs)" color="var(--fg-3)">{hm(tier.from)}–{hm(tier.to)} IST</Mono>
+          </span>
+          <IconButton label="Fill earlier" variant="ghost" size="sm" disabled={i === 0} onClick={() => onMove(-1)}><Icon name="arrow-up" size={14} /></IconButton>
+          <IconButton label="Fill later" variant="ghost" size="sm" disabled={i === count - 1} onClick={() => onMove(1)}><Icon name="arrow-down" size={14} /></IconButton>
+          <Switch size="sm" checked={tier.on} onChange={onToggle} aria-label={'Offer ' + tier.name} />
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+          {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+            <span key={d} style={{
+              display: 'grid', placeItems: 'center', width: 26, height: 26, borderRadius: '50%',
+              backgroundImage: tier.days.includes(d) ? 'var(--glass-fill-3)' : 'none',
+              boxShadow: tier.days.includes(d) ? 'var(--glass-rim-1)' : 'inset 0 0 0 1px var(--line-faint)',
+              color: tier.days.includes(d) ? 'var(--fg-1)' : 'var(--fg-4)', font: 'var(--type-caption)',
+            }}>{WD[d]}</span>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '84px minmax(0,1fr)', gap: 'var(--sp-3) var(--sp-4)', alignItems: 'center' }}>
+          <Kicker>Open to</Kicker>
+          <span style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+            {tier.open.map((r) => <Chip key={r} on hue={hue}>{RG[r].label}</Chip>)}
+          </span>
+          {tier.overflow.length > 0 && <Kicker>Overflow</Kicker>}
+          {tier.overflow.length > 0 && (
+            <span style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+              {tier.overflow.map((r) => <Chip key={r}>{RG[r].label}</Chip>)}
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>when {tier.rule}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function Detail({ link, update, wide, onToast }) {
+    const [region, setRegion] = React.useState('eu');
+    const [tiers, setTiers] = React.useState(TIERS);
+    const url = 'base.link/shreekant/' + link.slug;
+    const conv = pct(link.booked, link.views);
+    const target = pct(link.landed[0], link.booked);
+    const tierTotal = link.landed.reduce((a, b) => a + b, 0);
+
+    function move(i, d) { setTiers((cur) => { const n = cur.slice(); const j = i + d; [n[i], n[j]] = [n[j], n[i]]; return n; }); }
+
+    return (
+      <section key={link.id} className="ag-scroll" style={{
+        minHeight: 0, overflowY: wide === 'stack' ? 'visible' : 'auto', overscrollBehavior: 'contain', padding: 'var(--pad-card-lg)', borderRadius: 'var(--r-card-lg)',
+        backgroundImage: 'var(--glass-fill-2)', backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+        animation: 'ag-condense var(--dur-slow) var(--ease-glass) both',
+      }}>
+        <div style={{ display: 'grid', gap: 'var(--sp-10)' }}>
+          <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 220 }}>
+                <Kicker>{link.kind}</Kicker>
+                <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>{link.name}</h2>
+              </div>
+              <Switch checked={link.on} onChange={(v) => { update({ on: v, offSince: v ? null : 'today', offHits: 0 }); onToast(v ? { icon: 'link', title: 'Link on', detail: 'Taking bookings again.' } : { icon: 'link-2-off', title: 'Link off', detail: 'Existing bookings stay. New visitors see the off page.' }); }} label={link.on ? 'Taking bookings' : 'Off'} />
+              <MorphMenu align="end" width={260} header={{ title: link.name, meta: link.dur + ' min · ' + link.booked + ' booked' }}
+                trigger={<IconButton label="Link actions" variant="ghost"><Icon name="ellipsis" size={18} /></IconButton>}
+                items={[
+                  { section: 'This link' },
+                  { value: 'dup', label: 'Duplicate', icon: <Icon name="copy-plus" size={16} />, flash: 'Duplicated' },
+                  { value: 'one', label: 'Make a one-booking copy', icon: <Icon name="ticket" size={16} />, meta: 'for one client', flash: 'Copy made' },
+                  { divider: true },
+                  { section: 'Careful', tone: 'danger' },
+                  { value: 'del', label: 'Delete link', icon: <Icon name="trash-2" size={16} />, tone: 'danger',
+                    confirm: { label: 'Delete ' + link.name + '?', hint: 'Booked meetings stay on your calendar. The URL stops working.', action: 'Delete' } },
+                ]} />
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', minHeight: 44, padding: '0 var(--sp-3) 0 var(--sp-6)',
+              borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+            }}>
+              <Mono size="var(--text-sm)" color={link.on ? 'var(--fg-1)' : 'var(--fg-4)'} style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: link.on ? 'none' : 'line-through' }}>{url}</Mono>
+              <IconButton label="Copy link" variant="ghost" size="sm" onClick={() => onToast({ icon: 'clipboard-check', title: 'Copied', detail: url })}><Icon name="copy" size={15} /></IconButton>
+              <IconButton label="Open as a client" variant="ghost" size="sm" onClick={() => { location.href = 'booking-public.html' + (link.on ? '' : '#off'); }}><Icon name="external-link" size={15} /></IconButton>
+            </div>
+            {!link.on && (
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)', padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+              }}>
+                <span style={{ display: 'flex', color: 'var(--fg-3)', marginTop: 2 }}><Icon name="link-2-off" size={16} /></span>
+                <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', textWrap: 'pretty', flex: 1 }}>
+                  Off since {link.offSince}. <Mono>{link.offHits || 0}</Mono> visitors have hit the <a href="booking-public.html#off">off page</a> since.
+                  Bookings already made still work, and can still be moved or cancelled.
+                </span>
+              </div>
+            )}
+          </div>
+
+          <Section title="Last 30 days" meta={'8 weeks of bookings'}>
+            <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(4, minmax(0,1fr)) minmax(160px, 1.2fr)' : 'repeat(2, minmax(0,1fr))', gap: 'var(--sp-5)', alignItems: 'end' }}>
+              {[
+                ['Opened', link.views, null],
+                ['Booked', link.booked, conv + '% of opens'],
+                ['On target', link.booked ? target + '%' : '—', 'landed in tier 1'],
+                ['Undone', link.cancelled + link.moved, link.cancelled + ' cancelled · ' + link.moved + ' moved'],
+              ].map(([l, v, s]) => (
+                <div key={l} style={{ display: 'grid', gap: 'var(--sp-2)', minWidth: 0 }}>
+                  <Kicker>{l}</Kicker>
+                  <span style={{ font: 'var(--type-metric)', fontSize: 'var(--text-2xl)', color: l === 'On target' && link.booked ? (target >= 75 ? 'var(--accent)' : 'var(--status-review)') : 'var(--fg-1)', fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', minHeight: '1.2em' }}>{s}</span>
+                </div>
+              ))}
+              <SparkBars data={link.weeks} activeIndex={link.weeks.length - 1} height={56} gap={5} style={{ gridColumn: wide ? 'auto' : '1 / -1' }} />
+            </div>
+            {tierTotal > 0 && (
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                <div style={{ display: 'flex', height: 10, borderRadius: 'var(--r-pill)', overflow: 'hidden', gap: 2, backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)' }}>
+                  {link.landed.map((n, i) => n > 0 && (
+                    <span key={i} style={{ flex: n, background: 'color-mix(in oklch, ' + TIER_HUE[i] + ' 72%, transparent)' }} />
+                  ))}
+                </div>
+                <span style={{ display: 'flex', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                  {['Core hours', 'Afternoons', 'Evenings'].map((n, i) => (
+                    <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: TIER_HUE[i] }} />
+                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{n}</span>
+                      <Mono size="var(--text-xs)" color="var(--fg-2)">{link.landed[i]}</Mono>
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )}
+          </Section>
+
+          <Section title="Shape of a booking">
+            <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Length</span>
+              <SegmentedControl value={link.dur} onChange={(v) => update({ dur: v })}
+                options={[{ value: '15', label: '15 min' }, { value: '30', label: '30 min' }, { value: '45', label: '45 min' }, { value: '60', label: '60 min' }, { value: '90', label: '90 min' }]} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: 'var(--sp-5)' }}>
+              <NumStep label="Buffer before" value={link.before} unit="min" onChange={(v) => update({ before: v })} />
+              <NumStep label="Buffer after" value={link.after} unit="min" onChange={(v) => update({ after: v })} />
+              <NumStep label="Minimum notice" value={link.notice} unit="h" step={1} max={168} onChange={(v) => update({ notice: v })} />
+              <NumStep label="Books ahead" value={link.horizon} unit="days" step={1} min={1} max={90} onChange={(v) => update({ horizon: v })} />
+              <NumStep label="Most per day" value={link.cap} unit="" step={1} min={1} max={12} onChange={(v) => update({ cap: v })} />
+              <NumStep label="Client can change until" value={link.cutoff} unit="h before" step={1} max={72} onChange={(v) => update({ cutoff: v })} />
+            </div>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+              Buffers are held on your calendar, never shown to the client. A {link.dur} min booking blocks <Mono size="var(--text-xs)" color="var(--fg-3)">{Number(link.dur) + link.before + link.after} min</Mono>.
+            </span>
+          </Section>
+
+          <div style={{ display: 'grid', gridTemplateColumns: wide ? 'minmax(0,1fr) minmax(0,1.05fr)' : 'minmax(0,1fr)', gap: 'var(--sp-10)', alignItems: 'start' }}>
+            <Section title="Fill order" meta="first to last">
+              <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', margin: 0, textWrap: 'pretty' }}>
+                Hours you want booked, in the order you want them booked. Free time outside a tier is never offered.
+              </p>
+              <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                {tiers.map((t, i) => (
+                  <TierRow key={t.id} tier={t} i={i} count={tiers.length}
+                    onToggle={(v) => setTiers((cur) => cur.map((x) => x.id === t.id ? { ...x, on: v } : x))}
+                    onMove={(d) => move(i, d)} />
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+                <Button size="sm" variant="ghost" iconLeft={<Icon name="plus" size={14} />} onClick={() => onToast({ icon: 'layers', title: 'New tier', detail: 'Pick days, hours, and who sees it.' })}>Add tier</Button>
+                <span style={{ flex: 1 }} />
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>Never before 08:00 or after 20:00 in the client's own time.</span>
+              </div>
+            </Section>
+
+            <Section title="What a client sees" meta="Thu 24 – Wed 30 Sep">
+              <WeekPreview tiers={tiers} region={region} dur={link.dur} onRegion={setRegion} />
+            </Section>
+          </div>
+
+          <Section title="When you are free" meta="Asia/Kolkata · IST">
+            <div style={{ display: 'grid', gap: 'var(--sp-2)' }}>
+              {RULES.map((r) => (
+                <div key={r.wd} style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minHeight: 48, padding: '0 var(--sp-6)',
+                  borderRadius: 'var(--r-lg)', backgroundImage: r.on ? 'var(--glass-fill-1)' : 'none',
+                  boxShadow: r.on ? 'var(--glass-rim-1)' : 'inset 0 0 0 1px var(--line-faint)', flexWrap: 'wrap',
+                }}>
+                  <span style={{ width: 92, font: 'var(--type-label)', color: r.on ? 'var(--fg-1)' : 'var(--fg-4)' }}>{r.label}</span>
+                  <span style={{ display: 'flex', gap: 'var(--sp-3)', flex: 1, flexWrap: 'wrap', minWidth: 0 }}>
+                    {r.ranges.length ? r.ranges.map(([a, b]) => (
+                      <span key={a} style={{ display: 'inline-flex', alignItems: 'center', height: 28, padding: '0 var(--sp-4)', borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)' }}>
+                        <Mono size="var(--text-xs)">{hm(a)}–{hm(b)}</Mono>
+                      </span>
+                    )) : <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>Not free</span>}
+                  </span>
+                  <IconButton label={'Add hours on ' + r.label} variant="ghost" size="sm"><Icon name="plus" size={14} /></IconButton>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--sp-4)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)' }}>
+                <span style={{ display: 'flex', color: 'var(--accent)' }}><Icon name="calendar-check" size={16} /></span>
+                <span style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Google Calendar</span>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Busy events block. Focus sessions block.</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)' }}>
+                <span style={{ display: 'flex', color: 'var(--fg-3)' }}><Icon name="calendar-off" size={16} /></span>
+                <span style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
+                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Fri 2 Oct</span>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Whole day off. Overrides every rule.</span>
+                </span>
+                <Button size="sm" variant="ghost">Add date</Button>
+              </div>
+            </div>
+          </Section>
+        </div>
+      </section>
+    );
+  }
+
+  function Booking() {
+    const [w, setW] = React.useState(window.innerWidth);
+    const [links, setLinks] = React.useState(LINKS);
+    const [current, setCurrent] = React.useState('intro');
+    const [toast, setToast] = React.useState(null);
+    const wide = w >= 900, docked = w >= 1100, roomy = w >= 1360;
+
+    React.useEffect(() => { const on = () => setW(window.innerWidth); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on); }, []);
+    React.useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3400); return () => clearTimeout(t); }, [toast]);
+
+    const link = links.find((l) => l.id === current) || links[0];
+    const update = (patch) => setLinks((cur) => cur.map((l) => l.id === link.id ? { ...l, ...patch } : l));
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} /> }));
+    const go = (v) => { const it = NAV.find((n) => n.value === v); if (it && it.href) location.href = it.href; };
+    const live = links.filter((l) => l.on);
+    const totalBooked = live.reduce((a, l) => a + l.booked, 0);
+    const onTarget = pct(live.reduce((a, l) => a + l.landed[0], 0), totalBooked);
+
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'stretch' }}>
+        <GlassFilters />
+        {wide && (
+          <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="booking" onChange={go} />
+          </div>
+        )}
+        <div style={{
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, height: '100vh', boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page)' : 'var(--sp-8) var(--gutter-page-sm) 116px', overflowY: docked ? 'hidden' : 'auto',
+        }}>
+          <header style={{ width: '100%', maxWidth: 1320, margin: '0 auto', flex: '0 0 auto', display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 240 }}>
+              <Kicker color="var(--fg-3)">Links clients book through</Kicker>
+              <h1 style={{ font: 'var(--type-display)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>Booking</h1>
+            </div>
+            <span style={{ display: 'flex', gap: 'var(--sp-6)', alignItems: 'baseline', flex: '0 0 auto' }}>
+              <span style={{ whiteSpace: 'nowrap' }}><Mono size="var(--text-lg)">{totalBooked}</Mono> <Kicker>booked · 30 d</Kicker></span>
+              <span style={{ whiteSpace: 'nowrap' }}><Mono size="var(--text-lg)" color={onTarget >= 75 ? 'var(--accent)' : 'var(--status-review)'}>{onTarget}%</Mono> <Kicker>on target</Kicker></span>
+            </span>
+            <Button variant="frost" iconLeft={<Icon name="plus" size={16} />} onClick={() => setToast({ icon: 'link', title: 'New link', detail: 'Starts from your Intro call rules.' })}>New link</Button>
+          </header>
+
+          <div style={{
+            width: '100%', maxWidth: 1320, margin: 'var(--sp-8) auto 0', flex: 1, minHeight: docked ? 0 : 'auto', flexShrink: docked ? 1 : 0,
+            display: 'grid', gridTemplateColumns: docked ? '300px minmax(0,1fr)' : 'minmax(0,1fr)', gap: 'var(--sp-7)',
+          }}>
+            <div className="ag-scroll" style={{ display: 'grid', gap: 'var(--sp-3)', alignContent: 'start', minHeight: 0, overflowY: docked ? 'auto' : 'visible' }}>
+              <Kicker color="var(--fg-3)" style={{ padding: '0 var(--sp-3) var(--sp-2)' }}>{live.length} on · {links.length - live.length} off</Kicker>
+              {links.map((l, i) => <LinkRow key={l.id} i={i} link={l} on={l.id === link.id} onPick={() => setCurrent(l.id)} />)}
+            </div>
+            <Detail key={link.id} link={link} update={update} wide={roomy || (!docked && wide)} onToast={setToast} />
+          </div>
+        </div>
+
+        {toast && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-13)', display: 'grid', placeItems: 'center', zIndex: 80, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <Toast icon={<Icon name={toast.icon} size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+            </span>
+          </div>
+        )}
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}><MiniNav items={navItems} value="booking" onChange={go} /></span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Booking />);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+/* ---------------------------------------------------------------
+   AURORA GLASS — BASE
+   The live half of the design system's `tokens/reset.css`.
+
+   WHY THIS IS NOT tokens/reset.css VERBATIM
+   -----------------------------------------
+   The design project links `styles.css` into a bare HTML page with no
+   other stylesheet, so its reset has to do the whole job. This app has
+   Tailwind, whose preflight already ships most of it. Importing the
+   reset unchanged would mean two resets fighting, so it is split:
+
+     Dropped — Tailwind preflight already does it
+       `box-sizing: border-box` on *, ::before, ::after
+       `-webkit-text-size-adjust: 100%` on html
+       `margin: 0` on body, headings and p
+       `font: inherit` on button/input/select/textarea
+       `cursor: pointer` on button
+
+     Kept — preflight does NOT do it, and the material needs it
+       everything below.
+
+   The design-system/ mirror keeps the untrimmed original; this file is
+   the app's copy and the two are meant to differ.
+
+   WHY THESE RULES ARE NOT IN `@layer base`
+   ----------------------------------------
+   This file is pulled in by an `@import` at the top of src/index.css,
+   above the `@tailwind` directives. Whether a `@layer base` block
+   inside an imported file gets hoisted into Tailwind's base layer
+   depends on the order Vite resolves CSS `@import` against the PostCSS
+   run — order this repo has no test for. Leaving the rules unlayered
+   sidesteps the question, and costs nothing: every rule here is an
+   element or pseudo-class selector, which any Tailwind utility class
+   already outranks on specificity alone.
+
+   The one place that is not true is `:focus-visible` (0,1,0), which
+   ties with `.outline-none` and, being unlayered, wins the tie. That
+   is the intended behaviour — the system's focus ring is not
+   negotiable per-element. Use `[data-ag-field]` to opt an inner
+   element out, which is what the composed Input does.
+
+   FIXED ON IMPORT
+   ---------------
+   The source styles `a:hover` with `--accent-blue-lift` and `a:active`
+   with `--accent-blue-sink`. Neither token exists anywhere in the
+   design system — `colors.css` defines `--accent-lift` and
+   `--accent-sink`. Links in the mockups therefore fall back to
+   unset on hover. Pointed at the real tokens here.
+   --------------------------------------------------------------- */
+
+/* Body carries the system face and the DS letter-spacing. Colour and
+   background are deliberately NOT set here — `.ag-page` owns the
+   backdrop, and src/index.css owns the body fallback, so a screen that
+   has not migrated yet keeps the background it has today. */
+body {
+  font: var(--type-body);
+  letter-spacing: var(--tracking-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-wrap: pretty;
+}
+
+/* Preflight strips headings back to `font-size: inherit`. These put the
+   type scale back. A `text-*` utility still wins — class beats element. */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-title);
+  line-height: var(--leading-snug);
+  text-wrap: balance;
+}
+h1 { font-size: var(--text-2xl); letter-spacing: var(--tracking-display); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+  text-underline-offset: 3px;
+  transition: color var(--dur-fast) var(--ease-glass);
+}
+a:hover { color: var(--accent-lift); text-decoration: underline; }
+a:active { color: var(--accent-sink); }
+
+/* Focus follows the control's OWN shape. An outline respects
+   border-radius; a box-shadow ring on an inner <input> draws a hard
+   rectangle inside its rounded parent, which is why it is not used here.
+   Composed controls (Input, and anything else whose surface lights up
+   around the field) opt their inner element out via [data-ag-field]. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+input[data-ag-field]:focus-visible,
+textarea[data-ag-field]:focus-visible {
+  outline: none;
+}
+
+::selection { background: var(--accent-wash); color: var(--fg-1); }
+
+/* Numerals: tabular everywhere a number could change in place */
+.ag-tnum, table, [data-numeric] { font-variant-numeric: tabular-nums; }
+
+/* Mono kicker label — the small uppercase run used above metrics.
+   Uppercase through `--kicker-transform`, which V3 sets to `none`. */
+.ag-kicker {
+  font: var(--type-kicker);
+  letter-spacing: var(--tracking-kicker);
+  text-transform: var(--kicker-transform);
+  color: var(--text-muted);
+}
+
+/* Scrollbars — thin, glassy, never dark grey. Replaces the block that
+   used to live in src/index.css; do not keep both. */
+* { scrollbar-width: thin; scrollbar-color: oklch(1 0 0 / 0.18) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 0.14);
+  border: 3px solid transparent;
+  border-radius: var(--r-pill);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: oklch(1 0 0 / 0.26); background-clip: content-box; }
+*::-webkit-scrollbar-corner { background: transparent; }

@@ -1,0 +1,91 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Navigation" subtitle="Floating pill rail, sliding tabs, and the flow spine" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Navigation</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../core/Icon.jsx',
+  '../navigation/MiniNav.jsx',
+  '../navigation/Tabs.jsx',
+  '../navigation/Stepper.jsx'
+]).then(function (AG) {
+  const { Icon, MiniNav, Tabs, Stepper } = AG;
+
+  function Demo() {
+    const [view, setView] = React.useState('selection');
+    const [tab, setTab] = React.useState('action');
+    const [step, setStep] = React.useState(1);
+
+    return (
+      <div className="pad col" style={{ gap: 'var(--sp-7)' }}>
+        <div className="row" style={{ gap: 'var(--sp-7)' }}>
+          <MiniNav
+            value={view}
+            onChange={setView}
+            items={[
+              { value: 'home', label: 'Home', icon: <Icon name="house" size={20} /> },
+              { value: 'selection', label: 'Tasks', icon: <Icon name="list-checks" size={20} /> },
+              { value: 'deadlines', label: 'Time', icon: <Icon name="clock" size={20} /> },
+              { value: 'focus', label: 'Focus', icon: <Icon name="target" size={20} />, badge: true },
+            ]}
+          />
+          <MiniNav
+            orientation="vertical"
+            items={[
+              { value: 'a', label: 'Home', icon: <Icon name="house" size={20} /> },
+              { value: 'b', label: 'Stats', icon: <Icon name="chart-column" size={20} /> },
+              { value: 'c', label: 'Settings', icon: <Icon name="settings" size={20} /> },
+            ]}
+          />
+          <div className="col" style={{ gap: 'var(--sp-4)', flex: 1, minWidth: 260 }}>
+            <Tabs
+              value={tab}
+              onChange={setTab}
+              tabs={[
+                { value: 'action', label: '⚡ Action Steps', count: 7 },
+                { value: 'ice', label: '🧊 Backburner', count: 12 },
+                { value: 'ref', label: '📚 Reference', count: 3 },
+              ]}
+            />
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>The underline measures each tab and slides.</span>
+          </div>
+        </div>
+
+        <div onClick={() => setStep((s) => (s + 1) % 4)} style={{ cursor: 'pointer', maxWidth: 560 }}>
+          <Stepper
+            current={step}
+            steps={[
+              { label: 'Select tasks', hint: '7 chosen' },
+              { label: 'Allocate time', hint: '3h 20m' },
+              { label: 'Focus', hint: 'Strict mode' },
+            ]}
+          />
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

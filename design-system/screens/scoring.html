@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Scoring</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  /* Placeholders are --fg-4 everywhere; pseudo-elements need a sheet. */
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+
+  /* Native date/number chrome, brought onto the palette. The picker
+     glyph ships mid-grey; it has to read as a --fg-3 label. */
+  .ag-field::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(0.72);
+    opacity: 0.8; cursor: pointer;
+  }
+  .ag-field::-webkit-inner-spin-button { display: none; }
+  .ag-select {
+    appearance: none; -webkit-appearance: none;
+  }
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page" data-screen-label="Scoring">
+<div id="root">
+  <!-- Static first paint: rail width and the session bar, so the page
+       never flashes an empty near-black field. -->
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="height:60px;border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/forms/Input.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/data/ScoreDial.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/Dialog.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, Input, Switch, ScoreDial, StatusPill, MiniNav, Dialog } = AG;
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',     icon: 'layout-dashboard', href: 'home.html' },
+    { value: 'home',      label: 'Home',          icon: 'house',            href: 'home.html' },
+    { value: 'assistant', label: 'Assistant',     icon: 'sparkles',         href: 'atlas.html' },
+    { value: 'session',   label: 'New Session',   icon: 'zap',              href: 'session.html' },
+    { value: 'score',     label: 'Score',         icon: 'award' },
+    { value: 'alerts',    label: 'Notifications', icon: 'bell',             href: 'home.html' },
+    { value: 'settings',  label: 'Settings',      icon: 'settings',         href: 'settings.html' },
+  ];
+
+  /* ------------------------------------------------------------------ *
+     THE MODEL
+
+     The score is the page's only output, so the model is written around
+     it: five factors in, one number out, out of 13.5.
+       Eisenhower  0–4   the quadrant
+       Deadline    0–4   derived from the due date, never typed
+       Personal    1–5   the only purely subjective input
+       Quasi-need  0–1   someone else is blocked
+       Duration   −0.5   a penalty on anything over two hours
+   * ------------------------------------------------------------------ */
+
+  const MAX = 13.5;
+
+  /* Each quadrant carries a status hue, used for its own meaning rather
+     than as decoration: urgent-and-important is amber (a decision now),
+     scheduled is cyan (queued), delegated is violet (someone else's
+     backburner), eliminated is grey (archived). Emerald stays out — it
+     only ever means live. */
+  const QUADRANTS = {
+    schedule:  { label: 'Schedule',  points: 2, hue: '0.70 0.15 210', ink: 'oklch(0.93 0.07 210)', hint: 'Important, not urgent \u2014 give it a slot.' },
+    do:        { label: 'Do first',  points: 4, hue: '0.75 0.15  82', ink: 'oklch(0.95 0.07 82)',  hint: 'Important and urgent \u2014 today.' },
+    eliminate: { label: 'Eliminate', points: 1, hue: '0.70 0.02 260', ink: 'oklch(0.88 0.01 260)', hint: 'Neither \u2014 consider dropping it.' },
+    delegate:  { label: 'Delegate',  points: 3, hue: '0.70 0.15 296', ink: 'oklch(0.93 0.07 296)', hint: 'Urgent, not important \u2014 hand it off.' },
+  };
+
+  /* Personal importance is one hue heating up, not five hues: the trough
+     reads as a dial, and the ramp says "more of the same thing". */
+  const HEAT = (n) => 'oklch(0.75 0.15 82 / ' + (0.05 + n * 0.035) + ')';
+  const tintOf = (hue, a, b, c) =>
+    'linear-gradient(155deg, oklch(' + hue + ' / ' + a + ') 0%, oklch(' + hue + ' / ' + b + ') 55%, oklch(' + hue + ' / ' + c + ') 100%)';
+
+  const IMPORTANCE = ['Very low', 'Low', 'Medium', 'High', 'Critical'];
+
+  const LISTS = ['\u26a1 Action Steps', '\ud83e\uddca Backburner', '\ud83d\udcda Reference Materials'];
+
+  const REMINDERS = ['None', 'At the deadline', '10 minutes before', '1 hour before', '1 day before'];
+
+  const DAY = 86400000;
+  const NOW = new Date('2026-08-21T09:00');
+
+  /* Deadline points are DERIVED. The old screen made the user judge
+     urgency twice — once on the quadrant, once by typing a date. */
+  function deadlineScore(iso) {
+    if (!iso) return { points: 0, phrase: 'No deadline set' };
+    const days = (new Date(iso) - NOW) / DAY;
+    if (days < 0)  return { points: 4,   phrase: 'Overdue by ' + Math.ceil(-days) + 'd' };
+    if (days <= 1) return { points: 3.5, phrase: 'Due within a day' };
+    if (days <= 7) return { points: 3,   phrase: 'Due in ' + Math.ceil(days) + 'd' };
+    if (days <= 21) return { points: 2,  phrase: 'Due in ' + Math.ceil(days) + 'd' };
+    if (days <= 60) return { points: 1,  phrase: 'Due in ' + Math.round(days / 7) + 'w' };
+    return { points: 0.5, phrase: 'Due in ' + Math.round(days / 30) + ' months' };
+  }
+
+  function scoreOf(t) {
+    const eis = t.quadrant ? QUADRANTS[t.quadrant].points : 0;
+    const dl = deadlineScore(t.deadline).points;
+    const per = t.importance || 0;
+    const quasi = t.quasi ? 1 : 0;
+    const penalty = Number(t.est) > 120 ? 0.5 : 0;
+    return {
+      total: Math.max(0, Math.min(MAX, eis + dl + per + quasi - penalty)),
+      factors: [
+        { key: 'eis',   label: 'Eisenhower', value: eis,   max: 4, tone: 0.62 },
+        { key: 'dl',    label: 'Deadline',   value: dl,    max: 4, tone: 0.44 },
+        { key: 'per',   label: 'Personal',   value: per,   max: 5, tone: 0.30 },
+        { key: 'quasi', label: 'Quasi-need', value: quasi, max: 1, tone: 0.19 },
+      ],
+      penalty,
+    };
+  }
+
+  /* Every field the session refuses to leave behind. */
+  function needsOf(t) {
+    const out = [];
+    if (!t.quadrant) out.push({ id: 'quadrant', label: 'Eisenhower' });
+    if (!t.importance) out.push({ id: 'importance', label: 'Importance' });
+    if (!t.deadline) out.push({ id: 'deadline', label: 'Deadline' });
+    if (!t.est) out.push({ id: 'est', label: 'Estimate' });
+    if (!t.desc.trim()) out.push({ id: 'desc', label: 'Description' });
+    return out;
+  }
+
+  const money = (n) => '\u20b9' + Number(n || 0).toLocaleString('en-IN');
+
+  function recurrenceText(r) {
+    if (!r) return '';
+    const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const unit = r.every === 1 ? r.unit.replace(/s$/, '') : r.every + ' ' + r.unit;
+    let s = 'Every ' + unit;
+    if (r.unit === 'weeks' && r.days.length) s += ' on ' + r.days.slice().sort().map((d) => names[d]).join(', ');
+    if (r.ends === 'after') s += ', ' + r.count + 'x';
+    if (r.ends === 'on' && r.until) s += ', until ' + r.until;
+    return s;
+  }
+
+  const TASKS = [
+    {
+      id: 't1', title: 'Quarterly compliance review', project: 'Shreekant Empire', list: 'Operations',
+      status: 'todo', deadline: '2026-09-08T11:00', start: '', est: 60, desc: '',
+      quadrant: 'schedule', importance: 3, value: 0, quasi: false,
+      shared: ['\u26a1 Action Steps'], assignee: null, tags: ['compliance'], links: [],
+      blockedBy: 'Section 44AD reading notes',
+      repeat: { every: 2, unit: 'weeks', days: [1, 4], ends: 'after', count: 8, until: '' },
+      occurrence: 1, reminder: '1 hour before', notes: '', cover: null, state: 'open',
+    },
+    {
+      id: 't2', title: 'Countersign the studio lease', project: 'Shreekant Empire', list: 'Legal',
+      status: 'doing', deadline: '2026-08-24T17:00', start: '2026-08-21T10:00', est: 20,
+      desc: 'Both copies signed, one scanned to the landlord, one filed.',
+      quadrant: 'do', importance: 4, value: 250000, quasi: true,
+      shared: [], assignee: 'Me', tags: ['lease', 'urgent'], links: [{ label: 'Draft v4', url: 'https://drive.example/lease-v4' }],
+      blockedBy: '', repeat: null, occurrence: null, reminder: '1 day before', notes: '', cover: null, state: 'open',
+    },
+    {
+      id: 't3', title: 'Get the acoustic treatment quote', project: 'Shreekant Empire', list: 'Studio build',
+      status: 'todo', deadline: '2026-09-04T12:00', start: '', est: 45, desc: '',
+      quadrant: 'delegate', importance: 2, value: 40000, quasi: false,
+      shared: [], assignee: null, tags: ['studio'], links: [],
+      blockedBy: '', repeat: null, occurrence: null, reminder: 'None', notes: '', cover: null, state: 'open',
+    },
+    {
+      id: 't4', title: 'Draft the launch-week invite', project: 'Shreekant Empire', list: 'Marketing',
+      status: 'todo', deadline: '2026-08-28T18:00', start: '', est: 90,
+      desc: 'One paragraph, one date, one link. Nothing else.',
+      quadrant: 'schedule', importance: 3, value: 0, quasi: false,
+      shared: ['\ud83d\udcda Reference Materials'], assignee: 'Me', tags: [], links: [],
+      blockedBy: '', repeat: null, occurrence: null, reminder: '1 hour before', notes: '', cover: null, state: 'open',
+    },
+    {
+      id: 't5', title: 'Pitch the podcast appearance', project: 'Shreekant Empire', list: 'Marketing',
+      status: 'todo', deadline: '', start: '', est: 30, desc: '',
+      quadrant: null, importance: 2, value: 0, quasi: false,
+      shared: [], assignee: null, tags: [], links: [],
+      blockedBy: '', repeat: null, occurrence: null, reminder: 'None', notes: '', cover: null, state: 'open',
+    },
+    {
+      id: 't6', title: 'Section 44AD reading notes', project: 'Shreekant Empire', list: 'Legal',
+      status: 'todo', deadline: '2026-10-30T09:00', start: '', est: 150, desc: '',
+      quadrant: 'eliminate', importance: 1, value: 0, quasi: false,
+      shared: ['\ud83e\uddca Backburner'], assignee: null, tags: ['reading'], links: [],
+      blockedBy: '', repeat: null, occurrence: null, reminder: 'None', notes: '', cover: null, state: 'open',
+    },
+  ];
+
+  /* ------------------------------------------------------------------ *
+     PRIMITIVES
+   * ------------------------------------------------------------------ */
+
+  function Kicker({ icon, children, tone = 'var(--fg-3)', style }) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
+        font: 'var(--type-kicker)', textTransform: 'uppercase',
+        letterSpacing: 'var(--tracking-kicker)', color: tone, whiteSpace: 'nowrap', ...style,
+      }}>
+        {icon && <Icon name={icon} size={13} />}
+        {children}
+      </span>
+    );
+  }
+
+  /* A carved well that can hold anything — the one surface every input
+     on this page shares, so date, number and select all read alike. */
+  function Well({ children, focus, flash, pad = '0 var(--sp-5)', height = 48, radius = 'var(--r-control)', style }) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+        minHeight: height, padding: pad, borderRadius: radius,
+        backgroundImage: 'var(--glass-well)',
+        boxShadow: flash
+          ? 'var(--glass-well-shadow), 0 0 0 1px var(--hue-amber), 0 0 22px -6px var(--hue-amber)'
+          : focus
+            ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+            : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+        transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+        ...style,
+      }}>
+        {children}
+      </div>
+    );
+  }
+
+  function Labelled({ icon, label, hint, right, children, flash }) {
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-3)', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <Kicker icon={icon} tone={flash ? 'var(--hue-amber)' : 'var(--fg-3)'}>{label}</Kicker>
+          <span style={{ flex: 1 }} />
+          {right}
+        </div>
+        {children}
+        {hint && <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>{hint}</span>}
+      </div>
+    );
+  }
+
+  const fieldStyle = (mono) => ({
+    flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent',
+    color: 'var(--fg-1)', font: mono ? 'var(--type-numeric)' : 'var(--type-body)',
+    fontSize: 'var(--text-md)', letterSpacing: 'var(--tracking-ui)',
+    fontVariantNumeric: mono ? 'tabular-nums' : undefined,
+  });
+
+  function Area({ value, onChange, placeholder, rows = 3, inputRef, flash }) {
+    const [focus, setFocus] = React.useState(false);
+    return (
+      <Well focus={focus} flash={flash} pad="var(--sp-5) var(--sp-6)" radius="var(--r-lg)" height={0}>
+        <textarea
+          ref={inputRef}
+          className="ag-field"
+          rows={rows}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+          placeholder={placeholder}
+          style={{ ...fieldStyle(false), resize: 'none', lineHeight: 'var(--leading-normal)', padding: 0 }}
+        />
+      </Well>
+    );
+  }
+
+  /* A dropdown of our own. The native select renders an OS menu that
+     ignores every rule in this system — square corners, its own blue
+     highlight, no glass. This one unfurls out of the trigger like every
+     other opening surface here. */
+  function Pick({ value, onChange, options, inputRef, placeholder }) {
+    const [open, setOpen] = React.useState(false);
+    const [hover, setHover] = React.useState(null);
+    const box = React.useRef(null);
+
+    React.useEffect(() => {
+      if (!open) return;
+      const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+      const esc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } };
+      document.addEventListener('pointerdown', away);
+      document.addEventListener('keydown', esc);
+      return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
+    }, [open]);
+
+    return (
+      <div ref={box} style={{ position: 'relative', minWidth: 0 }}>
+        <button
+          ref={inputRef}
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%',
+            minHeight: 48, padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', textAlign: 'left',
+            borderRadius: 'var(--r-control)',
+            backgroundImage: 'var(--glass-well)',
+            boxShadow: open
+              ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+              : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+            color: value ? 'var(--fg-1)' : 'var(--fg-4)',
+            font: 'var(--type-body)', fontSize: 'var(--text-md)', letterSpacing: 'var(--tracking-ui)',
+            transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+          }}
+        >
+          <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {value || placeholder}
+          </span>
+          <span style={{
+            display: 'flex', color: open ? 'var(--accent)' : 'var(--fg-4)',
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform var(--dur-base) var(--ease-glass), color var(--dur-fast) var(--ease-glass)',
+          }}>
+            <Icon name="chevron-down" size={16} />
+          </span>
+        </button>
+
+        {open && (
+          <div
+            role="listbox"
+            className="ag-scroll"
+            style={{
+              position: 'absolute', top: 'calc(100% + var(--sp-3))', left: 0, right: 0, zIndex: 60,
+              display: 'grid', gap: 2, maxHeight: 268, overflowY: 'auto',
+              padding: 'var(--sp-3)', borderRadius: 'var(--r-lg)',
+              backgroundImage: 'var(--glass-fill-3)',
+              backdropFilter: 'var(--glass-bd-xl)', WebkitBackdropFilter: 'var(--glass-bd-xl)',
+              boxShadow: 'var(--glass-shadow-thick)',
+              transformOrigin: 'top center',
+              animation: 'ag-unfurl var(--dur-morph) var(--ease-morph) both',
+            }}
+          >
+            {options.length === 0 && (
+              <span style={{ padding: 'var(--sp-4) var(--sp-5)', font: 'var(--type-caption)', color: 'var(--fg-4)' }}>Nothing left to pick.</span>
+            )}
+            {options.map((o) => {
+              const on = o === value;
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  onClick={() => { onChange(o); setOpen(false); }}
+                  onMouseEnter={() => setHover(o)}
+                  onMouseLeave={() => setHover(null)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%',
+                    minHeight: 44, padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', textAlign: 'left',
+                    borderRadius: 'var(--r-md)',
+                    backgroundImage: on ? 'var(--glass-tint-accent)' : hover === o ? 'var(--glass-fill-2)' : 'transparent',
+                    boxShadow: on ? 'var(--glass-rim-1)' : 'none',
+                    color: on ? 'oklch(0.93 0.07 162)' : 'var(--fg-2)',
+                    font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+                    transition: 'var(--t-hover)',
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0 }}>{o}</span>
+                  {on && <Icon name="check" size={15} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* A points badge. Mono, tabular, and it never carries a hue of its
+     own — the pane it sits in already says whether things are urgent. */
+  function Points({ value, tone = 'var(--fg-2)', size = 'var(--text-xs)' }) {
+    const sign = value > 0 ? '+' : value < 0 ? '\u2212' : '';
+    return (
+      <span style={{
+        font: 'var(--type-numeric)', fontSize: size, fontVariantNumeric: 'tabular-nums',
+        color: tone, whiteSpace: 'nowrap',
+      }}>
+        {sign}{Math.abs(value)}
+      </span>
+    );
+  }
+
+  function Chip({ children, icon, onRemove, onClick, tone, active }) {
+    const [hover, setHover] = React.useState(false);
+    const Tag = onClick ? 'button' : 'span';
+    return (
+      <Tag
+        type={onClick ? 'button' : undefined}
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto',
+          height: 32, padding: '0 ' + (onRemove ? 'var(--sp-3)' : 'var(--sp-5)') + ' 0 var(--sp-5)',
+          border: 0, borderRadius: 'var(--r-pill)', cursor: onClick ? 'pointer' : 'default',
+          backgroundImage: tone === 'amber'
+            ? 'var(--glass-tint-amber)'
+            : active ? 'var(--glass-fill-3)' : (hover && onClick ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)'),
+          boxShadow: tone === 'amber' ? 'var(--glass-rim-1)' : active ? 'var(--glass-rim-2)' : 'var(--glass-rim-1)',
+          color: tone === 'amber' ? 'oklch(0.95 0.07 82)' : active ? 'var(--fg-1)' : 'var(--fg-2)',
+          font: 'var(--type-label)', fontSize: 'var(--text-xs)', whiteSpace: 'nowrap',
+          transition: 'var(--t-hover)',
+        }}
+      >
+        {icon && <Icon name={icon} size={13} />}
+        {children}
+        {onRemove && (
+          <span
+            role="button"
+            aria-label="Remove"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onRemove(); } }}
+            style={{ display: 'grid', placeItems: 'center', width: 22, height: 22, borderRadius: '50%', color: 'var(--fg-3)', cursor: 'pointer' }}
+          >
+            <Icon name="x" size={13} />
+          </span>
+        )}
+      </Tag>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE INSTRUMENT — one number, and the four things that made it
+   * ------------------------------------------------------------------ */
+
+  function Instrument({ score }) {
+    const urgent = score.total >= 10;
+    return (
+      <div style={{
+        display: 'grid', gap: 'var(--sp-6)', minWidth: 288,
+        padding: 'var(--pad-card)', borderRadius: 'var(--r-card)',
+        backgroundImage: urgent ? 'var(--glass-tint-amber)' : 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-shadow-pane)',
+        transition: 'background var(--dur-slow) var(--ease-glass)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-4)' }}>
+          <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 0 }}>
+            <Kicker icon="target" tone={urgent ? 'oklch(0.95 0.07 82)' : 'var(--fg-3)'}>Priority score</Kicker>
+            <span style={{
+              font: 'var(--font-mono)', fontWeight: 'var(--weight-light)', fontSize: 'var(--text-4xl)',
+              lineHeight: 'var(--leading-tight)', letterSpacing: 'var(--tracking-display)',
+              fontVariantNumeric: 'tabular-nums',
+              color: urgent ? 'var(--hue-amber)' : 'var(--fg-1)',
+              transition: 'color var(--dur-slow) var(--ease-glass)',
+            }}>
+              {score.total.toFixed(1)}
+            </span>
+          </div>
+          <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)', paddingBottom: 6 }}>/ {MAX}</span>
+        </div>
+
+        {/* One bar, four segments. Whites, not a rainbow: the hues in
+            this system are reserved for status. */}
+        <div style={{
+          display: 'flex', gap: 2, height: 10, padding: 2, borderRadius: 'var(--r-pill)',
+          backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden',
+        }}>
+          {score.factors.filter((f) => f.value > 0).map((f) => (
+            <span key={f.key} style={{
+              flex: f.value + ' 0 0', minWidth: 3, borderRadius: 'var(--r-pill)',
+              background: 'oklch(1 0 0 / ' + f.tone + ')',
+              transition: 'flex-grow var(--dur-slow) var(--ease-glass)',
+            }} />
+          ))}
+          <span style={{ flex: Math.max(0, MAX - score.total) + ' 0 0' }} />
+        </div>
+
+        <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+          {score.factors.map((f) => (
+            <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+              <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, flex: '0 0 auto', background: 'oklch(1 0 0 / ' + f.tone + ')' }} />
+              <span style={{ flex: 1, minWidth: 0, font: 'var(--type-caption)', color: f.value ? 'var(--fg-2)' : 'var(--fg-4)' }}>{f.label}</span>
+              <Points value={f.value} tone={f.value ? 'var(--fg-1)' : 'var(--fg-4)'} />
+              <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)', width: 26, textAlign: 'right' }}>/{f.max}</span>
+            </div>
+          ))}
+          {score.penalty > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line-faint)' }}>
+              <span aria-hidden="true" style={{ width: 8, height: 8, flex: '0 0 auto', borderRadius: 2, background: 'repeating-linear-gradient(45deg, var(--fg-4) 0 2px, transparent 2px 4px)' }} />
+              <span style={{ flex: 1, minWidth: 0, font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Over two hours</span>
+              <Points value={-score.penalty} tone="var(--fg-3)" />
+              <span style={{ width: 26 }} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE EISENHOWER GRID — the single most consequential input, so it
+     gets real estate and axis labels that read horizontally.
+   * ------------------------------------------------------------------ */
+
+  function Quadrants({ value, onChange, firstRef, flash }) {
+    const cell = (key) => {
+      const q = QUADRANTS[key];
+      const on = value === key;
+      return (
+        <button
+          key={key}
+          ref={key === 'schedule' ? firstRef : undefined}
+          type="button"
+          onClick={() => onChange(key)}
+          aria-pressed={on}
+          style={{
+            display: 'grid', alignContent: 'space-between', gap: 'var(--sp-3)',
+            minHeight: 104, padding: 'var(--sp-5)', border: 0, cursor: 'pointer', textAlign: 'left',
+            borderRadius: 'var(--r-tile)',
+            backgroundImage: on ? tintOf(q.hue, 0.30, 0.10, 0.19) : tintOf(q.hue, 0.10, 0.03, 0.07),
+            boxShadow: on
+              ? 'var(--glass-rim-2), 0 0 0 1px oklch(' + q.hue + ' / 0.45), 0 0 26px -6px oklch(' + q.hue + ' / 0.55)'
+              : flash
+                ? 'var(--glass-rim-1), 0 0 0 1px var(--hue-amber)'
+                : 'var(--glass-rim-1), inset 0 0 0 1px oklch(' + q.hue + ' / 0.16)',
+            color: on ? 'var(--fg-1)' : 'var(--fg-1)',
+            transition: 'var(--t-hover)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', flex: 1, minWidth: 0,
+              font: 'var(--type-title)', fontSize: 'var(--text-md)', letterSpacing: 'var(--tracking-ui)',
+            }}>
+              <span aria-hidden="true" style={{
+                width: 5, height: 5, borderRadius: '50%', flex: '0 0 auto',
+                background: 'oklch(' + q.hue + ')',
+                boxShadow: on ? '0 0 8px oklch(' + q.hue + ' / 0.9)' : 'none',
+                opacity: on ? 1 : 0.75,
+              }} />
+              {q.label}
+            </span>
+            <Points value={q.points} tone={on ? q.ink : 'var(--fg-2)'} size="var(--text-sm)" />
+          </div>
+          <span style={{
+            font: 'var(--type-caption)', color: on ? q.ink : 'var(--fg-2)',
+            textWrap: 'pretty',
+          }}>
+            {q.hint}
+          </span>
+        </button>
+      );
+    };
+
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '92px 1fr 1fr', gap: 'var(--sp-4)', alignItems: 'stretch' }}>
+        <span />
+        <Kicker style={{ justifyContent: 'center' }}>Not urgent</Kicker>
+        <Kicker icon="flame" style={{ justifyContent: 'center' }}>Urgent</Kicker>
+
+        <Kicker style={{ alignSelf: 'center' }}>Important</Kicker>
+        {cell('schedule')}
+        {cell('do')}
+
+        <Kicker style={{ alignSelf: 'center', whiteSpace: 'normal', textWrap: 'pretty' }}>Not important</Kicker>
+        {cell('eliminate')}
+        {cell('delegate')}
+      </div>
+    );
+  }
+
+  /* Five stops in a trough. Only the ends are labelled — a caption under
+     every number is five times the ink for the same information. */
+  function Importance({ value, onChange, firstRef, flash }) {
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+        <div style={{
+          display: 'grid', gridAutoFlow: 'column', gridAutoColumns: '1fr', gap: 'var(--sp-2)',
+          padding: 4, borderRadius: 'var(--r-pill)',
+          backgroundImage: 'var(--glass-well)',
+          boxShadow: flash ? 'var(--glass-well-shadow), 0 0 0 1px var(--hue-amber)' : 'var(--glass-well-shadow)',
+        }}>
+          {[1, 2, 3, 4, 5].map((n) => {
+            const on = value === n;
+            return (
+              <button
+                key={n}
+                ref={n === 1 ? firstRef : undefined}
+                type="button"
+                onClick={() => onChange(n)}
+                aria-pressed={on}
+                aria-label={n + ' \u2014 ' + IMPORTANCE[n - 1]}
+                style={{
+                  height: 44, border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
+                  backgroundImage: on
+                    ? tintOf('0.75 0.15 82', 0.34, 0.12, 0.22)
+                    : 'linear-gradient(155deg, ' + HEAT(n) + ', ' + HEAT(n) + ')',
+                  boxShadow: on
+                    ? 'var(--glass-rim-2), 0 0 0 1px oklch(0.75 0.15 82 / 0.45), 0 0 24px -6px oklch(0.75 0.15 82 / 0.6)'
+                    : 'none',
+                  color: on ? 'oklch(0.96 0.07 82)' : 'var(--fg-1)',
+                  font: 'var(--type-numeric)', fontSize: 'var(--text-md)',
+                  transition: 'var(--t-hover)',
+                }}
+              >
+                {n}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Kicker tone="var(--fg-4)">Very low</Kicker>
+          <Kicker tone="var(--fg-4)">Critical</Kicker>
+        </div>
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     DETAIL SECTIONS — everything that is true of the task but does not
+     move the number. Collapsed by default, and each header carries its
+     own outstanding count so nothing hides.
+   * ------------------------------------------------------------------ */
+
+  function Section({ icon, title, hint, need, open, onToggle, children }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <div style={{
+        borderRadius: 'var(--r-card)',
+        backgroundImage: 'var(--glass-fill-1)',
+        backdropFilter: 'var(--glass-bd-sm)', WebkitBackdropFilter: 'var(--glass-bd-sm)',
+        boxShadow: open ? 'var(--glass-shadow-pane)' : 'var(--glass-rim-1), var(--glass-cast-1)',
+        transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+      }}>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', width: '100%',
+            padding: 'var(--sp-6) var(--pad-card)', border: 0, background: 'transparent',
+            cursor: 'pointer', textAlign: 'left', borderRadius: 'var(--r-card)',
+          }}
+        >
+          <span style={{
+            display: 'grid', placeItems: 'center', width: 38, height: 38, flex: '0 0 auto',
+            borderRadius: 'var(--r-sm)',
+            backgroundImage: open ? 'var(--glass-fill-3)' : 'var(--glass-fill-1)',
+            boxShadow: 'var(--glass-rim-1)', color: open || hover ? 'var(--fg-1)' : 'var(--fg-3)',
+            transition: 'var(--t-hover)',
+          }}>
+            <Icon name={icon} size={17} />
+          </span>
+          <div style={{ display: 'grid', gap: 2, flex: 1, minWidth: 0 }}>
+            <span style={{ font: 'var(--type-title)', fontSize: 'var(--text-md)', color: 'var(--fg-1)' }}>{title}</span>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hint}</span>
+          </div>
+          {need > 0 && <Chip tone="amber">{need} needed</Chip>}
+          <span style={{
+            display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto',
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform var(--dur-base) var(--ease-glass)',
+          }}>
+            <Icon name="chevron-down" size={18} />
+          </span>
+        </button>
+        {open && (
+          <div style={{
+            display: 'grid', gap: 'var(--gap-stack)',
+            padding: '0 var(--pad-card) var(--pad-card)',
+            animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+          }}>
+            {children}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     CUSTOM RECURRENCE — same fields as the old modal, on-system. The
+     three "Ends" radios become a SegmentedControl: this system has no
+     radio, because every exclusive choice in the product is one of these.
+   * ------------------------------------------------------------------ */
+
+  function RecurrenceDialog({ open, initial, onClose, onSave }) {
+    const base = { every: 1, unit: 'weeks', days: [], ends: 'never', count: 8, until: '' };
+    const [r, setR] = React.useState(initial || base);
+    React.useEffect(() => { if (open) setR(initial || base); }, [open]);
+
+    const set = (k, v) => setR((cur) => Object.assign({}, cur, { [k]: v }));
+    const toggleDay = (d) => setR((cur) => Object.assign({}, cur, {
+      days: cur.days.indexOf(d) > -1 ? cur.days.filter((x) => x !== d) : cur.days.concat(d),
+    }));
+
+    return (
+      <Dialog open={open} onClose={onClose} width={520} style={{ gap: 0, padding: 0 }}>
+        <div style={{ display: 'grid', gap: 'var(--sp-8)', padding: 'var(--pad-sheet)' }}>
+          <header style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-5)' }}>
+            <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 0 }}>
+              <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                Custom repeat
+              </h2>
+              <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--accent)' }}>
+                {recurrenceText(r) || 'Not repeating'}
+              </span>
+            </div>
+            <IconButton label="Close" variant="ghost" onClick={onClose}><Icon name="x" size={18} /></IconButton>
+          </header>
+
+          <Labelled icon="repeat" label="Repeat every">
+            <div style={{ display: 'flex', gap: 'var(--sp-4)' }}>
+              <Well style={{ width: 92, flex: '0 0 auto' }}>
+                <input
+                  className="ag-field"
+                  type="number"
+                  min="1"
+                  max="99"
+                  value={r.every}
+                  onChange={(e) => set('every', Math.max(1, Number(e.target.value) || 1))}
+                  aria-label="Repeat interval"
+                  style={{ ...fieldStyle(true), textAlign: 'center' }}
+                />
+              </Well>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Pick value={r.unit} onChange={(v) => set('unit', v)} options={['days', 'weeks', 'months', 'years']} />
+              </div>
+            </div>
+          </Labelled>
+
+          {r.unit === 'weeks' && (
+            <Labelled icon="calendar-days" label="Repeat on">
+              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => {
+                  const on = r.days.indexOf(i) > -1;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => toggleDay(i)}
+                      aria-pressed={on}
+                      aria-label={['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][i]}
+                      style={{
+                        width: 44, height: 44, border: 0, cursor: 'pointer', borderRadius: '50%',
+                        backgroundImage: on ? 'var(--glass-tint-accent)' : 'var(--glass-well)',
+                        boxShadow: on ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-well-shadow)',
+                        color: on ? 'oklch(0.93 0.07 162)' : 'var(--fg-3)',
+                        font: 'var(--type-label)', transition: 'var(--t-hover)',
+                      }}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            </Labelled>
+          )}
+
+          <Labelled icon="flag" label="Ends">
+            <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+              <SegmentedControl
+                value={r.ends}
+                onChange={(v) => set('ends', v)}
+                style={{ width: '100%' }}
+                options={[
+                  { value: 'never', label: 'Never' },
+                  { value: 'on', label: 'On a date' },
+                  { value: 'after', label: 'After' },
+                ]}
+              />
+              {r.ends === 'on' && (
+                <Well>
+                  <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="calendar" size={16} /></span>
+                  <input className="ag-field" type="date" value={r.until} onChange={(e) => set('until', e.target.value)} aria-label="Repeat until" style={fieldStyle(true)} />
+                </Well>
+              )}
+              {r.ends === 'after' && (
+                <Well>
+                  <input
+                    className="ag-field"
+                    type="number"
+                    min="1"
+                    value={r.count}
+                    onChange={(e) => set('count', Math.max(1, Number(e.target.value) || 1))}
+                    aria-label="Number of occurrences"
+                    style={{ ...fieldStyle(true), flex: '0 0 64px', textAlign: 'center' }}
+                  />
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>occurrences</span>
+                </Well>
+              )}
+            </div>
+          </Labelled>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--line-faint)' }}>
+            <Button variant="ghost" onClick={() => { onSave(null); onClose(); }}>Don't repeat</Button>
+            <span style={{ flex: 1 }} />
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button variant="solid" onClick={() => { onSave(r); onClose(); }}>Save repeat</Button>
+          </div>
+        </div>
+      </Dialog>
+    );
+  }
+
+  /* ------------------------------------------------------------------ *
+     THE SCREEN
+   * ------------------------------------------------------------------ */
+
+  function Scoring() {
+    const [tasks, setTasks] = React.useState(TASKS);
+    const [i, setI] = React.useState(0);
+    const [wide, setWide] = React.useState(window.innerWidth >= 1180);
+    const [open, setOpen] = React.useState({ essentials: true, organize: false, advanced: false });
+    const [repeatOpen, setRepeatOpen] = React.useState(false);
+    const [flash, setFlash] = React.useState(null);
+    const [tagDraft, setTagDraft] = React.useState('');
+    const [linkDraft, setLinkDraft] = React.useState({ label: '', url: '' });
+
+    const refs = {
+      quadrant: React.useRef(null), importance: React.useRef(null),
+      deadline: React.useRef(null), est: React.useRef(null), desc: React.useRef(null),
+    };
+
+    React.useEffect(() => {
+      const onResize = () => setWide(window.innerWidth >= 1180);
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    const t = tasks[i];
+    const score = scoreOf(t);
+    const needs = needsOf(t);
+    const dl = deadlineScore(t.deadline);
+    const remaining = tasks.filter((x, n) => n > i && x.state === 'open').length;
+
+    const patch = (k, v) => setTasks((cur) => cur.map((x, n) => (n === i ? Object.assign({}, x, { [k]: v }) : x)));
+
+    /* A need chip is a jump, not a label. Focus the field it names; for
+       the two that aren't text inputs, ring them amber for a beat. */
+    const jump = (id) => {
+      const el = refs[id] && refs[id].current;
+      if (id === 'desc' || id === 'organize') setOpen((o) => Object.assign({}, o, { essentials: true }));
+      setFlash(id);
+      window.setTimeout(() => setFlash(null), 1400);
+      if (el) window.setTimeout(() => el.focus({ preventScroll: false }), 40);
+    };
+
+    const advance = (mark) => {
+      if (mark) setTasks((cur) => cur.map((x, n) => (n === i ? Object.assign({}, x, { state: mark }) : x)));
+      setI((n) => Math.min(tasks.length - 1, n + 1));
+      setOpen({ essentials: true, organize: false, advanced: false });
+    };
+
+    React.useEffect(() => {
+      const onKey = (e) => {
+        if (e.target.matches('input, textarea, select')) {
+          if (!((e.metaKey || e.ctrlKey) && e.key === 'Enter')) return;
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !needs.length) { e.preventDefault(); advance('scored'); }
+        else if (e.key === 'ArrowRight' && !e.metaKey) advance(null);
+        else if (e.key === 'ArrowLeft' && !e.metaKey) setI((n) => Math.max(0, n - 1));
+      };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+    }, [i, needs.length, tasks]);
+
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+    const go = (v) => { const hit = NAV.find((n) => n.value === v); if (hit && hit.href) location.href = hit.href; };
+
+    const organizeNeed = 0;
+    const essentialsNeed = needs.filter((n) => n.id === 'desc').length;
+
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'flex-start' }}>
+        <GlassFilters />
+
+        <div style={{ position: 'sticky', top: 'var(--sp-9)', flex: '0 0 auto', padding: wide ? 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' : 'var(--sp-6) 0 var(--sp-6) var(--sp-5)', zIndex: 40 }}>
+          <MiniNav orientation="vertical" items={navItems} value="score" onChange={go} />
+        </div>
+
+        <div style={{
+          flex: 1, minWidth: 0, display: 'grid', gap: 'var(--sp-8)',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-13)' : 'var(--sp-8) var(--gutter-page-sm) var(--sp-13)',
+        }}>
+          {/* ---- Session bar. The one place the system voice speaks. ---- */}
+          <header style={{
+            position: 'sticky', top: 'var(--sp-5)', zIndex: 30,
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
+            padding: 'var(--sp-4) var(--sp-5) var(--sp-4) var(--sp-4)',
+            borderRadius: 'var(--r-pill)',
+            backgroundImage: 'var(--glass-fill-2)',
+            backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+            boxShadow: 'var(--glass-shadow-pane)',
+          }}>
+            <a href="home.html" style={{ display: 'flex', border: 0 }} aria-label="Back to Home">
+              <IconButton label="Back to Home" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+            </a>
+            <span style={{ font: 'var(--type-system)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-system)', color: 'var(--fg-1)', whiteSpace: 'nowrap' }}>
+              Needs attention
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-3)' }}>
+              <span style={{ color: 'var(--fg-1)' }}>{i + 1}</span>/{tasks.length}
+            </span>
+            <div style={{ flex: 1, minWidth: 120, height: 6, borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden' }}>
+              <span style={{
+                display: 'block', height: '100%', width: ((i + 1) / tasks.length * 100) + '%',
+                borderRadius: 'var(--r-pill)', background: 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.55), var(--accent))',
+                boxShadow: '0 0 14px -2px var(--accent)',
+                transition: 'width var(--dur-slow) var(--ease-glass)',
+              }} />
+            </div>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', whiteSpace: 'nowrap' }}>{remaining} remaining</span>
+            <a href="home.html" style={{ display: 'flex', border: 0 }}>
+              <Button variant="ghost" size="sm" iconLeft={<Icon name="log-out" size={15} />}>End session</Button>
+            </a>
+          </header>
+
+          {/* ---- The queue. One row, scores visible, so the order of the
+                  session is legible before you touch anything. ---- */}
+          <div className="ag-scroll" style={{ display: 'flex', gap: 'var(--sp-3)', overflowX: 'auto', paddingBottom: 2, margin: '0 calc(var(--sp-3) * -1)', padding: '0 var(--sp-3) 2px' }}>
+            {tasks.map((x, n) => {
+              const on = n === i;
+              const s = scoreOf(x);
+              const short = needsOf(x).length;
+              return (
+                <button
+                  key={x.id}
+                  type="button"
+                  onClick={() => setI(n)}
+                  aria-current={on ? 'true' : undefined}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flex: '0 0 auto',
+                    maxWidth: 300, height: 46, padding: '0 var(--sp-5)', border: 0, cursor: 'pointer',
+                    borderRadius: 'var(--r-pill)',
+                    backgroundImage: on ? 'var(--glass-fill-3)' : 'var(--glass-fill-1)',
+                    boxShadow: on ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-rim-1)',
+                    color: on ? 'var(--fg-1)' : 'var(--fg-3)',
+                    opacity: x.state === 'skipped' ? 0.5 : 1,
+                    transition: 'var(--t-hover)',
+                  }}
+                >
+                  {x.state === 'scored'
+                    ? <span style={{ display: 'flex', color: 'var(--accent)' }}><Icon name="check" size={15} /></span>
+                    : short > 0
+                      ? <span aria-label={short + ' fields needed'} style={{ width: 7, height: 7, flex: '0 0 auto', borderRadius: '50%', background: 'var(--hue-amber)', boxShadow: '0 0 8px var(--hue-amber)' }} />
+                      : <span style={{ width: 7, flex: '0 0 auto' }} />}
+                  <span style={{ font: 'var(--type-label)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{x.title}</span>
+                  <ScoreDial value={s.total} size="sm" />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ---- The subject ---- */}
+          <div style={{ display: 'flex', gap: 'var(--gap-card)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 420px', minWidth: 0, display: 'grid', gap: 'var(--sp-5)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+                <Chip icon="folder">{t.project}</Chip>
+                <span style={{ color: 'var(--fg-4)' }}><Icon name="chevron-right" size={14} /></span>
+                <Chip icon="list">{t.list}</Chip>
+                <StatusPill status={t.status === 'done' ? 'done' : t.status === 'doing' ? 'running' : 'queued'}>
+                  {t.status === 'done' ? 'Done' : t.status === 'doing' ? 'In progress' : 'To do'}
+                </StatusPill>
+              </div>
+              <input
+                value={t.title}
+                onChange={(e) => patch('title', e.target.value)}
+                aria-label="Task title"
+                className="ag-field"
+                style={{
+                  width: '100%', border: 0, background: 'transparent', padding: 0,
+                  font: 'var(--type-display)', fontSize: 'var(--text-3xl)',
+                  letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)',
+                }}
+              />
+
+              {/* What the session is still waiting for. Each chip jumps. */}
+              {needs.length > 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                  <Kicker icon="triangle-alert" tone="var(--hue-amber)">Needs</Kicker>
+                  {needs.map((n) => (
+                    <Chip key={n.id} tone="amber" onClick={() => jump(n.id)}>{n.label}</Chip>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+                  <Kicker icon="check" tone="var(--accent)">Complete</Kicker>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Everything this score needs is filled.</span>
+                </div>
+              )}
+            </div>
+
+            <Instrument score={score} />
+          </div>
+
+          {/* ---- Two columns: what moves the number, and what doesn't ---- */}
+          <div style={{
+            display: 'grid', gap: 'var(--gap-card)', alignItems: 'start',
+            gridTemplateColumns: wide ? 'minmax(0, 1.35fr) minmax(0, 1fr)' : '1fr',
+          }}>
+            {/* ============ SCORE INPUTS ============ */}
+            <div style={{
+              display: 'grid', gap: 'var(--sp-9)',
+              padding: 'var(--pad-card-lg)', borderRadius: 'var(--r-card-lg)',
+              backgroundImage: 'var(--glass-fill-2)',
+              backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+              boxShadow: 'var(--glass-shadow-pane)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
+                <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                  What decides the score
+                </h2>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>Five inputs. Nothing else counts.</span>
+              </div>
+
+              <Labelled
+                icon="grid-2x2"
+                label="Eisenhower quadrant"
+                flash={flash === 'quadrant'}
+                right={<Points value={t.quadrant ? QUADRANTS[t.quadrant].points : 0} tone="var(--fg-2)" />}
+              >
+                <Quadrants value={t.quadrant} onChange={(v) => patch('quadrant', v)} firstRef={refs.quadrant} flash={flash === 'quadrant'} />
+              </Labelled>
+
+              <Labelled
+                icon="star"
+                label="Personal importance"
+                flash={flash === 'importance'}
+                right={<span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{t.importance ? IMPORTANCE[t.importance - 1] : 'Not set'}</span>
+                  <Points value={t.importance || 0} tone="var(--fg-2)" />
+                </span>}
+                hint="The only subjective input. Everything else is derived."
+              >
+                <Importance value={t.importance} onChange={(v) => patch('importance', v)} firstRef={refs.importance} flash={flash === 'importance'} />
+              </Labelled>
+
+              {/* Dates live HERE, not under "Essentials": they are what
+                  the Deadline factor is computed from. */}
+              <div style={{ display: 'grid', gap: 'var(--gap-stack)', gridTemplateColumns: wide ? '1fr 1fr' : '1fr' }}>
+                <Labelled
+                  icon="calendar-clock"
+                  label="Deadline"
+                  flash={flash === 'deadline'}
+                  right={<Points value={dl.points} tone={dl.points >= 3.5 ? 'var(--hue-amber)' : 'var(--fg-2)'} />}
+                  hint={dl.phrase + ' \u2014 the Deadline factor is derived from this.'}
+                >
+                  <Well flash={flash === 'deadline'}>
+                    <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="calendar" size={16} /></span>
+                    <input
+                      ref={refs.deadline}
+                      className="ag-field"
+                      type="datetime-local"
+                      value={t.deadline}
+                      onChange={(e) => patch('deadline', e.target.value)}
+                      aria-label="Deadline"
+                      style={fieldStyle(true)}
+                    />
+                  </Well>
+                </Labelled>
+
+                <Labelled icon="play" label="Start date" hint="Optional. Blocks the task from surfacing early.">
+                  <Well>
+                    <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="calendar" size={16} /></span>
+                    <input
+                      className="ag-field"
+                      type="datetime-local"
+                      value={t.start}
+                      onChange={(e) => patch('start', e.target.value)}
+                      aria-label="Start date"
+                      style={fieldStyle(true)}
+                    />
+                  </Well>
+                </Labelled>
+              </div>
+
+              <div style={{ display: 'grid', gap: 'var(--gap-stack)', gridTemplateColumns: wide ? '1fr 1fr' : '1fr' }}>
+                <Labelled
+                  icon="clock"
+                  label="Estimate"
+                  flash={flash === 'est'}
+                  right={score.penalty > 0 ? <Points value={-score.penalty} tone="var(--fg-3)" /> : null}
+                  hint={score.penalty > 0 ? 'Over two hours \u2014 half a point off, so it cannot crowd out short work.' : 'Feeds the session clock and the duration penalty.'}
+                >
+                  <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                    <Well flash={flash === 'est'}>
+                      <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="timer" size={16} /></span>
+                      <input
+                        ref={refs.est}
+                        className="ag-field"
+                        type="number"
+                        min="0"
+                        step="5"
+                        value={t.est}
+                        onChange={(e) => patch('est', e.target.value === '' ? '' : Number(e.target.value))}
+                        aria-label="Estimated minutes"
+                        style={fieldStyle(true)}
+                      />
+                      <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)' }}>MIN</span>
+                    </Well>
+                    <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                      {[15, 30, 60, 90, 120].map((m) => (
+                        <Chip key={m} onClick={() => patch('est', m)} active={Number(t.est) === m}>{m}m</Chip>
+                      ))}
+                    </div>
+                  </div>
+                </Labelled>
+
+                <div style={{ display: 'grid', gap: 'var(--gap-stack)', alignContent: 'start' }}>
+                  <Labelled icon="indian-rupee" label="Value" hint={'Rolls up into ' + t.list + ' and the project total.'}>
+                    <Well>
+                      <span style={{ font: 'var(--type-numeric)', color: 'var(--fg-4)' }}>&#8377;</span>
+                      <input
+                        className="ag-field"
+                        type="number"
+                        min="0"
+                        step="1000"
+                        value={t.value}
+                        onChange={(e) => patch('value', e.target.value === '' ? 0 : Number(e.target.value))}
+                        aria-label="Value in rupees"
+                        style={fieldStyle(true)}
+                      />
+                      <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)' }}>{money(t.value)}</span>
+                    </Well>
+                  </Labelled>
+
+                  <Well style={{ minHeight: 60, padding: 'var(--sp-4) var(--sp-6)', borderRadius: 'var(--r-lg)' }}>
+                    <div style={{ display: 'grid', gap: 2, flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', font: 'var(--type-label)', color: 'var(--fg-1)' }}>
+                        Quasi-need
+                        <Points value={1} tone="var(--fg-3)" />
+                      </span>
+                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>Someone else is blocked until this lands.</span>
+                    </div>
+                    <Switch checked={t.quasi} onChange={(v) => patch('quasi', typeof v === 'boolean' ? v : !t.quasi)} aria-label="Quasi-need" />
+                  </Well>
+                </div>
+              </div>
+            </div>
+
+            {/* ============ EVERYTHING ELSE ============ */}
+            <div style={{ display: 'grid', gap: 'var(--sp-5)', alignContent: 'start' }}>
+              <Section
+                icon="align-left"
+                title="Essentials"
+                hint="Status and description"
+                need={essentialsNeed}
+                open={open.essentials}
+                onToggle={() => setOpen((o) => Object.assign({}, o, { essentials: !o.essentials }))}
+              >
+                <Labelled icon="circle-dot" label="Status">
+                  <SegmentedControl
+                    value={t.status}
+                    onChange={(v) => patch('status', v)}
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'todo', label: 'To do' },
+                      { value: 'doing', label: 'In progress' },
+                      { value: 'done', label: 'Done' },
+                    ]}
+                  />
+                </Labelled>
+
+                <Labelled
+                  icon="text"
+                  label="Description"
+                  flash={flash === 'desc'}
+                  right={!t.desc.trim() ? <Chip tone="amber">Needed</Chip> : null}
+                  hint="What actually needs doing, and why."
+                >
+                  <Area
+                    value={t.desc}
+                    onChange={(v) => patch('desc', v)}
+                    placeholder="One or two lines. What has to be true when it's done."
+                    rows={3}
+                    inputRef={refs.desc}
+                    flash={flash === 'desc'}
+                  />
+                </Labelled>
+              </Section>
+
+              <Section
+                icon="share-2"
+                title="Organize"
+                hint={'Assignee, tags, links' + (t.blockedBy ? ' \u00b7 blocked' : '')}
+                need={organizeNeed}
+                open={open.organize}
+                onToggle={() => setOpen((o) => Object.assign({}, o, { organize: !o.organize }))}
+              >
+                {t.blockedBy && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+                    padding: 'var(--sp-4) var(--sp-5)', borderRadius: 'var(--r-lg)',
+                    backgroundImage: 'var(--glass-tint-amber)', boxShadow: 'var(--glass-rim-1)',
+                  }}>
+                    <span style={{ display: 'flex', color: 'var(--hue-amber)' }}><Icon name="lock" size={16} /></span>
+                    <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                      <span style={{ font: 'var(--type-label)', color: 'oklch(0.95 0.07 82)' }}>Blocked by {t.blockedBy}</span>
+                      <span style={{ font: 'var(--type-caption)', color: 'oklch(0.95 0.07 82)', opacity: 0.72 }}>A soft warning. Never hidden, never reordered.</span>
+                    </div>
+                  </div>
+                )}
+
+                <Labelled icon="share-2" label="Also shown in" hint="Shared tasks stay in sync everywhere they appear.">
+                  <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                    <Pick
+                      value=""
+                      placeholder={'Share into another list…'}
+                      onChange={(v) => { if (v && t.shared.indexOf(v) < 0) patch('shared', t.shared.concat(v)); }}
+                      options={LISTS.filter((l) => t.shared.indexOf(l) < 0)}
+                    />
+                    {t.shared.length > 0 && (
+                      <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                        {t.shared.map((s) => (
+                          <Chip key={s} onRemove={() => patch('shared', t.shared.filter((x) => x !== s))}>{s}</Chip>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Labelled>
+
+                <div style={{ display: 'grid', gap: 'var(--gap-stack)', gridTemplateColumns: '1fr' }}>
+                  <Labelled icon="user-round" label="Assignee">
+                    {t.assignee ? (
+                      <Well>
+                        <span style={{ display: 'grid', placeItems: 'center', width: 28, height: 28, borderRadius: '50%', backgroundImage: 'var(--glass-fill-3)', boxShadow: 'var(--glass-rim-2)', color: 'var(--fg-1)', font: 'var(--type-kicker)' }}>
+                          {t.assignee.slice(0, 1).toUpperCase()}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)' }}>{t.assignee}</span>
+                        <IconButton label="Unassign" variant="ghost" onClick={() => patch('assignee', null)}><Icon name="x" size={16} /></IconButton>
+                      </Well>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => patch('assignee', 'Me')}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%',
+                          minHeight: 48, padding: '0 var(--sp-5)', cursor: 'pointer',
+                          borderRadius: 'var(--r-control)', border: '1px dashed var(--line-strong)',
+                          background: 'transparent', color: 'var(--fg-3)', font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+                          transition: 'var(--t-hover)',
+                        }}
+                      >
+                        <Icon name="user-round-plus" size={16} />
+                        Assign to me
+                      </button>
+                    )}
+                  </Labelled>
+
+                  <Labelled icon="tag" label="Tags">
+                    <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                      {t.tags.length > 0 && (
+                        <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                          {t.tags.map((tag) => (
+                            <Chip key={tag} onRemove={() => patch('tags', t.tags.filter((x) => x !== tag))}>#{tag}</Chip>
+                          ))}
+                        </div>
+                      )}
+                      <Well>
+                        <input
+                          className="ag-field"
+                          value={tagDraft}
+                          onChange={(e) => setTagDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter' || !tagDraft.trim()) return;
+                            e.preventDefault();
+                            patch('tags', t.tags.concat(tagDraft.trim().replace(/^#/, '')));
+                            setTagDraft('');
+                          }}
+                          placeholder="Add tag, then Enter"
+                          aria-label="Add tag"
+                          style={fieldStyle(false)}
+                        />
+                      </Well>
+                    </div>
+                  </Labelled>
+
+                  <Labelled icon="link" label="Links">
+                    <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                      {t.links.map((l, n) => (
+                        <Well key={n}>
+                          <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name="link" size={15} /></span>
+                          <span style={{ flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {l.label || l.url}
+                          </span>
+                          <IconButton label="Remove link" variant="ghost" onClick={() => patch('links', t.links.filter((x, m) => m !== n))}><Icon name="x" size={16} /></IconButton>
+                        </Well>
+                      ))}
+                      <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                        <Well style={{ flex: '0 0 34%' }}>
+                          <input className="ag-field" value={linkDraft.label} onChange={(e) => setLinkDraft({ label: e.target.value, url: linkDraft.url })} placeholder="Label" aria-label="Link label" style={fieldStyle(false)} />
+                        </Well>
+                        <Well style={{ flex: 1, minWidth: 0 }}>
+                          <input
+                            className="ag-field"
+                            value={linkDraft.url}
+                            onChange={(e) => setLinkDraft({ label: linkDraft.label, url: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter' || !linkDraft.url.trim()) return;
+                              e.preventDefault();
+                              patch('links', t.links.concat(linkDraft));
+                              setLinkDraft({ label: '', url: '' });
+                            }}
+                            placeholder={'https://…'}
+                            aria-label="Link URL"
+                            style={fieldStyle(false)}
+                          />
+                        </Well>
+                        <IconButton
+                          label="Add link"
+                          onClick={() => { if (!linkDraft.url.trim()) return; patch('links', t.links.concat(linkDraft)); setLinkDraft({ label: '', url: '' }); }}
+                        >
+                          <Icon name="plus" size={16} />
+                        </IconButton>
+                      </div>
+                    </div>
+                  </Labelled>
+                </div>
+              </Section>
+
+              <Section
+                icon="sliders-horizontal"
+                title="Advanced"
+                hint={(t.repeat ? recurrenceText(t.repeat) : 'No repeat') + ' \u00b7 ' + t.reminder.toLowerCase()}
+                need={0}
+                open={open.advanced}
+                onToggle={() => setOpen((o) => Object.assign({}, o, { advanced: !o.advanced }))}
+              >
+                <Labelled
+                  icon="repeat"
+                  label="Repeat"
+                  right={t.repeat && t.occurrence ? <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)' }}>{t.occurrence} of {t.repeat.count}</span> : null}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setRepeatOpen(true)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%',
+                      minHeight: 48, padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', textAlign: 'left',
+                      borderRadius: 'var(--r-control)',
+                      backgroundImage: 'var(--glass-well)',
+                      boxShadow: 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
+                      color: t.repeat ? 'var(--fg-1)' : 'var(--fg-4)',
+                      font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+                    }}
+                  >
+                    <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {t.repeat ? recurrenceText(t.repeat) : 'Does not repeat'}
+                    </span>
+                    <span style={{ display: 'flex', color: 'var(--fg-3)' }}><Icon name="pencil" size={15} /></span>
+                  </button>
+                </Labelled>
+
+                <Labelled icon="bell" label="Reminder">
+                  <Pick value={t.reminder} onChange={(v) => patch('reminder', v)} options={REMINDERS} />
+                </Labelled>
+
+                <Labelled icon="file-text" label="Notes" hint="Long-form. Never shown on the card.">
+                  <Area value={t.notes} onChange={(v) => patch('notes', v)} placeholder="Research, context, links to dig into later." rows={4} />
+                </Labelled>
+
+                <Labelled icon="image" label="Cover">
+                  <button
+                    type="button"
+                    style={{
+                      display: 'grid', placeItems: 'center', gap: 'var(--sp-3)', width: '100%',
+                      minHeight: 84, padding: 'var(--sp-6)', cursor: 'pointer',
+                      borderRadius: 'var(--r-lg)', border: '1px dashed var(--line-strong)',
+                      background: 'transparent', color: 'var(--fg-3)', font: 'var(--type-label)',
+                      transition: 'var(--t-hover)',
+                    }}
+                  >
+                    <Icon name="image-up" size={20} />
+                    Upload cover image
+                  </button>
+                </Labelled>
+              </Section>
+            </div>
+          </div>
+
+          {/* ---- Commit bar. Sticky, so the session's only two verbs are
+                  always in reach. Frost carries the primary action. ---- */}
+          <div style={{
+            position: 'sticky', bottom: 'var(--sp-6)', zIndex: 30,
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap',
+            padding: 'var(--sp-4) var(--sp-5)', borderRadius: 'var(--r-pill)',
+            backgroundImage: 'var(--glass-fill-2)',
+            backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+            boxShadow: 'var(--glass-shadow-thick)',
+          }}>
+            <ScoreDial value={score.total} max={MAX} size="lg" showMax />
+            <span style={{
+              font: 'var(--type-label)', minWidth: 0,
+              color: needs.length ? 'oklch(0.95 0.07 82)' : 'var(--fg-2)',
+            }}>
+              {needs.length
+                ? needs.length + (needs.length === 1 ? ' field still needed' : ' fields still needed')
+                : 'Scored. \u2318\u21b5 to commit and move on.'}
+            </span>
+            <span style={{ flex: 1 }} />
+            <Button variant="glass" disabled={i === 0} onClick={() => setI((n) => Math.max(0, n - 1))} iconLeft={<Icon name="arrow-left" size={16} />}>
+              Previous
+            </Button>
+            <Button variant="glass" onClick={() => advance('skipped')} iconLeft={<Icon name="skip-forward" size={16} />}>
+              Skip
+            </Button>
+            <Button
+              variant="frost"
+              disabled={needs.length > 0}
+              onClick={() => { if (i === tasks.length - 1) { location.href = 'home.html'; return; } advance('scored'); }}
+              iconRight={<Icon name={i === tasks.length - 1 ? 'check' : 'arrow-right'} size={16} />}
+            >
+              {i === tasks.length - 1 ? 'Finish session' : 'Save & next'}
+            </Button>
+          </div>
+        </div>
+
+        <RecurrenceDialog
+          open={repeatOpen}
+          initial={t.repeat}
+          onClose={() => setRepeatOpen(false)}
+          onSave={(r) => patch('repeat', r)}
+        />
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Scoring />);
+});
+</script>
+</body>
+</html>

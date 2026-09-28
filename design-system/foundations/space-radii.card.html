@@ -1,0 +1,48 @@
+<!-- @dsCard group="Foundations" viewport="700x260" name="Space & radii" subtitle="4px base with deliberately generous semantic steps; controls are always pills" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Space and radii</title>
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div class="pad col" style="gap: var(--sp-7)">
+  <div>
+    <span class="lbl">Space — semantic steps</span>
+    <div class="row" style="gap: var(--sp-6); margin-top: var(--sp-4); align-items: flex-end">
+      <div><div style="width:var(--sp-3);height:34px;background:var(--accent);border-radius:2px"></div><div class="lbl" style="margin-top:6px">gap-tight 8</div></div>
+      <div><div style="width:var(--sp-4);height:34px;background:var(--accent);border-radius:2px"></div><div class="lbl" style="margin-top:6px">inline 12</div></div>
+      <div><div style="width:var(--sp-5);height:34px;background:var(--accent);border-radius:2px"></div><div class="lbl" style="margin-top:6px">stack 16</div></div>
+      <div><div style="width:var(--sp-7);height:34px;background:var(--accent);border-radius:2px"></div><div class="lbl" style="margin-top:6px">card 24</div></div>
+      <div><div style="width:var(--sp-9);height:34px;background:var(--accent);border-radius:2px"></div><div class="lbl" style="margin-top:6px">sheet 32</div></div>
+      <div><div style="width:var(--sp-11);height:34px;background:var(--accent);border-radius:2px"></div><div class="lbl" style="margin-top:6px">section 48</div></div>
+    </div>
+  </div>
+  <div>
+    <span class="lbl">Radii — concentric, and controls are always pills</span>
+    <div class="row" style="gap: var(--sp-4); margin-top: var(--sp-4)">
+      <div><div style="width:74px;height:56px;border-radius:var(--r-sm);background:var(--glass-fill-2);box-shadow:var(--glass-rim-2)"></div><div class="lbl" style="margin-top:6px">sm 14</div></div>
+      <div><div style="width:74px;height:56px;border-radius:var(--r-md);background:var(--glass-fill-2);box-shadow:var(--glass-rim-2)"></div><div class="lbl" style="margin-top:6px">tile 20</div></div>
+      <div><div style="width:74px;height:56px;border-radius:var(--r-lg);background:var(--glass-fill-2);box-shadow:var(--glass-rim-2)"></div><div class="lbl" style="margin-top:6px">card 26</div></div>
+      <div><div style="width:74px;height:56px;border-radius:var(--r-2xl);background:var(--glass-fill-2);box-shadow:var(--glass-rim-2)"></div><div class="lbl" style="margin-top:6px">hero 40</div></div>
+      <div><div style="width:110px;height:44px;border-radius:var(--r-pill);background:var(--glass-fill-2);box-shadow:var(--glass-rim-2)"></div><div class="lbl" style="margin-top:6px">control pill</div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

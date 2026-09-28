@@ -1,0 +1,57 @@
+/* ---------------------------------------------------------------
+   TYPE — the system face carries everything human; mono carries
+   everything measured (durations, countdowns, allocated minutes,
+   table numerics). One extra role matters here: the SYSTEM label —
+   uppercase, wide-tracked, bold — which is the app's existing voice
+   ("INITIALIZING CORE...", "ENTER BASE"). Keep it rare.
+   --------------------------------------------------------------- */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+               "Segoe UI Variable Display", "Segoe UI", system-ui, "Geist",
+               "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", Menlo,
+               "JetBrains Mono", monospace;
+
+  /* Scale — 15px UI base */
+  --text-2xs:   0.6875rem;  /* 11 — mono kickers, badges              */
+  --text-xs:    0.75rem;    /* 12 — captions, table labels            */
+  --text-sm:    0.8125rem;  /* 13 — secondary UI, helper text          */
+  --text-md:    0.9375rem;  /* 15 — UI base, body, buttons             */
+  --text-base:  1rem;       /* 16 — long-form body                     */
+  --text-lg:    1.125rem;   /* 18 — card titles                        */
+  --text-xl:    1.375rem;   /* 22 — section headings                   */
+  --text-2xl:   1.75rem;    /* 28 — page titles                        */
+  --text-3xl:   2.25rem;    /* 36 — big metric                         */
+  --text-4xl:   3rem;       /* 48 — display                            */
+  --text-5xl:   4rem;       /* 64 — the countdown                      */
+  --text-6xl:   5.5rem;     /* 88 — focus-mode timer                   */
+
+  --weight-light:  300;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semi:   600;
+  --weight-bold:   700;
+
+  --leading-tight:   1.03;
+  --leading-snug:    1.22;
+  --leading-normal:  1.45;
+  --leading-relaxed: 1.65;
+
+  --tracking-display: -0.032em;  /* 36px and up            */
+  --tracking-title:   -0.018em;  /* 18–28px                */
+  --tracking-ui:      -0.006em;  /* 13–16px                */
+  --tracking-kicker:   0.14em;   /* uppercase mono         */
+  --tracking-system:   0.30em;   /* the OS label voice     */
+
+  /* Roles */
+  --type-timer:   var(--weight-light)  var(--text-6xl) / var(--leading-tight) var(--font-mono);
+  --type-display: var(--weight-medium) var(--text-4xl) / var(--leading-tight) var(--font-sans);
+  --type-metric:  var(--weight-medium) var(--text-3xl) / var(--leading-tight) var(--font-sans);
+  --type-title:   var(--weight-medium) var(--text-lg)  / var(--leading-snug)  var(--font-sans);
+  --type-body:    var(--weight-normal) var(--text-md)  / var(--leading-normal) var(--font-sans);
+  --type-label:   var(--weight-medium) var(--text-sm)  / var(--leading-snug)  var(--font-sans);
+  --type-caption: var(--weight-normal) var(--text-xs)  / var(--leading-snug)  var(--font-sans);
+  --type-kicker:  var(--weight-normal) var(--text-2xs) / var(--leading-snug)  var(--font-mono);
+  --type-numeric: var(--weight-normal) var(--text-md)  / var(--leading-snug)  var(--font-mono);
+  --type-system:  var(--weight-bold)   var(--text-sm)  / var(--leading-snug)  var(--font-sans);
+}

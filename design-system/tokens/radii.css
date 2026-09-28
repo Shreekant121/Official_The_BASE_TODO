@@ -1,0 +1,28 @@
+/* ---------------------------------------------------------------
+   RADII — the live app already commits to big soft corners
+   (rounded-[40px] on the home cards, rounded-full on every button).
+   That instinct is right; this just makes it a scale.
+   Nested elements step down by roughly their padding so corners
+   stay concentric.
+   --------------------------------------------------------------- */
+:root {
+  --r-2xs: 6px;
+  --r-xs:  10px;
+  --r-sm:  14px;
+  --r-md:  20px;
+  --r-lg:  26px;
+  --r-xl:  34px;
+  --r-2xl: 40px;   /* the product's existing hero-card radius */
+  --r-3xl: 56px;
+  --r-pill: 999px;
+  --r-circle: 50%;
+
+  /* Semantic */
+  --r-control: var(--r-pill);  /* buttons, inputs, chips — always pill */
+  --r-chip:    var(--r-pill);
+  --r-card:    var(--r-lg);
+  --r-card-lg: var(--r-2xl);   /* 40px, matches Home.tsx              */
+  --r-sheet:   var(--r-2xl);
+  --r-tile:    var(--r-md);
+  --r-thumb:   var(--r-md);
+}

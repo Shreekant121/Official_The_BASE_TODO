@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — The notification</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  /* Android's own type stack. This sheet deliberately does NOT dress the
+     system surfaces in Aurora Glass — we do not draw them. */
+  .and { font-family: Roboto, "Noto Sans", system-ui, sans-serif; }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="The notification">
+<div id="root">
+  <div style="display:grid;place-items:center;height:100vh">
+    <div style="width:min(412px,72vmin);height:340px;border-radius:44px;background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/IconButton.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, IconButton } = AG;
+
+  /* ================================================================
+     ANDROID SYSTEM SURFACES
+     Four fields are ours: small icon, title, body, actions. Everything
+     else on this device is drawn by Android and cannot be styled, so it
+     is rendered here in Android's own material — neutral tonal grey,
+     28px containers, Roboto — rather than in glass. Any pixel that
+     looks like our design system on this page would be a lie.
+     ================================================================ */
+
+  const SURF = '#2B2930';       /* surfaceContainerHigh, dark scheme */
+  const SURF_LO = '#211F26';
+  const INK_1 = '#E6E0E9';
+  const INK_2 = '#CAC4D0';
+  const INK_3 = '#948F99';
+  const ACT = '#34D399';        /* our notification colour, which Android tints actions with */
+
+  function AppIcon({ size = 18 }) {
+    return (
+      <span style={{
+        width: size, height: size, borderRadius: '50%', display: 'grid', placeItems: 'center',
+        background: '#0A0A0A', flex: '0 0 auto', overflow: 'hidden',
+      }}>
+        <img src="../assets/mark-white.png" alt="" width={Math.round(size * 0.66)} height={Math.round(size * 0.66)} style={{ display: 'block' }} />
+      </span>
+    );
+  }
+
+  /* One Android notification. `actions` renders the divided action row. */
+  function Notif({ when = 'now', title, body, lines, actions, ongoing }) {
+    return (
+      <div className="and" style={{
+        background: SURF, borderRadius: 28, padding: '14px 16px 6px',
+        display: 'grid', gap: 8, boxShadow: '0 1px 3px rgba(0,0,0,.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <AppIcon />
+          <span style={{ fontSize: 12, color: INK_3, whiteSpace: 'nowrap' }}>BASE</span>
+          <span style={{ fontSize: 12, color: INK_3 }}>·</span>
+          <span style={{ fontSize: 12, color: INK_3, whiteSpace: 'nowrap' }}>Brave</span>
+          <span style={{ fontSize: 12, color: INK_3 }}>·</span>
+          <span style={{ fontSize: 12, color: INK_3, whiteSpace: 'nowrap' }}>{when}</span>
+          <span style={{ flex: 1 }} />
+          {ongoing && <span style={{ fontSize: 11, color: ACT, letterSpacing: '.02em' }}>Ongoing</span>}
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style={{ color: INK_3, flex: '0 0 auto' }}>
+            <path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+
+        <div style={{ display: 'grid', gap: 2, paddingBottom: actions ? 4 : 10 }}>
+          <span style={{ fontSize: 16, fontWeight: 500, color: INK_1, lineHeight: 1.25, letterSpacing: '-.004em' }}>{title}</span>
+          {body && <span style={{ fontSize: 14, color: INK_2, lineHeight: 1.35, textWrap: 'pretty' }}>{body}</span>}
+          {lines && (
+            <div style={{ display: 'grid', gap: 1, marginTop: 4 }}>
+              {lines.map(function (l) {
+                return <span key={l} style={{ fontSize: 14, color: INK_2, lineHeight: 1.35, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l}</span>;
+              })}
+            </div>
+          )}
+        </div>
+
+        {actions && (
+          <div style={{ display: 'flex', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,.07)' }}>
+            {actions.map(function (a, i) {
+              return (
+                <React.Fragment key={a}>
+                  {i > 0 && <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,.09)', flex: '0 0 auto' }} />}
+                  <span style={{
+                    flex: 1, minHeight: 44, display: 'grid', placeItems: 'center',
+                    fontSize: 14, fontWeight: 500, color: ACT, letterSpacing: '.01em',
+                  }}>{a}</span>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* The phone. Portrait, 412×892 — a Pixel-class tablet-owner's phone,
+     and the shape this notification is actually read on. */
+  function Phone({ id, label, note, clock = '17:15', children }) {
+    const wrap = React.useRef(null);
+    const w = 412, h = 892;
+    const [s, setS] = React.useState(1);
+    React.useEffect(function () {
+      const on = function () { if (wrap.current) setS(Math.min(1, wrap.current.clientWidth / w)); };
+      on();
+      window.addEventListener('resize', on);
+      return function () { window.removeEventListener('resize', on); };
+    }, []);
+
+    return (
+      <figure style={{ margin: 0, display: 'grid', gap: 'var(--sp-5)', minWidth: 0, alignContent: 'start' }}>
+        <figcaption style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+            <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--accent)' }}>{id}</span>
+            <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>{label}</span>
+            <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--fg-4)' }}>412×892</span>
+          </span>
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>{note}</span>
+        </figcaption>
+
+        <div ref={wrap} style={{ width: '100%', minWidth: 0 }}>
+          <div style={{ width: w * s, height: h * s, maxWidth: '100%' }}>
+            <div style={{
+              width: w, height: h, transform: 'scale(' + s + ')', transformOrigin: 'top left',
+              borderRadius: 44, overflow: 'hidden', position: 'relative', boxSizing: 'border-box',
+              /* A phone, not our product: plain dark wallpaper, no grid. */
+              background: 'radial-gradient(120% 80% at 20% 0%, #14161A 0%, #0B0C0E 60%, #08090A 100%)',
+              boxShadow: 'var(--glass-cast-3), 0 0 0 1px rgba(255,255,255,.10), inset 0 0 0 1px rgba(255,255,255,.04)',
+              display: 'grid', gridTemplateRows: 'auto auto minmax(0,1fr) auto',
+            }}>
+              {/* status bar */}
+              <div className="and" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 24px 0', fontSize: 12, color: INK_2 }}>
+                <span>{clock}</span>
+                <span style={{ flex: 1 }} />
+                <Icon name="signal" size={13} />
+                <Icon name="wifi" size={13} />
+                <span style={{ fontSize: 11 }}>62%</span>
+                <Icon name="battery-medium" size={15} />
+              </div>
+
+              {/* clock block — Android's, big and light */}
+              <div className="and" style={{ padding: '30px 26px 22px', display: 'grid', gap: 2 }}>
+                <span style={{ fontSize: 72, fontWeight: 200, lineHeight: 1, color: '#F2EEF6', letterSpacing: '-.02em', fontVariantNumeric: 'tabular-nums' }}>{clock}</span>
+                <span style={{ fontSize: 14, color: INK_2 }}>Wed, 16 September</span>
+              </div>
+
+              {/* notification stack */}
+              <div style={{ padding: '0 12px', display: 'grid', gap: 8, alignContent: 'start', minHeight: 0 }}>
+                {children}
+              </div>
+
+              {/* bottom furniture */}
+              <div className="and" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 34px 30px', color: INK_2 }}>
+                <span style={{ width: 48, height: 48, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,.07)' }}>
+                  <Icon name="phone" size={20} />
+                </span>
+                <span style={{ display: 'grid', justifyItems: 'center', gap: 6, color: INK_3 }}>
+                  <Icon name="lock" size={14} />
+                  <span style={{ fontSize: 12 }}>Swipe up to unlock</span>
+                </span>
+                <span style={{ width: 48, height: 48, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,.07)' }}>
+                  <Icon name="camera" size={20} />
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    );
+  }
+
+  /* ---------------- sheet furniture (ours) ---------------- */
+
+  function Kicker({ children, color = 'var(--fg-3)' }) {
+    return <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color }}>{children}</span>;
+  }
+
+  function Card({ children, style }) {
+    return (
+      <section style={{
+        borderRadius: 'var(--r-card)', padding: 'var(--pad-card)',
+        backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+        animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+        ...style,
+      }}>{children}</section>
+    );
+  }
+
+  function Field({ name, value, note }) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '92px minmax(0,1fr)', gap: 'var(--sp-5)', alignItems: 'baseline' }}>
+        <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-4)' }}>{name}</span>
+        <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
+          <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-1)', textWrap: 'pretty' }}>{value}</span>
+          {note && <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>{note}</span>}
+        </div>
+      </div>
+    );
+  }
+
+  function Rule({ n, children }) {
+    return (
+      <div style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'baseline', minWidth: 0 }}>
+        <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--accent)', flex: '0 0 auto' }}>{n}</span>
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', textWrap: 'pretty' }}>{children}</span>
+      </div>
+    );
+  }
+
+  /* ================================================================ */
+
+  function Sheet() {
+    return (
+      <div style={{ minHeight: '100vh', padding: 'var(--sp-8) var(--gutter-page-sm) var(--sp-13)' }}>
+        <GlassFilters />
+        <div style={{ width: '100%', maxWidth: 820, margin: '0 auto', display: 'grid', gap: 'var(--sp-9)' }}>
+
+          <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
+            <a href="notifications.html" style={{ display: 'flex', border: 0 }} aria-label="Back to Notifications">
+              <IconButton label="Back to Notifications" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+            </a>
+            <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+              <h1 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                The notification
+              </h1>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                Android lock screen, delivered by Brave. Four fields are ours.
+              </span>
+            </div>
+          </header>
+
+          {/* The rule, restated once so the copy can be read against it. */}
+          <Card>
+            <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+              <Kicker>The rule</Kicker>
+              <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                <Rule n="01">Only tasks starting today fire. A dated task already draws its own block.</Rule>
+                <Rule n="02">One fires at deadline minus estimate — the moment work has to begin.</Rule>
+                <Rule n="03">Tapping it opens the task in Focus, already running.</Rule>
+                <Rule n="04">A missed one never fires again. Missed ones collapse into one summary.</Rule>
+              </div>
+              <div style={{ height: 1, background: 'var(--line-faint)' }} />
+              <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+                Rule 02 means the notification arrives with zero slack in it. Every word below is written from that.
+              </p>
+            </div>
+          </Card>
+
+          {/* ---- the four states, phone-shaped ---- */}
+          <div style={{ display: 'grid', gap: 'var(--sp-11)', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+
+            <Phone
+              id="01" clock="17:15"
+              label="The fire"
+              note="17:15, because the filing is due at 18:00 and estimated at 45 min. Collapsed, as the lock screen first draws it."
+            >
+              <Notif
+                when="now"
+                title="Start now — 45 min"
+                body="Draft the incorporation filing · due 18:00"
+                actions={['Start', '5 min']}
+              />
+            </Phone>
+
+            <Phone
+              id="02" clock="17:15"
+              label="The fire, expanded"
+              note="One tap to expand. The project and the absence of slack are the only things worth the extra lines."
+            >
+              <Notif
+                when="now"
+                title="Start now — 45 min"
+                lines={[
+                  'Draft the incorporation filing',
+                  'Shreekant Empire · due 18:00',
+                  '45 min allocated. No slack after this.',
+                ]}
+                actions={['Start', '5 min']}
+              />
+            </Phone>
+
+            <Phone
+              id="03" clock="17:20"
+              label="The one snooze, returning"
+              note="5 min is the only choice, and it is offered once. The minutes come out of the block, so the title says what is left rather than repeating the estimate."
+            >
+              <Notif
+                when="now"
+                title="Start now — 40 min left"
+                body="Draft the incorporation filing · due 18:00. Last call."
+                actions={['Start']}
+              />
+            </Phone>
+
+            <Phone
+              id="04" clock="14:02"
+              label="The summary for a face-down tablet"
+              note="Three fires missed between 09:20 and 13:15, replaced by one line. Nothing is re-fired — this is a report, not an alarm."
+            >
+              <Notif
+                when="1h ago"
+                title="3 tasks started without you"
+                body="Since 09:20 — 2 h 05 min of allocated time unclaimed."
+                actions={['Re-plan today']}
+              />
+            </Phone>
+          </div>
+
+          {/* ---- the summary, expanded ---- */}
+          <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+              <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--accent)' }}>05</span>
+              <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>The summary, expanded</span>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                Android's group summary. Three lines, oldest first, no per-task actions — each of these is already past.
+              </span>
+            </span>
+            <div style={{ maxWidth: 412 }}>
+              <Notif
+                when="1h ago"
+                title="3 tasks started without you"
+                lines={[
+                  '09:20  Shortlist the CA — 25 min',
+                  '11:30  Reply to the landlord — 40 min',
+                  '13:15  Draft the pitch outline — 60 min',
+                ]}
+                actions={['Re-plan today']}
+              />
+            </div>
+          </div>
+
+          {/* ---- the copy, as fields ---- */}
+          <Card>
+            <div style={{ display: 'grid', gap: 'var(--sp-6)' }}>
+              <Kicker>What we control</Kicker>
+              <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+                <Field name="Small icon" value="The mark, monochrome" note="Android tints it and draws it at 18px. It cannot carry colour." />
+                <Field name="Title" value="Start now — 45 min" note="The instruction, then the number. Never the task name: the title is the only line guaranteed to survive truncation, and “start” is what has to survive." />
+                <Field name="Body" value="Draft the incorporation filing · due 18:00" note="The subject and the deadline. Concrete, mono-ish, no encouragement." />
+                <Field name="Actions" value="Start · 5 min" note="Start opens Focus with the timer already running. 5 min is the whole snooze menu." />
+                <Field name="Colour" value="#34D399" note="Android tints the action labels with it. The only colour we are given." />
+              </div>
+
+              <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Why the snooze is one choice, not four</span>
+                <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                  The alert already fires at the last possible minute. A 15- or 30-minute snooze would be
+                  the app agreeing to miss the deadline. 5 min is a grace, it is offered once, and the
+                  returning alert counts down what is left instead of asking again.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Everything else on that screen is Android's</span>
+                <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                  The container, the radius, the type, the expand chevron and the action divider are drawn by
+                  the system and change between versions. They are shown here in Android's material, not in glass,
+                  so nothing on this page looks more controllable than it is.
+                </p>
+              </div>
+            </div>
+          </Card>
+
+        </div>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Sheet />);
+});
+</script>
+</body>
+</html>

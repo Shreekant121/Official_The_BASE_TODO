@@ -1,0 +1,8 @@
+/* FONTS — SF Pro first (native on Apple devices). Inter is the closest
+   free match, loaded for everything else. Numbers use SF Pro / Inter
+   with tabular figures — no monospace for timers or metrics. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css");
+@import url("https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css");
+body { font-feature-settings: "cv11", "ss03"; }

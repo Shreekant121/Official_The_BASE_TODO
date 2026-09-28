@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+body{margin:0;background:oklch(0.085 0.004 260);-webkit-font-smoothing:antialiased}
+a{color:oklch(0.82 0.15 165)}a:hover{color:oklch(0.9 0.1 165)}
+@keyframes nt-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="nt-lens" x="0" y="0" width="1" height="1" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+    <feImage ref="{{ mapRef }}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="m"></feImage>
+    <feDisplacementMap in="SourceGraphic" in2="m" scale="0.075" xChannelSelector="R" yChannelSelector="G" result="dr"></feDisplacementMap>
+    <feColorMatrix in="dr" type="matrix" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="r"></feColorMatrix>
+    <feDisplacementMap in="SourceGraphic" in2="m" scale="0.065" xChannelSelector="R" yChannelSelector="G" result="dg"></feDisplacementMap>
+    <feColorMatrix in="dg" type="matrix" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="g"></feColorMatrix>
+    <feDisplacementMap in="SourceGraphic" in2="m" scale="0.055" xChannelSelector="R" yChannelSelector="G" result="db"></feDisplacementMap>
+    <feColorMatrix in="db" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="b"></feColorMatrix>
+    <feBlend in="r" in2="g" mode="screen" result="rg"></feBlend><feBlend in="rg" in2="b" mode="screen"></feBlend>
+  </filter>
+</svg>
+<div style="min-height:100vh;padding:64px 56px 96px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif;font-feature-settings:'cv11','ss03';color:oklch(0.86 0.006 260)">
+<div style="display:grid;gap:10px;margin-bottom:48px;max-width:720px">
+  <div style="font-size:13px;font-weight:600;color:oklch(0.82 0.15 165)">Aurora Glass</div>
+  <h1 style="margin:0;font-size:48px;letter-spacing:-0.035em;font-weight:700;color:#fff;line-height:1.05">Notifications</h1>
+  <p style="margin:0;font-size:17px;line-height:1.45;color:oklch(0.66 0.008 260)">Reminders, deadlines and Atlas, in one quiet list.</p>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<div style="display:grid;gap:14px">
+<div style="font-size:13px;font-weight:500;color:oklch(0.6 0.008 260)">Laptop · 1280 × 800</div>
+<div data-screen-label="Notifications laptop" style="width:1280px;height:800px;border-radius:28px;padding:10px;background:linear-gradient(160deg,oklch(0.30 0.004 260),oklch(0.14 0.004 260));box-shadow:0 0 0 1px oklch(1 0 0 / 0.08),0 60px 120px -30px oklch(0 0 0 / 0.9)">
+<div style="position:relative;width:100%;height:100%;border-radius:20px;overflow:hidden;background:oklch(0.10 0.008 200);display:grid;grid-template-columns:96px 1fr 420px;isolation:isolate">
+  <div style="position:absolute;inset:0;z-index:-1;overflow:hidden">
+    <div style="position:absolute;width:1000px;height:700px;left:80px;top:-460px;border-radius:50%;background:oklch(0.40 0.11 168);filter:blur(140px);opacity:.5"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(oklch(1 0 0 / 0.04) 1px,transparent 1px),linear-gradient(90deg,oklch(1 0 0 / 0.04) 1px,transparent 1px);background-size:64px 64px"></div>
+  </div>
+
+  <nav style="position:relative;margin:18px 0 18px 18px;border-radius:40px;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:8px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),linear-gradient(135deg,oklch(1 0 0 / 0.09),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.05));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#nt-lens) blur(10px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 20px 50px -14px oklch(0 0 0 / 0.6)">
+    <img src="assets/mark-white.png" alt="" style="width:26px;height:26px;object-fit:contain;margin:6px 0 12px"></img>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="6">
+      <button aria-label="{{ r.label }}" style="position:relative;width:52px;height:52px;border:0;padding:0;border-radius:50%;display:grid;place-items:center;background:transparent;color:#fff;cursor:pointer">
+        <span style="{{ r.glow }}"></span><span style="{{ r.plate }}"></span>
+        <i class="ph-fill {{ r.icon }}" style="{{ r.glyph }}"></i>
+        <span style="{{ r.badge }}">{{ unread }}</span>
+      </button>
+    </sc-for>
+  </nav>
+
+  <main style="display:grid;grid-template-rows:auto auto 1fr;gap:14px;padding:30px 28px 18px 32px;min-width:0;min-height:0">
+    <header style="display:flex;align-items:flex-end;gap:12px">
+      <div style="display:grid;gap:2px"><div style="font-size:30px;font-weight:700;letter-spacing:-0.028em;color:#fff">Notifications</div><div style="font-size:14px;color:oklch(0.7 0.01 200)">{{ unreadLabel }}</div></div>
+      <div style="flex:1"></div>
+      <button onClick="{{ markAll }}" style="height:40px;padding:0 16px;border:0;border-radius:20px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;color:#fff;background:oklch(1 0 0 / 0.08);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.45),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.15)">Mark all read</button>
+    </header>
+    <div style="display:flex;padding:4px;border-radius:22px;width:max-content;background:oklch(0 0 0 / 0.22);box-shadow:inset 0 1px 3px oklch(0 0 0 / 0.35),inset 0 -1px 0 oklch(1 0 0 / 0.08)">
+      <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4"><button onClick="{{ f.go }}" style="{{ f.style }}">{{ f.label }}</button></sc-for>
+    </div>
+    <div style="display:grid;gap:6px;align-content:start;overflow-y:auto;scrollbar-width:none;min-height:0;padding-bottom:12px">
+      <sc-for list="{{ groups }}" as="gp" hint-placeholder-count="2">
+        <div style="display:grid;gap:8px">
+          <div style="font-size:13px;font-weight:600;color:oklch(0.62 0.01 200);padding:4px 6px 0">{{ gp.label }}</div>
+          <sc-for list="{{ gp.items }}" as="n">
+            <button onClick="{{ n.pick }}" style="{{ n.card }}">
+              <span style="{{ n.iconWrap }}"><i class="ph-fill {{ n.icon }}" style="{{ n.iconStyle }}"></i></span>
+              <span style="flex:1;min-width:0;display:grid;gap:2px">
+                <span style="font-size:15px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.title }}</span>
+                <span style="font-size:14px;color:oklch(0.7 0.01 200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.body }}</span>
+              </span>
+              <span style="display:grid;justify-items:end;gap:6px;flex:0 0 auto"><span style="font-size:12px;color:oklch(0.6 0.01 200)">{{ n.time }}</span><span style="{{ n.dot }}"></span></span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+
+  <aside style="margin:18px 18px 18px 0;border-radius:34px;padding:26px;display:grid;grid-template-rows:auto auto 1fr auto;gap:18px;min-height:0;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:url(#nt-lens) blur(14px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="{{ sel.bigWrap }}"><i class="ph-fill {{ sel.icon }}" style="{{ sel.bigIcon }}"></i></span>
+      <div style="display:grid;gap:2px;min-width:0"><span style="font-size:13px;font-weight:600;color:oklch(0.7 0.01 200)">{{ sel.kind }} · {{ sel.time }}</span><span style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#fff">{{ sel.title }}</span></div>
+    </div>
+    <p style="margin:0;font-size:15px;line-height:1.55;color:oklch(0.84 0.008 260);text-wrap:pretty">{{ sel.detail }}</p>
+    <div style="display:grid;gap:2px;align-content:start;padding:8px;border-radius:24px;background:oklch(0 0 0 / 0.20);box-shadow:inset 0 1px 3px oklch(0 0 0 / 0.3),inset 0 -1px 0 oklch(1 0 0 / 0.07)">
+      <sc-for list="{{ sel.facts }}" as="fc" hint-placeholder-count="3">
+        <div style="display:flex;justify-content:space-between;gap:12px;padding:11px 12px"><span style="font-size:14px;color:oklch(0.68 0.01 200)">{{ fc.k }}</span><span style="font-size:14px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums">{{ fc.v }}</span></div>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onClick="{{ snooze }}" style="flex:1;height:48px;border:0;border-radius:24px;cursor:pointer;font:inherit;font-size:15px;font-weight:600;color:#fff;background:oklch(1 0 0 / 0.10);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.5),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.18)">{{ snoozeLabel }}</button>
+      <button style="flex:1;height:48px;border:0;border-radius:24px;cursor:pointer;font:inherit;font-size:15px;font-weight:600;color:oklch(0.18 0.05 165);background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),inset 0 -2px 6px oklch(0.45 0.12 165 / 0.5),0 12px 28px -10px oklch(0.7 0.16 162 / 0.55)">{{ sel.cta }}</button>
+    </div>
+  </aside>
+</div>
+</div>
+</div>
+
+<div style="display:grid;gap:14px">
+<div style="font-size:13px;font-weight:500;color:oklch(0.6 0.008 260)">Phone · 390 × 844</div>
+<div data-screen-label="Notifications phone" style="width:390px;height:844px;border-radius:58px;padding:10px;background:linear-gradient(160deg,oklch(0.30 0.004 260),oklch(0.14 0.004 260));box-shadow:0 0 0 1px oklch(1 0 0 / 0.1),0 60px 120px -30px oklch(0 0 0 / 0.9)">
+<div style="position:relative;width:100%;height:100%;border-radius:48px;overflow:hidden;background:oklch(0.10 0.008 200);isolation:isolate">
+  <div style="position:absolute;inset:0;z-index:-1;overflow:hidden">
+    <div style="position:absolute;width:600px;height:480px;left:-110px;top:-300px;border-radius:50%;background:oklch(0.40 0.11 168);filter:blur(100px);opacity:.55"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(oklch(1 0 0 / 0.04) 1px,transparent 1px),linear-gradient(90deg,oklch(1 0 0 / 0.04) 1px,transparent 1px);background-size:48px 48px"></div>
+  </div>
+  <div style="height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 32px 0 38px;font-size:16px;font-weight:600;color:#fff"><span>19:22</span><span style="width:122px;height:36px;border-radius:20px;background:#000"></span><span style="display:flex;gap:6px"><i class="ph-fill ph-cell-signal-full" style="font-size:16px"></i><i class="ph-fill ph-battery-full" style="font-size:20px"></i></span></div>
+  <div style="padding:8px 18px 0;display:grid;gap:14px">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:0 4px"><div style="display:grid"><span style="font-size:32px;font-weight:700;letter-spacing:-0.03em;color:#fff">Notifications</span><span style="font-size:14px;color:oklch(0.7 0.01 200)">{{ unreadLabel }}</span></div>
+      <button onClick="{{ markAll }}" aria-label="Mark all read" style="width:44px;height:44px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background:oklch(1 0 0 / 0.08);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.45),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.15)"><i class="ph-bold ph-checks" style="font-size:19px"></i></button></div>
+    <div style="display:flex;padding:4px;border-radius:22px;background:oklch(0 0 0 / 0.22);box-shadow:inset 0 1px 3px oklch(0 0 0 / 0.35),inset 0 -1px 0 oklch(1 0 0 / 0.08)">
+      <sc-for list="{{ filtersSm }}" as="f" hint-placeholder-count="4"><button onClick="{{ f.go }}" style="{{ f.style }}">{{ f.label }}</button></sc-for>
+    </div>
+    <div style="display:grid;gap:8px">
+      <sc-for list="{{ flat }}" as="n" hint-placeholder-count="5">
+        <button onClick="{{ n.pick }}" style="{{ n.cardSm }}">
+          <span style="{{ n.iconWrap }}"><i class="ph-fill {{ n.icon }}" style="{{ n.iconStyle }}"></i></span>
+          <span style="flex:1;min-width:0;display:grid;gap:1px"><span style="font-size:15px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.title }}</span><span style="font-size:13px;color:oklch(0.7 0.01 200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.body }}</span></span>
+          <span style="display:grid;justify-items:end;gap:6px;flex:0 0 auto"><span style="font-size:12px;color:oklch(0.6 0.01 200)">{{ n.time }}</span><span style="{{ n.dot }}"></span></span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="position:absolute;left:16px;right:16px;bottom:28px;height:66px;border-radius:33px;padding:6px;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#nt-lens) blur(10px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 20px 40px -12px oklch(0 0 0 / 0.6)">
+    <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="4">
+      <span style="{{ tb.wrap }}"><i class="ph-fill {{ tb.icon }}" style="{{ tb.glyph }}"></i><span style="{{ tb.badge }}">{{ unread }}</span></span>
+    </sc-for>
+  </div>
+  <div style="position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:oklch(1 0 0 / 0.7)"></div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { filter: 0, sel: 'n1', read: { n5: true, n6: true, n7: true }, snoozed: {} };
+  mapRef = React.createRef();
+  componentDidMount() {
+    const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const ctx = cv.getContext('2d'), img = ctx.createImageData(N, N);
+    const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const nx = x / (N - 1) * 2 - 1, ny = y / (N - 1) * 2 - 1, i = (y * N + x) * 4;
+      img.data[i] = 128 - Math.sign(nx) * (ss(0.45, 1, Math.abs(nx)) * 0.85 + Math.abs(nx) * 0.15) * 127;
+      img.data[i + 1] = 128 - Math.sign(ny) * (ss(0.45, 1, Math.abs(ny)) * 0.85 + Math.abs(ny) * 0.15) * 127;
+      img.data[i + 2] = 128; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const el = this.mapRef.current, url = cv.toDataURL();
+    if (el) { el.setAttribute('href', url); el.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url); }
+  }
+  renderVals() {
+    const s = this.state;
+    const K = { reminder: ['Reminder', 'ph-alarm', 75], deadline: ['Deadline', 'ph-calendar-dots', 35], atlas: ['Atlas', 'ph-sparkle', 162], system: ['System', 'ph-arrows-clockwise', 215] };
+    const ALL = [
+      { id: 'n1', k: 'deadline', day: 'Today', time: '19:10', title: 'Pricing review due in 2h', body: 'Q4 Launch · 30 min allocated', detail: 'The pricing page review is due at 21:00. It’s third in tonight’s queue, so it will start around 20:15 if the current task finishes on time.', facts: [['Project', 'Q4 Launch'], ['Due', 'Today, 21:00'], ['Allocated', '30 min']], cta: 'Open task' },
+      { id: 'n2', k: 'atlas', day: 'Today', time: '18:42', title: 'Atlas suggests a swap', body: 'Move 3 tasks to Thursday to free 1h 25m', detail: 'Three Q4 Launch tasks have slack before Friday’s review. Moving them frees time tonight for the onboarding email, which is blocking the launch.', facts: [['Tasks', '3'], ['Time freed', '1h 25m'], ['Undo window', '30 days']], cta: 'Review in Atlas' },
+      { id: 'n3', k: 'reminder', day: 'Today', time: '18:00', title: 'Standup in 15 min', body: 'Design sync · Google Meet', detail: 'Daily design sync starts at 18:15. Your focus session will pause automatically and resume after the call.', facts: [['Starts', '18:15'], ['Length', '15 min'], ['Session', 'Pauses']], cta: 'Join call' },
+      { id: 'n4', k: 'reminder', day: 'Today', time: '14:30', title: 'Break — 5 minutes', body: 'You’ve focused for 90 minutes', detail: 'Ninety minutes of focus without a break. A short pause now keeps the next block sharp.', facts: [['Focused', '1h 30m'], ['Break', '5 min']], cta: 'Start break' },
+      { id: 'n5', k: 'system', day: 'Earlier', time: 'Mon', title: 'Google Tasks synced', body: '42 tasks, 3 lists updated', detail: 'Sync finished without conflicts. Three lists changed on Google’s side and were merged.', facts: [['Tasks', '42'], ['Lists changed', '3'], ['Conflicts', '0']], cta: 'View log' },
+      { id: 'n6', k: 'deadline', day: 'Earlier', time: 'Sun', title: 'Invoice sent late', body: 'Northwind · 1 day overdue', detail: 'The Northwind invoice went out one day after its deadline. Atlas has added a reminder for next month’s cycle.', facts: [['Client', 'Northwind'], ['Late by', '1 day']], cta: 'Open task' },
+      { id: 'n7', k: 'atlas', day: 'Earlier', time: 'Sat', title: 'Weekly review ready', body: '18 of 22 planned tasks done', detail: 'Your weekly review is ready: 18 of 22 planned tasks finished, focus score up 6 points.', facts: [['Done', '18 / 22'], ['Focus score', '82 (+6)']], cta: 'Open review' },
+    ];
+    const keys = [null, 'reminder', 'deadline', 'atlas'];
+    const fk = keys[s.filter];
+    const list = ALL.filter(n => !fk || n.k === fk);
+    const card = (n, on, pad) => `display:flex;align-items:center;gap:14px;width:100%;padding:${pad};border:0;border-radius:28px;text-align:left;cursor:pointer;font:inherit;color:inherit;animation:nt-in 420ms cubic-bezier(0.34,1.32,0.64,1) both;transition:background 260ms ease, box-shadow 260ms ease, transform 300ms cubic-bezier(0.34,1.32,0.64,1);background:${on ? 'radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.18),transparent 42%),linear-gradient(135deg,oklch(1 0 0 / 0.14),oklch(1 0 0 / 0.04) 50%,oklch(1 0 0 / 0.08))' : 'radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.10),transparent 42%),linear-gradient(135deg,oklch(1 0 0 / 0.07),oklch(1 0 0 / 0.015) 50%,oklch(1 0 0 / 0.04))'};-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#nt-lens) blur(12px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / ${on ? 0.65 : 0.45}),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.2),inset 0 -12px 24px -14px oklch(0 0 0 / 0.4),0 18px 40px -20px oklch(0 0 0 / 0.6)`;
+    const map = n => {
+      const [kind, icon, h] = K[n.k], unread = !s.read[n.id];
+      return { ...n, kind, icon,
+        pick: () => this.setState(p => ({ sel: n.id, read: { ...p.read, [n.id]: true } })),
+        card: card(n, s.sel === n.id, '10px 18px 10px 10px'),
+        cardSm: card(n, false, '10px 14px 10px 10px'),
+        iconWrap: `position:relative;flex:0 0 auto;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:oklch(0.74 0.12 ${h} / 0.16);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.5),inset 0 0 12px oklch(0.74 0.12 ${h} / 0.18)`,
+        iconStyle: `font-size:21px;color:oklch(0.86 0.12 ${h});filter:drop-shadow(0 0 8px oklch(0.74 0.14 ${h} / 0.6))`,
+        dot: `width:9px;height:9px;border-radius:50%;background:oklch(0.82 0.16 162);box-shadow:0 0 10px oklch(0.74 0.16 162 / 0.9);transition:opacity 300ms ease, transform 300ms cubic-bezier(0.34,1.32,0.64,1);opacity:${unread ? 1 : 0};transform:scale(${unread ? 1 : 0.4})`,
+      };
+    };
+    const items = list.map(map);
+    const groups = ['Today', 'Earlier'].map(label => ({ label, items: items.filter(n => n.day === label) })).filter(g => g.items.length);
+    const cur = map(ALL.find(n => n.id === s.sel));
+    const h = K[cur.k][2];
+    const unread = ALL.filter(n => !s.read[n.id]).length;
+    const seg = (label, i, grow) => ({ label, go: () => this.setState({ filter: i }),
+      style: `${grow ? 'flex:1;' : ''}height:34px;padding:0 16px;border:0;border-radius:17px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;transition:all 380ms cubic-bezier(0.34,1.32,0.64,1);color:${s.filter === i ? '#fff' : 'oklch(0.66 0.01 200)'};background:${s.filter === i ? 'oklch(1 0 0 / 0.14)' : 'transparent'};box-shadow:${s.filter === i ? 'inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.2)' : 'none'}` });
+    const badge = (show) => `position:absolute;top:4px;right:2px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;display:${show && unread ? 'grid' : 'none'};place-items:center;font-size:11px;font-weight:700;color:#fff;background:oklch(0.63 0.21 25);box-shadow:0 3px 8px oklch(0.4 0.18 25 / 0.6)`;
+    const rail = [['ph-squares-four', 'Home'], ['ph-list-checks', 'Queue'], ['ph-calendar-dots', 'Deadlines'], ['ph-bell', 'Notifications'], ['ph-sparkle', 'Atlas'], ['ph-gear-six', 'Settings']].map(([icon, label], i) => {
+      const on = i === 3;
+      return { icon, label, badge: badge(on),
+        glow: `position:absolute;inset:6px;border-radius:50%;background:oklch(0.74 0.16 162);filter:blur(14px);opacity:${on ? 0.7 : 0}`,
+        plate: `position:absolute;inset:0;border-radius:50%;opacity:${on ? 1 : 0};background:oklch(1 0 0 / 0.14);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.7),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25)`,
+        glyph: `position:relative;font-size:22px;opacity:${on ? 1 : 0.55};filter:drop-shadow(0 2px 5px oklch(0 0 0 / 0.45))` };
+    });
+    const tabs = [['ph-squares-four'], ['ph-list-checks'], ['ph-bell'], ['ph-user']].map(([icon], i) => {
+      const on = i === 2;
+      return { icon, badge: badge(on).replace('top:4px;right:2px', 'top:2px;right:18px'),
+        wrap: `position:relative;display:grid;place-items:center;border-radius:27px;background:${on ? 'oklch(1 0 0 / 0.14)' : 'transparent'};box-shadow:${on ? 'inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.2)' : 'none'}`,
+        glyph: `font-size:24px;color:#fff;opacity:${on ? 1 : 0.55};filter:drop-shadow(0 2px 5px oklch(0 0 0 / 0.45))` };
+    });
+    return {
+      mapRef: this.mapRef, rail, tabs, groups, flat: items.slice(0, 6), unread,
+      unreadLabel: unread ? unread + ' unread' : 'All caught up',
+      filters: ['All', 'Reminders', 'Deadlines', 'Atlas'].map((l, i) => seg(l, i, false)),
+      filtersSm: ['All', 'Reminders', 'Deadlines', 'Atlas'].map((l, i) => seg(l, i, true)),
+      markAll: () => this.setState({ read: Object.fromEntries(ALL.map(n => [n.id, true])) }),
+      sel: { ...cur, facts: cur.facts.map(([k, v]) => ({ k, v })),
+        bigWrap: `flex:0 0 auto;width:60px;height:60px;border-radius:50%;display:grid;place-items:center;background:oklch(0.74 0.12 ${h} / 0.18);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.55),inset 0 0 16px oklch(0.74 0.12 ${h} / 0.2)`,
+        bigIcon: `font-size:28px;color:oklch(0.88 0.12 ${h});filter:drop-shadow(0 0 10px oklch(0.74 0.14 ${h} / 0.6))` },
+      snooze: () => this.setState(p => ({ snoozed: { ...p.snoozed, [p.sel]: !p.snoozed[p.sel] } })),
+      snoozeLabel: s.snoozed[s.sel] ? 'Snoozed · 15 min' : 'Snooze 15 min',
+    };
+  }
+}
+</script>
+</body>
+</html>

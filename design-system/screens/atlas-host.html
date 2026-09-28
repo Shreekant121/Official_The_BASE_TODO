@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Atlas host</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+  .ag-code {
+    margin: 0; padding: var(--sp-5) var(--sp-6);
+    border-radius: var(--r-sm);
+    background-image: var(--glass-well);
+    box-shadow: var(--glass-well-shadow);
+    font: var(--type-numeric); font-size: var(--text-xs);
+    color: var(--fg-2); overflow-x: auto; white-space: pre;
+  }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="Atlas host">
+<div id="root">
+  <div style="display:flex;height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:1000px;margin:0 auto;height:180px;border-radius:var(--r-card-lg);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/data/ProgressRing.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/forms/Input.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/forms/Slider.jsx',
+  '../components/navigation/MiniNav.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, StatusPill, ProgressRing, Toast, Input, Switch, Slider, MiniNav } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',     icon: 'layout-dashboard', href: 'home.html' },
+    { value: 'home',      label: 'Home',          icon: 'house',            href: 'home.html' },
+    { value: 'atlas',     label: 'Atlas',         icon: 'sparkles',         href: 'atlas.html' },
+    { value: 'skills',    label: 'Skills',        icon: 'wrench',           href: 'skills.html' },
+    { value: 'inbox',     label: 'Inbox triage',  icon: 'inbox',            href: 'inbox.html' },
+    { value: 'people',    label: 'Contacts',      icon: 'users',            href: 'contacts.html' },
+    { value: 'catalog',   label: 'The catalog',   icon: 'book-open',        href: 'catalog.html' },
+    { value: 'trash',     label: 'Trash',         icon: 'trash-2',          href: 'trash.html' },
+    { value: 'log',       label: 'Action log',    icon: 'scroll-text',      href: 'log.html' },
+    { value: 'host',      label: 'Atlas host',    icon: 'server' },
+    { value: 'session',   label: 'New Session',   icon: 'zap',              href: 'session.html' },
+    { value: 'settings',  label: 'Settings',      icon: 'settings',         href: 'settings.html' },
+  ];
+
+  /* Measured on the ASUS TUF A16 on 2026-09-02. These are readings, not
+     specifications — the picker's whole value is that it does not guess. */
+  const MODELS = [
+    { id: 'gemma4:e4b', name: 'gemma4:e4b', disk: '9.61 GB', vram: '3.23 GB', gpu: 100, batt: 55.2, charge: 71.5, load: '13–16 s', max: '131,072',
+      note: 'E4B — 8B stored, ~4B active per token. Disk size is not memory size: it loads into 3.23 GB and stays on the card.', caps: ['tools', 'thinking', 'vision', 'audio'] },
+    { id: 'qwen3.5:4b', name: 'qwen3.5:4b', disk: '3.39 GB', vram: '3.34 GB', gpu: 100, batt: 58.4, charge: 82.0, load: '5–7 s', max: '262,144',
+      note: 'Fastest here and the longest window. Scales 3.34 → 5.34 GB across 8K–64K with no speed change at all.', caps: ['tools', 'thinking'] },
+    { id: 'qwen3.5:9b', name: 'qwen3.5:9b', disk: '6.59 GB', vram: '5.51 of 6.28 GB', gpu: 88, batt: 31.8, charge: 38.0, load: '9–13 s', max: '131,072',
+      note: 'Spills 12% onto the CPU and pays about half its throughput for it. The slowest of the three on this machine — manual choice only, never selected automatically.', caps: ['tools', 'thinking'] },
+  ];
+
+  const SLEEP_COPY = {
+    awake: { pill: 'Awake', tone: 'running', line: 'Reachable from this tablet over Tailscale. Full tool access.' },
+    asleep: { pill: 'Asleep', tone: 'archived', line: 'The laptop lid is shut. You are talking to the basic assistant.' },
+  };
+
+  const Kicker = ({ children, color = 'var(--fg-4)', style }) => (
+    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color, ...style }}>{children}</span>
+  );
+
+  /* A settings section is a card with a mono kicker and one idea in it.
+     Never two — the moment a card carries two decisions it becomes a
+     control panel, which is what this screen is trying not to be. */
+  function Panel({ kicker, title, hint, right, children, tone }) {
+    return (
+      <section style={{
+        display: 'grid', gap: 'var(--sp-6)', padding: 'var(--pad-card)',
+        borderRadius: 'var(--r-card)',
+        backgroundImage: tone === 'warn' ? 'var(--glass-tint-amber)' : 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: tone === 'warn' ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-rim-2), var(--glass-cast-1)',
+      }}>
+        <header style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 180 }}>
+            {kicker && <Kicker color="var(--fg-3)">{kicker}</Kicker>}
+            <h2 style={{ font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>{title}</h2>
+            {hint && <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', margin: 0, maxWidth: '58ch', textWrap: 'pretty' }}>{hint}</p>}
+          </div>
+          {right}
+        </header>
+        {children}
+      </section>
+    );
+  }
+
+  /* A labelled row inside a panel. Switch on the right, explanation
+     underneath — never a switch with no consequence stated. */
+  function Row({ title, hint, control, icon, tone }) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
+        padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+        backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+      }}>
+        {icon && (
+          <span style={{
+            display: 'grid', placeItems: 'center', width: 34, height: 34, flex: '0 0 auto',
+            borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
+            color: tone || 'var(--fg-3)',
+          }}><Icon name={icon} size={16} /></span>
+        )}
+        <div style={{ display: 'grid', gap: 2, flex: 1, minWidth: 200 }}>
+          <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>{title}</span>
+          {hint && <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>{hint}</span>}
+        </div>
+        <span style={{ flex: '0 0 auto' }}>{control}</span>
+      </div>
+    );
+  }
+
+  /* Model residency. One model is resident at a time on this machine and
+     swaps can fail (HTTP 500 observed) — so the card states which is in
+     memory, which is merely on disk, and what a swap costs. */
+  function ModelCard({ model, resident, selected, onSelect }) {
+    const [open, setOpen] = React.useState(false);
+    const on = selected === model.id;
+
+    return (
+      <div style={{
+        display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)',
+        borderRadius: 'var(--r-lg)',
+        backgroundImage: on ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+        boxShadow: on ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+        transition: 'var(--t-hover)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => onSelect(model.id)} aria-pressed={on} style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flex: 1, minWidth: 200,
+            border: 0, background: 'transparent', padding: 0, cursor: 'pointer', textAlign: 'left',
+          }}>
+            <span style={{
+              display: 'grid', placeItems: 'center', width: 34, height: 34, flex: '0 0 auto',
+              borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
+              color: on ? 'var(--accent)' : 'var(--fg-3)',
+            }}><Icon name="cpu" size={16} /></span>
+            <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+              <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-md)', color: 'var(--fg-1)' }}>{model.name}</span>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                {model.vram} in memory · {model.gpu}% on the card · {model.max} max context
+              </span>
+            </span>
+          </button>
+
+          {resident === model.id
+            ? <StatusPill status="running" size="sm">resident</StatusPill>
+            : <StatusPill status="archived" size="sm" dot={false}>on disk</StatusPill>}
+
+          <IconButton label="Readings" variant="ghost" size="sm" onClick={() => setOpen(!open)}>
+            <Icon name="chevron-down" size={15} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-base) var(--ease-morph)' }} />
+          </IconButton>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', transition: 'grid-template-rows var(--dur-morph) var(--ease-morph)' }}>
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ display: 'grid', gap: 'var(--sp-5)', paddingTop: 'var(--sp-2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 'var(--sp-4)' }}>
+                {[
+                  ['on charger', model.charge.toFixed(1), 'tok/s'],
+                  ['on battery', model.batt.toFixed(1), 'tok/s'],
+                  ['cold load', model.load, ''],
+                  ['on disk', model.disk, ''],
+                ].map(([k, v, u]) => (
+                  <div key={k} style={{
+                    display: 'grid', gap: 2, padding: 'var(--sp-4) var(--sp-5)', borderRadius: 'var(--r-sm)',
+                    backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+                  }}>
+                    <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-md)', color: 'var(--fg-1)', fontVariantNumeric: 'tabular-nums' }}>
+                      {v}{u && <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--fg-3)' }}> {u}</span>}
+                    </span>
+                    <Kicker>{k}</Kicker>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                {model.caps.map((c) => (
+                  <span key={c} style={{
+                    display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 var(--sp-4)',
+                    borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                    font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase',
+                    color: c === 'audio' ? 'var(--status-review)' : 'var(--fg-3)',
+                  }}>{c}{c === 'audio' ? ' · unverified' : ''}</span>
+                ))}
+              </div>
+              <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', margin: 0, maxWidth: '62ch', textWrap: 'pretty' }}>
+                {model.note}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ================================================================ */
+
+  function Host() {
+    const [w, setW] = React.useState(window.innerWidth);
+    const [awake, setAwake] = React.useState(true);
+    const [charger, setCharger] = React.useState(false);
+    const [selected, setSelected] = React.useState('gemma4:e4b');
+    const [geminiBlocked, setGeminiBlocked] = React.useState(false);
+    const [monthly, setMonthly] = React.useState(400);
+    const [perTurn, setPerTurn] = React.useState(5);
+    const [fallback, setFallback] = React.useState(true);
+    const [autoWake, setAutoWake] = React.useState(true);
+    const [toast, setToast] = React.useState(null);
+
+    const wide = w >= 900;
+    const spent = 118.4;
+    const resident = awake ? selected : null;
+    const state = SLEEP_COPY[awake ? 'awake' : 'asleep'];
+
+    React.useEffect(() => {
+      const on = () => setW(window.innerWidth);
+      window.addEventListener('resize', on);
+      return () => window.removeEventListener('resize', on);
+    }, []);
+
+    React.useEffect(() => {
+      if (!toast) return;
+      const t = setTimeout(() => setToast(null), 3400);
+      return () => clearTimeout(t);
+    }, [toast]);
+
+    function pickModel(id) {
+      if (id === selected) return;
+      setSelected(id);
+      const m = MODELS.find((x) => x.id === id);
+      showProgress({ label: 'Loading ' + m.name, doneLabel: 'Ready', duration: 4200 });
+      setTimeout(() => setToast({ icon: 'cpu', title: m.name + ' loaded', detail: 'Evicted the previous model from memory.' }), 4600);
+    }
+
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+    function go(v) { const it = NAV.find((n) => n.value === v); if (it && it.href) location.href = it.href; }
+
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'stretch' }}>
+        <GlassFilters />
+
+        {wide && (
+          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="host" onChange={go} />
+          </div>
+        )}
+
+        <div className="ag-scroll" style={{
+          flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-12)' : 'var(--sp-8) var(--gutter-page-sm) 116px',
+        }}>
+          <div style={{ width: '100%', maxWidth: 1000, margin: '0 auto', display: 'grid', gap: 'var(--sp-9)' }}>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 220 }}>
+                <Kicker color="var(--fg-3)">The program on your laptop</Kicker>
+                <h1 style={{ font: 'var(--type-display)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                  Atlas host
+                </h1>
+              </div>
+              <a href="atlas.html" style={{ display: 'flex', border: 0 }}>
+                <Button size="sm" variant="glass" iconLeft={<Icon name="sparkles" size={15} />}>Back to Atlas</Button>
+              </a>
+            </div>
+
+            {/* ---- The connection. One hero card, because "is Atlas
+                   reachable" is the only question this screen answers
+                   before any other. ---- */}
+            <section style={{
+              display: 'grid', gap: 'var(--sp-8)', padding: 'var(--pad-card-lg)',
+              borderRadius: 'var(--r-card-lg)',
+              backgroundImage: 'var(--glass-fill-2)',
+              backdropFilter: 'var(--glass-bd-lg-refract)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+              boxShadow: awake
+                ? 'var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-3)'
+                : 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-7)', flexWrap: 'wrap' }}>
+                <span style={{
+                  position: 'relative', display: 'grid', placeItems: 'center', width: 64, height: 64, flex: '0 0 auto',
+                  borderRadius: '50%',
+                  backgroundImage: awake ? 'none' : 'var(--glass-fill-1)',
+                  boxShadow: awake ? 'none' : 'var(--glass-rim-1)',
+                  color: awake ? 'oklch(0.93 0.07 162)' : 'var(--fg-4)',
+                }}>
+                  {awake ? <AiPresence state="idle" size={72} style={{ margin: -4 }} /> : <Icon name="moon" size={26} />}
+                </span>
+
+                <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 240 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+                    <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                      ASUS TUF A16
+                    </h2>
+                    <StatusPill status={state.tone} size="sm">{state.pill}</StatusPill>
+                  </div>
+                  <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', margin: 0, maxWidth: '52ch', textWrap: 'pretty' }}>
+                    {state.line}
+                  </p>
+                </div>
+
+                {/* Demo control. In the product this reflects the host. */}
+                <Switch checked={awake} onChange={setAwake} label={awake ? 'Host up' : 'Host down'} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--sp-4)' }}>
+                {[
+                  ['tailscale', awake ? 'atlas-tuf' : 'unreachable', awake ? 'private network · no open ports' : 'last seen 4 min ago', awake ? 'var(--accent)' : 'var(--fg-4)', 'shield-check'],
+                  ['round trip', awake ? '38 ms' : '—', 'tablet → laptop', 'var(--fg-1)', 'activity'],
+                  ['power', charger ? 'charger' : 'battery 61%', charger ? 'full throughput' : 'about 30% slower', charger ? 'var(--fg-1)' : 'var(--status-review)', charger ? 'zap' : 'battery-low'],
+                  ['ollama', '0.33.2', 'one model resident at a time', 'var(--fg-1)', 'box'],
+                ].map(([k, v, hint, tone, icon]) => (
+                  <div key={k} style={{
+                    display: 'grid', gap: 'var(--sp-2)', padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                    backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+                      <span style={{ display: 'flex', color: tone, flex: '0 0 auto' }}><Icon name={icon} size={14} /></span>
+                      <Kicker>{k}</Kicker>
+                    </span>
+                    <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-md)', color: tone, fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>{hint}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                <Switch checked={charger} onChange={setCharger} size="sm" label="On charger" />
+                <span style={{ flex: 1 }} />
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', maxWidth: '48ch', textWrap: 'pretty' }}>
+                  Public tunnels are refused by design. Only your own devices can reach this host.
+                </span>
+              </div>
+            </section>
+
+            {/* ---- The asleep fallback ---- */}
+            {!awake && (
+              <Panel
+                tone="warn"
+                kicker="Fallback"
+                title="You are talking to the basic assistant"
+                hint="The in-browser Gemini agent can still add a task and read your backlog. It cannot reach the mailbox, the catalog or the action log — those live on the host."
+                right={<span style={{ display: 'grid', placeItems: 'center', width: 40, height: 40, borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)', color: 'var(--status-review)' }}><Icon name="wifi-off" size={18} /></span>}
+              >
+                <Row
+                  icon="life-buoy"
+                  title="Use the basic assistant when Atlas is asleep"
+                  hint="Off means the chat says Atlas is unreachable and waits. Nothing queues silently either way."
+                  control={<Switch checked={fallback} onChange={setFallback} />}
+                />
+                <Row
+                  icon="alarm-clock"
+                  title="Wake the host when the lid opens"
+                  hint="Atlas resumes from its last recorded step rather than starting the task over."
+                  control={<Switch checked={autoWake} onChange={setAutoWake} />}
+                />
+              </Panel>
+            )}
+
+            {/* ---- Model residency ---- */}
+            <Panel
+              kicker="The brain"
+              title="Model residency"
+              hint="One model sits in memory at a time on this machine, and a swap costs a cold load. The main model never changes on its own — only you change it here or in the chat's picker."
+              right={
+                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-2)' }}>
+                  <ProgressRing value={awake ? MODELS.find((m) => m.id === selected).gpu : 0} max={100} size={72} thickness={7}
+                    tone={MODELS.find((m) => m.id === selected).gpu === 100 ? 'accent' : 'amber'} />
+                  <Kicker>on the card</Kicker>
+                </div>
+              }
+            >
+              <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                {MODELS.map((m) => (
+                  <ModelCard key={m.id} model={m} resident={resident} selected={selected} onSelect={pickModel} />
+                ))}
+              </div>
+              <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', margin: 0, maxWidth: '68ch', textWrap: 'pretty' }}>
+                A failed swap retries twice, then Atlas carries on with the model already loaded rather
+                than failing your turn. Sub-agents share the resident model — they buy clean context, not speed.
+              </p>
+            </Panel>
+
+            {/* ---- Escalation ---- */}
+            <Panel
+              kicker="Off-site"
+              title="Escalation to Gemini"
+              hint="When the local model says a problem is beyond it, Atlas hands off the shape of the problem — never the contents of your mailbox."
+              right={<Switch checked={!geminiBlocked} onChange={(v) => setGeminiBlocked(!v)} label={geminiBlocked ? 'Blocked' : 'Allowed'} />}
+            >
+              <Row
+                icon="lock"
+                title="Mailbox contents never leave the laptop"
+                hint="Not a setting. Atlas cannot override it, and the action log records what was sent upstream on every escalation."
+                tone="var(--accent)"
+                control={<Kicker color="var(--accent)">always on</Kicker>}
+              />
+              {geminiBlocked && (
+                <div style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)', padding: 'var(--sp-5) var(--sp-6)',
+                  borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-tint-amber)', boxShadow: 'var(--glass-rim-1)',
+                }}>
+                  <span style={{ display: 'flex', color: 'var(--status-review)', flex: '0 0 auto', marginTop: 2 }}><Icon name="scissors" size={16} /></span>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', textWrap: 'pretty' }}>
+                    With Gemini blocked, Atlas does not retry a hard problem six times. It breaks it into
+                    steps small enough to succeed locally, and offers you a hand-off prompt if it still cannot.
+                  </span>
+                </div>
+              )}
+              <Row
+                icon="clipboard-copy"
+                title="Hand-off prompt"
+                hint="Packages the problem, its context and what Atlas has tried, ready to paste into any other chat."
+                control={<Button size="sm" variant="ghost" iconLeft={<Icon name="copy" size={14} />}
+                  onClick={() => setToast({ icon: 'clipboard-check', title: 'Copied', detail: 'Problem, context and attempts — ready to paste.' })}>Copy</Button>}
+              />
+            </Panel>
+
+            {/* ---- Money ---- */}
+            <Panel
+              kicker="Money"
+              title="Spend"
+              hint="Local turns are free. Only escalated turns cost anything, and three multipliers — Atlas choosing its own brain, loops, and helpers — are why the ceilings exist."
+            >
+              <div style={{
+                display: 'grid', gap: 'var(--sp-6)', padding: 'var(--sp-7)', borderRadius: 'var(--r-lg)',
+                backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 160 }}>
+                    <Kicker>September so far</Kicker>
+                    <span style={{
+                      font: 'var(--type-metric)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-3xl)',
+                      letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)', fontVariantNumeric: 'tabular-nums',
+                    }}>₹{spent.toFixed(2)}</span>
+                  </span>
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>
+                    of ₹{monthly} · {Math.round((spent / monthly) * 100)}%
+                  </span>
+                </div>
+                <div style={{ position: 'relative', height: 8, borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden' }}>
+                  <span style={{
+                    position: 'absolute', inset: '0 auto 0 0', width: Math.min(100, (spent / monthly) * 100) + '%',
+                    borderRadius: 'var(--r-pill)',
+                    background: 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.5), var(--accent))',
+                    boxShadow: '0 0 14px -2px oklch(0.70 0.15 162 / 0.6)',
+                    transition: 'width var(--dur-base) var(--ease-glass)',
+                  }} />
+                </div>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+                  17 escalated turns this month. The $300 Google credit is half expired and is not part of the plan.
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gap: 'var(--sp-6)', padding: 'var(--sp-6) var(--sp-6) var(--sp-7)', borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
+                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', whiteSpace: 'nowrap', flex: '0 0 auto' }}>Monthly ceiling</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-md)', color: 'var(--fg-1)', flex: '0 0 auto' }}>₹{monthly}</span>
+                </div>
+                <Slider min={100} max={2000} step={50} value={monthly} onChange={setMonthly} showValue={false} aria-label="Monthly ceiling in rupees" />
+
+                <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
+                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', whiteSpace: 'nowrap', flex: '0 0 auto' }}>Stop a turn at</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-md)', color: 'var(--fg-1)', flex: '0 0 auto' }}>₹{perTurn}</span>
+                </div>
+                <Slider min={1} max={20} step={1} value={perTurn} onChange={setPerTurn} showValue={false} aria-label="Per-turn ceiling in rupees" />
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                  At the ceiling Atlas stops, says what it was doing, and offers to continue. Helpers count against the same number.
+                </span>
+              </div>
+            </Panel>
+
+            {/* ---- What is still unproven. Recorded on the screen, not
+                   in a document, because §12 exists for a reason. ---- */}
+            <Panel kicker="Unverified" title="Not yet proven on this machine">
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                {[
+                  ['audio-lines', 'Does gemma4:e4b actually transcribe through Ollama?', 'It declares the capability. Declared and working are different things.'],
+                  ['mic', 'How much VRAM does Chatterbox need beside gemma at 64K?', '5.3 GB plus Chatterbox against 8 GB is tight. Measure before designing voice.'],
+                  ['triangle-alert', 'Does num_ctx above the maximum ever error rather than clamp?', 'Everything observed so far clamps silently and reports success.'],
+                ].map(([icon, q, a]) => (
+                  <div key={q} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)',
+                    padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                    backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                  }}>
+                    <span style={{ display: 'flex', color: 'var(--fg-4)', flex: '0 0 auto', marginTop: 2 }}><Icon name={icon} size={16} /></span>
+                    <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                      <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', textWrap: 'pretty' }}>{q}</span>
+                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>{a}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textAlign: 'center', maxWidth: '56ch', margin: '0 auto', textWrap: 'pretty' }}>
+              Atlas does not assume it is on this laptop. Moving it to a Raspberry Pi or a cheap VM later
+              is a change of address, not a rebuild.
+            </p>
+          </div>
+        </div>
+
+        {toast && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-13)', display: 'grid', placeItems: 'center', zIndex: 80, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <Toast icon={<Icon name={toast.icon} size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+            </span>
+          </div>
+        )}
+
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <MiniNav items={navItems} value="host" onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Host />);
+});
+</script>
+</body>
+</html>

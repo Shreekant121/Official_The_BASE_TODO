@@ -1,0 +1,39 @@
+/* ---------------------------------------------------------------
+   SPACE — 4px base. The references are all air, so the semantic
+   aliases sit deliberately high: cards breathe at 24–28px, sections
+   at 48–64px. When in doubt, go one step larger.
+   --------------------------------------------------------------- */
+:root {
+  --sp-0:  0;
+  --sp-px: 1px;
+  --sp-1:  0.25rem;   /*  4 */
+  --sp-2:  0.375rem;  /*  6 */
+  --sp-3:  0.5rem;    /*  8 */
+  --sp-4:  0.75rem;   /* 12 */
+  --sp-5:  1rem;      /* 16 */
+  --sp-6:  1.25rem;   /* 20 */
+  --sp-7:  1.5rem;    /* 24 */
+  --sp-8:  1.75rem;   /* 28 */
+  --sp-9:  2rem;      /* 32 */
+  --sp-10: 2.5rem;    /* 40 */
+  --sp-11: 3rem;      /* 48 */
+  --sp-12: 4rem;      /* 64 */
+  --sp-13: 5rem;      /* 80 */
+  --sp-14: 6rem;      /* 96 */
+
+  /* Semantic */
+  --pad-control:    var(--sp-4);   /* button / input inner padding      */
+  --pad-card:       var(--sp-7);   /* standard card inset               */
+  --pad-card-lg:    var(--sp-9);   /* feature card inset                */
+  --pad-sheet:      var(--sp-9);   /* dialogs, drawers                  */
+  --gap-tight:      var(--sp-3);   /* icon-to-label                     */
+  --gap-inline:     var(--sp-4);   /* buttons in a row                  */
+  --gap-stack:      var(--sp-5);   /* fields in a form                  */
+  --gap-card:       var(--sp-6);   /* cards in a grid                   */
+  --gap-section:    var(--sp-11);  /* between page sections             */
+  --gutter-page:    var(--sp-10);  /* page edge inset (desktop)         */
+  --gutter-page-sm: var(--sp-6);   /* page edge inset (mobile)          */
+
+  /* Minimum hit target — never smaller, mobile or desktop */
+  --hit-min: 44px;
+}

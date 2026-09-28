@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Inside a project</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  .clamp1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* Task cards. Level-1 glass so a stack of forty is not a wall of
+     frosted panes; hover lifts one step and reveals its actions. */
+  .trow { background-image: var(--glass-fill-1); box-shadow: var(--glass-rim-1); }
+  .trow[data-live="true"], .trow[data-sel="true"] { background-image: var(--glass-tint-accent); box-shadow: var(--glass-rim-2), var(--glow-accent-sm); }
+  .trow[data-done="true"] { opacity: 0.48; }
+  .trow[data-done="true"]:hover { opacity: 0.74; }
+
+  .racts { opacity: 0; transition: opacity var(--dur-fast) var(--ease-glass); }
+  .trow:hover .racts, .racts:focus-within, .racts[data-open="true"] { opacity: 1; }
+  .grip { opacity: 0; transition: opacity var(--dur-fast) var(--ease-glass); }
+  .colhead:hover .grip, .trow:hover .grip, .grip:focus-visible { opacity: 1; }
+  @media (hover: none), (pointer: coarse) { .racts, .grip { opacity: 1; } }
+
+  /* No scrollport around the cards: a card's action menu is rendered
+     inline, and an inline popover can never escape one. Panels grow to
+     their content and the page scrolls instead. */
+  .table-scroll { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .table-scroll::-webkit-scrollbar { height: 8px; }
+  .table-scroll::-webkit-scrollbar-track { background: transparent; }
+  .table-scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: var(--r-pill); }
+
+  .addrow { border: 1px dashed var(--line-soft); color: var(--fg-3); background: transparent; transition: var(--t-hover); }
+  .addrow:hover { border-color: var(--accent-hairline); color: var(--fg-1); background-image: var(--glass-fill-1); }
+
+  /* Fields inside the task sheet. Pseudo-elements need a sheet, and the
+     native date chrome ships mid-grey — it has to read as a --fg-3 label. */
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+  .ag-field::-webkit-calendar-picker-indicator { filter: invert(1) brightness(0.72); opacity: .8; cursor: pointer; }
+  .ag-field::-webkit-inner-spin-button { display: none; }
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* The cover placeholder: fine diagonal hairlines, never an image and
+     never a gradient. Replaced by the user's own cover when there is one. */
+  .cover {
+    background-color: var(--void-1);
+    background-image: repeating-linear-gradient(135deg, oklch(1 0 0 / 0.045) 0 1px, transparent 1px 9px);
+  }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="Project">
+<div id="root">
+  <!-- Static first paint: the shell, so glass is on screen before React mounts. -->
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-11) var(--gutter-page) var(--sp-13)">
+      <div style="display:flex;align-items:center;gap:var(--sp-4)">
+        <img src="../assets/mark-white.png" alt="" width="26" height="26" style="opacity:.95">
+        <span style="font:var(--type-title);color:var(--fg-1)">BASE</span>
+      </div>
+      <div style="height:236px;margin-top:var(--sp-9);border-radius:var(--r-card-lg);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/MorphCluster.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/data/ProgressRing.jsx',
+  '../components/data/ScoreDial.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/MorphMenu.jsx',
+  '../components/forms/Checkbox.jsx',
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/overlay/TaskSheet.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, Switch, StatusPill, ProgressRing, ScoreDial, MiniNav, MorphMenu, TaskSheet } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress, MorphCluster } = AG;
+
+  /* The board answers "what is there"; the sheet answers "what is this".
+     Pressing a card opens it, so every field of a task lives one click
+     from the card that names it. `d` carries what the card never shows. */
+  const SHEET_NOW = '2026-08-21T09:00';
+  const SHARE_LISTS = ['\u26a1 Action Steps', '\ud83e\uddca Backburner', '\ud83d\udcda Reference Materials'];
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',   icon: 'layout-dashboard' },
+    { value: 'home',      label: 'Home',        icon: 'house' },
+    { value: 'assistant', label: 'Assistant',   icon: 'sparkles' },
+    { value: 'session',   label: 'New Session', icon: 'zap', href: 'session.html' },
+    { value: 'score',     label: 'Score',       icon: 'award', badge: 6 },
+    { value: 'alerts',    label: 'Notifications', icon: 'bell' },
+    { value: 'settings',  label: 'Settings',    icon: 'settings',  href: 'settings.html' },
+  ];
+
+  /* The project carries one identity hue. It is rationed to a 4px dot and
+     a hairline — never a card glow, because emerald has to stay the only
+     colour that means anything. */
+  /* Which project opened is carried in the URL (?p=id) by the home page's
+     cards, so the same screen serves every project and the back link stays
+     a plain anchor. Unknown or missing id falls back to the first. */
+  const EMPIRE_LISTS = [
+    {
+      id: 'build', name: 'Build', budget: '₹40,000',
+      tasks: [{
+        id: 'copy', title: 'Rewrite the landing page copy',
+        note: 'Lead with the outcome, not the process. Three sections, one call to action.',
+        due: '19 Sep', alloc: 150, sub: [0, 3], repeat: 'Monthly · last of 3',
+        tags: ['writing', 'web'], score: 7.5, state: 'queued',
+        d: {
+          deadline: '2026-09-19T18:00', importance: 4, quadrant: 'schedule', value: 40000, quasi: true,
+          reminder: '1 hour before', shared: ['\u26a1 Action Steps'],
+          repeat: { every: 1, unit: 'months', days: [], ends: 'after', count: 3 }, occurrence: 3,
+          links: [
+            { label: 'Current draft', url: 'https://docs.example/landing-copy' },
+            { label: 'Competitor teardown', url: 'https://docs.example/teardown' },
+          ],
+          subtasks: [
+            { id: 's1', title: 'Hero section', done: false },
+            { id: 's2', title: 'Proof section', done: false },
+            { id: 's3', title: 'Call to action', done: false },
+          ],
+        },
+      }],
+    },
+    {
+      id: 'ops', name: 'Operations', budget: '₹25,000',
+      tasks: [
+        {
+          id: 'inc', title: 'File the incorporation paperwork',
+          note: 'Form INC-32 plus the MOA and AOA. The CA has the drafts; they need signing and uploading.',
+          due: '1d left', urgent: true, alloc: 90, elapsed: 32, sub: [2, 5],
+          tags: ['legal', 'blocking'], score: 11.5, state: 'running',
+          d: {
+            deadline: '2026-08-22T06:00', importance: 4, quadrant: 'do', value: 15000,
+            reminder: '1 hour before', assignee: 'Me',
+            subtasks: [
+              { id: 'i1', title: 'Collect the signatures', done: true },
+              { id: 'i2', title: 'Scan the MOA and AOA', done: true },
+              { id: 'i3', title: 'Upload INC-32', done: false },
+              { id: 'i4', title: 'Pay the filing fee', done: false },
+              { id: 'i5', title: 'File the receipt', done: false },
+            ],
+          },
+        },
+        {
+          id: 'compliance', title: 'Quarterly compliance review',
+          note: 'Registers, minutes and the statutory file, checked against the register.',
+          due: '2d left', alloc: 60, repeat: 'Fortnightly · Mon, Thu · 1 of 8',
+          tags: ['compliance'], score: 7.0, state: 'queued',
+          d: {
+            deadline: '2026-08-23T09:00', importance: 2, quadrant: 'schedule', value: 10000,
+            reminder: '1 day before',
+            repeat: { every: 2, unit: 'weeks', days: [1, 4], ends: 'after', count: 8 }, occurrence: 1,
+          },
+        },
+      ],
+    },
+    {
+      id: 'money', name: 'Money', budget: '₹95,000',
+      tasks: [
+        {
+          id: 'account', title: 'Open the current account',
+          note: 'Needs the certificate of incorporation, so it cannot start until the filing clears.',
+          due: '23 Sep', alloc: 120, tags: ['banking'], score: 7.0,
+          state: 'queued', blockedBy: 'File the incorporation paperwork',
+          d: {
+            deadline: '2026-09-23T12:00', importance: 4, quadrant: 'schedule', value: 35000,
+            reminder: 'At the deadline',
+          },
+        },
+        {
+          id: 'invoices', title: 'Chase the outstanding invoices',
+          note: 'Two are past thirty days. Polite first note, then a call.',
+          alloc: 45, repeat: 'Daily · finished', tags: [], score: 9.0,
+          state: 'done', done: true,
+          d: {
+            importance: 5, quadrant: 'delegate', value: 60000, quasi: true, reminder: 'None',
+            repeat: { every: 1, unit: 'days', days: [], ends: 'after', count: 14 }, occurrence: 14,
+          },
+        },
+      ],
+    },
+  ];
+
+  const STUDIO_LISTS = [
+    {
+      id: 'space', name: 'The space', budget: '₹1,20,000',
+      tasks: [
+        {
+          id: 'lease', title: 'Sign the lease',
+          note: 'Nine hundred square feet on the second floor. Terms agreed, paperwork not.',
+          due: '3d left', alloc: 30, tags: ['legal'], score: 9.0, state: 'queued',
+          d: { deadline: '2026-08-24T17:00', importance: 2, quadrant: 'do', value: 90000, reminder: '1 day before' },
+        },
+        {
+          id: 'counter', title: 'Countersign the studio lease',
+          note: 'The landlord signs first; this is the return leg.',
+          due: '5d left', alloc: 40, tags: ['legal'], score: 7.0,
+          state: 'queued', blockedBy: 'Sign the lease',
+          d: { deadline: '2026-08-26T17:00', importance: 2, quadrant: 'schedule', value: 30000, reminder: 'None' },
+        },
+      ],
+    },
+    {
+      id: 'buildout', name: 'Build-out', budget: '₹60,000',
+      tasks: [
+        {
+          id: 'acoustics', title: 'Book the acoustics site survey',
+          note: 'Two hours on site with the treatment consultant, before anything is ordered.',
+          alloc: 35, tags: ['vendor'], score: 6.0, state: 'queued',
+          d: { importance: 3, quadrant: 'delegate', value: 60000, reminder: 'None' },
+        },
+      ],
+    },
+  ];
+
+  const PROJECTS = {
+    empire: {
+      id: 'empire', name: 'Shreekant Empire',
+      desc: 'The holding company — incorporation, compliance and the first year of filings.',
+      glyph: '📋', hue: 'var(--hue-violet)',
+      budget: '₹1.6L', lists: 3, tasks: 5, done: 1, progress: 20,
+      lists_: EMPIRE_LISTS,
+    },
+    studio: {
+      id: 'studio', name: 'Studio Launch',
+      desc: 'Everything that has to be true before the studio opens its doors.',
+      glyph: '🛠️', hue: 'var(--hue-amber)',
+      budget: '₹1.8L', lists: 2, tasks: 3, done: 0, progress: 0,
+      lists_: STUDIO_LISTS,
+    },
+    personal: {
+      id: 'personal', name: 'Personal',
+      desc: 'Errands, admin and everything that is nobody else’s problem.',
+      glyph: '📌', hue: 'var(--hue-cyan)',
+      budget: '—', lists: 0, tasks: 0, done: 0, progress: 0,
+      lists_: [],
+    },
+  };
+
+  const PROJECT = PROJECTS[new URLSearchParams(location.search).get('p')] || PROJECTS.empire;
+  const LISTS = PROJECT.lists_;
+
+  const ALL = LISTS.flatMap((l) => l.tasks.map((t) => ({ ...t, list: l.name })));
+  const LIST_NAMES = LISTS.map((l) => l.name);
+  const LIST_OF = {};
+  LISTS.forEach((l) => l.tasks.forEach((t) => { LIST_OF[t.id] = l.name; }));
+
+  /* Board task → sheet task. The card carries the shape of the work; `d`
+     carries everything the card deliberately does not show, and wins
+     wherever the two overlap. */
+  const toSheet = (t) => Object.assign({
+    id: t.id, title: t.title, project: PROJECT.name, list: t.list || LIST_OF[t.id],
+    status: t.done ? 'done' : t.state === 'running' ? 'doing' : 'todo',
+    blockedBy: t.blockedBy || '', tags: t.tags || [],
+    est: t.alloc, desc: t.note || '', deadline: '', start: '', notes: '',
+    importance: 0, quadrant: null, value: 0, quasi: false, reminder: 'None',
+    shared: [], links: [], subtasks: [], repeat: null, occurrence: null,
+    assignee: null, publicLink: null, visibleInShared: true, cover: null,
+  }, t.d || {});
+  const byScore = (a, b) => b.score - a.score;
+  const mins = (m) => m + ' min';
+  const totalAlloc = (tasks) => tasks.filter((t) => !t.done).reduce((n, t) => n + t.alloc, 0);
+  const doneCount = (tasks) => tasks.filter((t) => t.done).length;
+
+  /* ------------------------------------------------------------------ */
+  /* Small shared pieces                                                */
+
+  function Mono({ children, size = 'var(--text-xs)', color = 'var(--fg-3)', style }) {
+    return (
+      <span style={{ font: 'var(--type-numeric)', fontSize: size, color, fontVariantNumeric: 'tabular-nums', ...style }}>
+        {children}
+      </span>
+    );
+  }
+
+  /* A measured fact: 13px icon + mono value. Never a coloured pill —
+     colour means status here, and status has its own pill. */
+  function Fact({ icon, children, tone = 'var(--fg-3)' }) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: tone, minWidth: 0 }}>
+        <Icon name={icon} size={13} />
+        <Mono color={tone}>{children}</Mono>
+      </span>
+    );
+  }
+
+  function Tag({ children }) {
+    return (
+      <span style={{
+        font: 'var(--type-kicker)', color: 'var(--fg-3)', letterSpacing: '0.02em',
+        padding: '3px var(--sp-3)', borderRadius: 'var(--r-pill)',
+        backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', whiteSpace: 'nowrap',
+      }}>
+        {children}
+      </span>
+    );
+  }
+
+  /* Recurrence state — "last of 3", "finished". A fact about the series,
+     so it is a neutral chip, not an amber alarm. */
+  function SeriesChip({ children }) {
+    return (
+      <span style={{
+        font: 'var(--type-kicker)', color: 'var(--fg-2)', letterSpacing: '0.02em',
+        padding: '3px var(--sp-4)', borderRadius: 'var(--r-pill)',
+        backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-1)', whiteSpace: 'nowrap',
+      }}>
+        {children}
+      </span>
+    );
+  }
+
+  function Tick({ done, disabled, onToggle }) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); if (!disabled) onToggle(); }}
+        disabled={disabled}
+        aria-label={done ? 'Mark not done' : 'Mark done'}
+        aria-pressed={!!done}
+        style={{
+          flex: '0 0 auto', width: 42, height: 42, margin: -9, padding: 0, border: 0,
+          display: 'grid', placeItems: 'center', background: 'transparent',
+          cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
+        }}
+      >
+        <span style={{
+          display: 'grid', placeItems: 'center', width: 24, height: 24, borderRadius: 'var(--r-xs)',
+          backgroundImage: done ? 'var(--glass-tint-accent)' : 'var(--glass-well)',
+          boxShadow: done ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
+          transition: 'background var(--dur-base) var(--ease-glass), box-shadow var(--dur-base) var(--ease-glass)',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" fill="none" stroke="var(--fg-1)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ strokeDasharray: 16, strokeDashoffset: done ? 0 : 16, transition: 'stroke-dashoffset var(--dur-base) var(--ease-glass)' }} />
+          </svg>
+        </span>
+      </button>
+    );
+  }
+
+  /* Blocked is stated, not shouted: the blocker is named on a neutral
+     well. A red box on a task you cannot start is noise you can't act on. */
+  function BlockedLine({ on }) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0,
+        padding: '4px var(--sp-4) 4px var(--sp-3)', borderRadius: 'var(--r-pill)',
+        backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', color: 'var(--fg-3)',
+      }}>
+        <Icon name="lock" size={13} />
+        <span className="clamp1" style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+          Waiting on <span style={{ color: 'var(--fg-2)' }}>{on}</span>
+        </span>
+      </span>
+    );
+  }
+
+  /* A hairline trough. Two jobs on this screen: subtask progress on a
+     card, and list completion in a header. */
+  function Meter({ pct, tone = 'var(--accent)', height = 3 }) {
+    return (
+      <span style={{ display: 'block', height, borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden' }}>
+        <span style={{
+          display: 'block', height: '100%', width: pct + '%', borderRadius: 'var(--r-pill)',
+          background: pct ? tone : 'transparent', boxShadow: pct ? '0 0 10px -2px ' + tone : 'none',
+          transition: 'width var(--dur-slow) var(--ease-glass)',
+        }} />
+      </span>
+    );
+  }
+
+  /* One composed field: a well, a lead icon, a commit button, a dismiss.
+     Used for both quick-add-task and new-list, because they are the
+     same gesture at two scales. */
+  function InlineField({ icon, placeholder, action, onClose, autoFocus }) {
+    const [value, setValue] = React.useState('');
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+        padding: 'var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-6)',
+        borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-shadow-pane)',
+      }}>
+        <Icon name={icon} size={17} />
+        <input
+          autoFocus={autoFocus}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          data-ag-field
+          style={{
+            flex: 1, minWidth: 0, height: 38, border: 0, outline: 'none', background: 'transparent',
+            font: 'var(--type-body)', color: 'var(--fg-1)', letterSpacing: 'var(--tracking-ui)',
+          }}
+        />
+        <Button variant={value ? 'solid' : 'glass'} size="sm" onClick={() => setValue('')}>{action}</Button>
+        <IconButton label="Close" size="sm" variant="ghost" onClick={onClose}><Icon name="x" size={16} /></IconButton>
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Task card                                                          */
+
+  function taskMenu(t, onOpen) {
+    return [
+      { label: 'Open task', icon: <Icon name="panel-right-open" size={18} />, meta: <Icon name="chevron-right" size={16} />, onSelect: () => onOpen(t) },
+      { label: 'Start now', icon: <Icon name="zap" size={18} /> },
+      { label: 'Move to list', icon: <Icon name="corner-up-right" size={18} />, meta: <Icon name="chevron-right" size={16} /> },
+      { label: 'Share task', icon: <Icon name="share-2" size={18} /> },
+      { divider: true },
+      {
+        label: 'Delete task', icon: <Icon name="trash-2" size={18} />, tone: 'danger',
+        confirm: { label: 'Delete this task?', hint: t.title, action: 'Delete' },
+      },
+    ];
+  }
+
+  function TaskCard({ t, selectMode, selected, onSelect, onToggle, onOpen }) {
+    const live = t.state === 'running';
+    /* The card itself is the door into the detail sheet. Controls on the
+       card keep their own jobs — the tick, the menu, a link. */
+    const pick = (e) => {
+      if (e.target.closest('button, a, label, input, [role="button"]')) return;
+      if (selectMode && !t.done) { onSelect(t.id); return; }
+      onOpen(t);
+    };
+
+    return (
+      <article
+        className="trow"
+        data-live={live ? 'true' : 'false'}
+        data-sel={selected ? 'true' : 'false'}
+        data-done={t.done ? 'true' : 'false'}
+        onClick={pick}
+        style={{
+          display: 'grid', gridTemplateColumns: '24px 1fr', columnGap: 'var(--sp-5)', rowGap: 'var(--sp-4)',
+          padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-md)',
+          cursor: 'pointer',
+        }}
+      >
+        <Tick done={t.done} disabled={!!t.blockedBy} onToggle={() => onToggle(t.id)} />
+
+        <div style={{ minWidth: 0, display: 'grid', gap: 'var(--sp-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' }}>
+            <h3 style={{
+              flex: 1, minWidth: 0, font: 'var(--type-body)', color: t.done ? 'var(--fg-3)' : 'var(--fg-1)',
+              letterSpacing: 'var(--tracking-ui)',
+              textDecoration: t.done ? 'line-through' : 'none', textDecorationColor: 'var(--fg-4)',
+            }}>
+              {t.title}
+            </h3>
+            <ScoreDial value={t.score} size="sm" style={{ marginTop: 1 }} />
+            <span className="racts" style={{ display: 'flex', flex: '0 0 auto', marginTop: -4 }}>
+              <MorphMenu
+                align="end"
+                width={244}
+                trigger={<IconButton label={'Actions for ' + t.title} size="sm" variant="ghost"><Icon name="ellipsis" size={16} /></IconButton>}
+                items={taskMenu(t, onOpen)}
+              />
+            </span>
+          </div>
+
+          {t.note && (
+            <p className="clamp2" style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', lineHeight: 'var(--leading-normal)' }}>
+              {t.note}
+            </p>
+          )}
+
+          {live && (
+            <div style={{ display: 'grid', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <StatusPill status="running" size="sm">Running</StatusPill>
+                <Mono color="var(--accent)">{t.elapsed} / {t.alloc} min</Mono>
+              </div>
+              <Meter pct={t.elapsed / t.alloc * 100} height={4} />
+            </div>
+          )}
+
+          {t.blockedBy && <BlockedLine on={t.blockedBy} />}
+
+          {/* Measured facts, always in this order: when · how long · how far · how often */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+            {t.due && !t.done && (
+              t.urgent ? <StatusPill status="review" size="sm">{t.due}</StatusPill> : <Fact icon="calendar">{t.due}</Fact>
+            )}
+            {!live && <Fact icon="clock" tone={t.done ? 'var(--fg-4)' : 'var(--fg-3)'}>{mins(t.alloc)}</Fact>}
+            {t.sub && <Fact icon="corner-down-right">{t.sub[0]}/{t.sub[1]}</Fact>}
+            {t.repeat && <Fact icon="repeat">{t.repeat}</Fact>}
+          </div>
+
+          {t.sub && !live && <Meter pct={t.sub[0] / t.sub[1] * 100} tone="var(--fg-3)" />}
+
+          {t.tags.length > 0 && (
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+              {t.tags.map((g) => <Tag key={g}>#{g}</Tag>)}
+            </div>
+          )}
+        </div>
+      </article>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* List panel                                                         */
+
+  function ListPanel({ list, hue, selectMode, selected, onSelect, onToggle, showDone, onOpen }) {
+    const [adding, setAdding] = React.useState(false);
+    const tasks = list.tasks.filter((t) => showDone || !t.done).slice().sort(byScore);
+    const done = doneCount(list.tasks);
+    const pct = list.tasks.length ? Math.round(done / list.tasks.length * 100) : 0;
+
+    return (
+      <section style={{
+        display: 'grid', gridTemplateRows: 'auto auto auto', minWidth: 0, alignContent: 'start',
+        borderRadius: 'var(--r-card)',
+        backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md-refract)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-shadow-pane)',
+      }}>
+        <header className="colhead" style={{ display: 'grid', gap: 'var(--sp-4)', padding: 'var(--sp-6) var(--sp-6) var(--sp-5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+            <span className="grip" style={{ display: 'flex', color: 'var(--fg-4)', marginLeft: -6, cursor: 'grab' }} title="Drag to reorder">
+              <Icon name="grip-vertical" size={16} />
+            </span>
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: hue, flex: '0 0 auto' }} />
+            <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-md)', color: 'var(--fg-1)', letterSpacing: 'var(--tracking-ui)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {list.name}
+            </h2>
+            <Mono color="var(--fg-4)">{done}/{list.tasks.length}</Mono>
+            <span style={{ flex: 1 }} />
+            <span style={{
+              font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--fg-2)',
+              fontVariantNumeric: 'tabular-nums', padding: '3px var(--sp-4)', borderRadius: 'var(--r-pill)',
+              backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', whiteSpace: 'nowrap',
+            }}>
+              {list.budget}
+            </span>
+            <IconButton label={'Add task to ' + list.name} size="sm" variant="ghost" onClick={() => setAdding(true)}>
+              <Icon name="plus" size={16} />
+            </IconButton>
+            <MorphMenu
+              align="end"
+              width={244}
+              trigger={<IconButton label={'Actions for ' + list.name} size="sm" variant="ghost"><Icon name="chevron-down" size={16} /></IconButton>}
+              header={{ title: list.name, meta: [list.tasks.length + ' tasks', mins(totalAlloc(list.tasks)) + ' left', list.budget].join('  ·  ') }}
+              items={[
+                { label: 'Rename list', icon: <Icon name="square-pen" size={18} /> },
+                { label: 'Add task', icon: <Icon name="plus" size={18} /> },
+                { label: 'Share list', icon: <Icon name="share-2" size={18} /> },
+                { label: 'Hide from shares', icon: <Icon name="eye-off" size={18} /> },
+                { divider: true },
+                { label: 'Delete list', icon: <Icon name="trash-2" size={18} />, tone: 'danger', confirm: { label: 'Delete ' + list.name + '?', hint: list.tasks.length + ' tasks go with it.', action: 'Delete' } },
+              ]}
+            />
+          </div>
+
+          {/* Two numbers per list, and only two: how far in, and work left. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            <span style={{ flex: 1 }}><Meter pct={pct} /></span>
+            <Mono color="var(--fg-4)">{mins(totalAlloc(list.tasks))} left</Mono>
+          </div>
+        </header>
+
+        <div className="colbody" style={{ display: 'grid', gap: 'var(--sp-3)', alignContent: 'start', padding: '0 var(--sp-5)' }}>
+          {adding && (
+            <div style={{ paddingBottom: 'var(--sp-2)' }}>
+              <InlineField autoFocus icon="circle" action="Add" placeholder="Task title. Enter to add, paste lines for several." onClose={() => setAdding(false)} />
+            </div>
+          )}
+          {tasks.length === 0 && !adding && (
+            <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-6) var(--sp-2)' }}>Nothing here.</p>
+          )}
+          {tasks.map((t) => (
+            <TaskCard key={t.id} t={t} selectMode={selectMode} selected={selected.has(t.id)} onSelect={onSelect} onToggle={onToggle} onOpen={onOpen} />
+          ))}
+        </div>
+
+        <div style={{ padding: 'var(--sp-5)' }}>
+          <button type="button" className="addrow" onClick={() => setAdding(true)} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-3)',
+            width: '100%', minHeight: 44, borderRadius: 'var(--r-pill)', cursor: 'pointer', font: 'var(--type-label)',
+          }}>
+            <Icon name="plus" size={16} />
+            Add task
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  /* Adding a list is rare, so it gets a low strip rather than a
+     card-sized dashed void that reads as an empty fourth list. */
+  function AddList() {
+    const [open, setOpen] = React.useState(false);
+
+    if (open) {
+      return (
+        <section style={{
+          display: 'grid', alignContent: 'center', gap: 'var(--sp-4)', minHeight: 152,
+          padding: 'var(--pad-card)', borderRadius: 'var(--r-card)',
+          backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+        }}>
+          <span className="ag-kicker">New list</span>
+          <InlineField autoFocus icon="circle-plus" action="Create" placeholder="List name. Enter to create, paste lines for several." onClose={() => setOpen(false)} />
+        </section>
+      );
+    }
+
+    return (
+      <button type="button" className="addrow" onClick={() => setOpen(true)} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-4)',
+        minHeight: 152, padding: 'var(--pad-card)', borderRadius: 'var(--r-card)',
+        cursor: 'pointer', font: 'var(--type-label)',
+      }}>
+        <span style={{ display: 'grid', placeItems: 'center', width: 40, height: 40, borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)' }}>
+          <Icon name="plus" size={18} />
+        </span>
+        Add list
+      </button>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* List view — the same tasks as a table, where numbers get headings   */
+
+  /* Tags are the first thing to go when the table gets narrow: they are
+     the only column that is not a number with a heading. */
+  const GRID_WIDE = '24px minmax(220px, 1fr) auto 96px 84px 54px 40px';
+  const GRID_TIGHT = '24px minmax(150px, 1fr) 88px 76px 48px 36px';
+  const gridFor = (wide) => (wide ? GRID_WIDE : GRID_TIGHT);
+
+  function ListRow({ t, wide, selectMode, selected, onSelect, onToggle, onOpen }) {
+    const live = t.state === 'running';
+    return (
+      <div
+        className="trow"
+        data-live={live ? 'true' : 'false'}
+        data-sel={selected ? 'true' : 'false'}
+        data-done={t.done ? 'true' : 'false'}
+        onClick={(e) => {
+          if (e.target.closest('button, a, label, input, [role="button"]')) return;
+          if (selectMode && !t.done) { onSelect(t.id); return; }
+          onOpen(t);
+        }}
+        style={{
+          display: 'grid', gridTemplateColumns: gridFor(wide), alignItems: 'center', gap: 'var(--sp-5)',
+          minHeight: 60, padding: 'var(--sp-4) var(--sp-6)', borderRadius: 'var(--r-md)',
+          cursor: 'pointer',
+        }}
+      >
+        <Tick done={t.done} disabled={!!t.blockedBy} onToggle={() => onToggle(t.id)} />
+
+        <div style={{ minWidth: 0, display: 'grid', gap: 3 }}>
+          <span style={{
+            font: 'var(--type-body)', color: t.done ? 'var(--fg-3)' : 'var(--fg-1)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            textDecoration: t.done ? 'line-through' : 'none', textDecorationColor: 'var(--fg-4)',
+          }}>
+            {t.title}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+            {live && <StatusPill status="running" size="sm">Running · {t.elapsed}/{t.alloc} min</StatusPill>}
+            {t.blockedBy && <BlockedLine on={t.blockedBy} />}
+            {!live && !t.blockedBy && t.repeat && <Fact icon="repeat">{t.repeat}</Fact>}
+            {!live && !t.blockedBy && !t.repeat && t.sub && <Fact icon="corner-down-right">{t.sub[0]}/{t.sub[1]} subtasks</Fact>}
+          </span>
+        </div>
+
+        <span style={{ display: wide ? 'flex' : 'none', gap: 'var(--sp-3)', flexWrap: 'nowrap' }}>
+          {t.tags.map((g) => <Tag key={g}>#{g}</Tag>)}
+        </span>
+
+        <span style={{ textAlign: 'right' }}>
+          {t.due
+            ? (t.urgent ? <StatusPill status="review" size="sm">{t.due}</StatusPill> : <Mono>{t.due}</Mono>)
+            : <Mono color="var(--fg-4)">—</Mono>}
+        </span>
+        <span style={{ textAlign: 'right' }}><Mono color={t.done ? 'var(--fg-4)' : 'var(--fg-2)'}>{mins(t.alloc)}</Mono></span>
+        <span style={{ display: 'grid', justifyItems: 'end' }}><ScoreDial value={t.score} size="sm" /></span>
+
+        <span className="racts" style={{ justifySelf: 'end' }}>
+          <MorphMenu
+            align="end"
+            width={244}
+            trigger={<IconButton label={'Actions for ' + t.title} size="sm" variant="ghost"><Icon name="ellipsis" size={16} /></IconButton>}
+            items={taskMenu(t, onOpen)}
+          />
+        </span>
+      </div>
+    );
+  }
+
+  function ListView({ lists, wide, selectMode, selected, onSelect, onToggle, showDone, onOpen }) {
+    return (
+      <div className="table-scroll" style={{
+        display: 'grid', gap: 'var(--sp-7)', padding: 'var(--pad-card)', borderRadius: 'var(--r-card)',
+        backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-md-refract)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: 'var(--glass-shadow-pane)',
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: gridFor(wide), gap: 'var(--sp-5)', padding: '0 var(--sp-6)' }}>
+          <span />
+          <span className="ag-kicker">Task</span>
+          {wide && <span />}
+          <span className="ag-kicker" style={{ textAlign: 'right' }}>Due</span>
+          <span className="ag-kicker" style={{ textAlign: 'right' }}>Allocated</span>
+          <span className="ag-kicker" style={{ textAlign: 'right' }}>Score</span>
+          <span />
+        </div>
+
+        {lists.map((l) => {
+          const tasks = l.tasks.filter((t) => showDone || !t.done).slice().sort(byScore);
+          if (!tasks.length) return null;
+          return (
+            <section key={l.id} style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', padding: '0 var(--sp-6) var(--sp-2)' }}>
+                <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)' }}>{l.name}</span>
+                <Mono color="var(--fg-4)">{doneCount(l.tasks)}/{l.tasks.length}</Mono>
+                <span style={{ flex: 1, height: 1, background: 'var(--line-faint)' }} />
+                <Mono color="var(--fg-4)">{mins(totalAlloc(l.tasks))} left</Mono>
+                <Mono color="var(--fg-3)">{l.budget}</Mono>
+              </div>
+              {tasks.map((t) => (
+                <ListRow key={t.id} t={t} wide={wide} selectMode={selectMode} selected={selected.has(t.id)} onSelect={onSelect} onToggle={onToggle} onOpen={onOpen} />
+              ))}
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Masthead — the project, and the one question the product answers    */
+
+  function Masthead() {
+
+    return (
+      <section style={{
+        display: 'grid', gap: 'var(--sp-8)', padding: 'var(--pad-card-lg)',
+        borderRadius: 'var(--r-card-lg)',
+        backgroundImage: 'var(--glass-fill-2)',
+        backdropFilter: 'var(--glass-bd-lg-refract)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+      }}>
+        {/* Cover sits BEHIND the glass and stays desaturated, so it can
+            never compete with the task board underneath. */}
+        <div style={{ position: 'relative' }}>
+          <div className="cover" style={{
+            height: 116, borderRadius: 'var(--r-lg)',
+            boxShadow: 'var(--glass-well-shadow), inset 0 0 0 1px var(--line-faint)',
+            display: 'grid', placeItems: 'center',
+          }}>
+            <span style={{ font: 'var(--type-kicker)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)' }}>
+              cover · 1200×400
+            </span>
+          </div>
+          <span style={{
+            position: 'absolute', left: 'var(--sp-6)', bottom: -22,
+            display: 'grid', placeItems: 'center', width: 56, height: 56, fontSize: 26,
+            borderRadius: 'var(--r-md)', backgroundImage: 'var(--glass-fill-3)',
+            backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+            boxShadow: 'var(--glass-rim-2), var(--glass-cast-2)',
+          }}>
+            {PROJECT.glyph}
+          </span>
+          <span style={{ position: 'absolute', right: 'var(--sp-6)', top: 'var(--sp-6)' }}>
+            <Button variant="glass" size="sm" iconLeft={<Icon name="image" size={15} />}>Change cover</Button>
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gap: 'var(--sp-9)', paddingTop: 'var(--sp-5)' }}>
+          <div style={{ display: 'grid', gap: 'var(--sp-6)', alignContent: 'start', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: PROJECT.hue }} />
+              <span className="ag-kicker">Project</span>
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--fg-4)' }} />
+              <Mono color="var(--fg-4)">{PROJECT.lists} lists</Mono>
+            </div>
+
+            <div style={{ display: 'grid', gap: 'var(--sp-4)', minWidth: 0 }}>
+              <h1 style={{ font: 'var(--type-metric)', letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)' }}>
+                {PROJECT.name}
+              </h1>
+              <p style={{ font: 'var(--type-body)', color: 'var(--fg-3)', maxWidth: '48ch', textWrap: 'pretty' }}>
+                {PROJECT.desc}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-7)', flexWrap: 'wrap', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--line-faint)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
+                <ProgressRing value={PROJECT.progress} size={54} thickness={5} showValue />
+                <span style={{ display: 'grid', gap: 2 }}>
+                  <Mono size="var(--text-sm)" color="var(--fg-1)">{PROJECT.done} of {PROJECT.tasks}</Mono>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>tasks done</span>
+                </span>
+              </span>
+              <span style={{ width: 1, height: 34, background: 'var(--line-faint)' }} />
+              <span style={{ display: 'grid', gap: 2 }}>
+                <Mono size="var(--text-sm)" color="var(--fg-1)">{mins(totalAlloc(ALL))}</Mono>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>work left</span>
+              </span>
+              <span style={{ width: 1, height: 34, background: 'var(--line-faint)' }} />
+              <span style={{ display: 'grid', gap: 2 }}>
+                <Mono size="var(--text-sm)" color="var(--fg-1)">{PROJECT.budget}</Mono>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>value</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  function Screen() {
+    const [view, setView] = React.useState('board');
+    const [nav, setNav] = React.useState('home');
+    const [wide, setWide] = React.useState(window.innerWidth >= 1080);
+    const [showDone, setShowDone] = React.useState(true);
+    const [selectMode, setSelectMode] = React.useState(false);
+    const [quickAdd, setQuickAdd] = React.useState(false);
+    const [selected, setSelected] = React.useState(new Set());
+    const [done, setDone] = React.useState(new Set(['invoices']));
+    /* ?t=<id> opens straight onto a task, so a shared link lands on the
+       detail rather than on the board. */
+    const [sheet, setSheet] = React.useState(() => {
+      const id = new URLSearchParams(location.search).get('t');
+      const hit = ALL.find((x) => x.id === id);
+      return hit ? toSheet(hit) : null;
+    });
+
+    React.useEffect(() => {
+      const on = () => setWide(window.innerWidth >= 1080);
+      window.addEventListener('resize', on);
+      return () => window.removeEventListener('resize', on);
+    }, []);
+
+    const lists = LISTS.map((l) => ({
+      ...l,
+      tasks: l.tasks.map((t) => ({ ...t, done: done.has(t.id), state: done.has(t.id) ? 'done' : t.state })),
+    }));
+
+    const onToggle = (id) => setDone((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+    const onSelect = (id) => setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+    const picked = ALL.filter((t) => selected.has(t.id));
+    const openSheet = (t) => setSheet(toSheet(t));
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'flex-start' }}>
+        <GlassFilters />
+
+        {/* The rail, at every width. */}
+        <div style={{ position: 'sticky', top: 'var(--sp-9)', flex: '0 0 auto', padding: wide ? 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' : 'var(--sp-6) 0 var(--sp-6) var(--sp-5)', zIndex: 40 }}>
+          <MiniNav orientation="vertical" items={navItems} value={nav} onChange={(v) => { if (v === 'assistant') { location.href = 'atlas.html'; return; } if (v === 'score') { location.href = 'scoring.html'; return; } if (v === 'session') { location.href = 'session.html'; return; } setNav(v); }} />
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0, padding: wide ? 'var(--sp-11) var(--gutter-page) var(--sp-13)' : 'var(--sp-9) var(--gutter-page-sm) var(--sp-13)' }}>
+          <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap', marginBottom: 'var(--sp-9)' }}>
+            <a href="home.html" style={{ display: 'flex', textDecoration: 'none' }} aria-label="Back to projects">
+              <IconButton label="Back to projects" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+            </a>
+            <img src="../assets/mark-white.png" alt="" width="26" height="26" style={{ opacity: 0.95, display: 'block' }} />
+            <a href="home.html" style={{ font: 'var(--type-label)', color: 'var(--fg-3)', textDecoration: 'none' }}>Projects</a>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>/</span>
+            <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>{PROJECT.name}</span>
+            <span style={{ flex: 1 }} />
+            <IconButton label="Search tasks and commands" variant="ghost"><Icon name="search" size={18} /></IconButton>
+            <MorphMenu
+              align="end"
+              width={256}
+              trigger={<IconButton label="Project actions" variant="ghost"><Icon name="ellipsis" size={18} /></IconButton>}
+              header={{ title: PROJECT.name, meta: [PROJECT.lists + ' lists', PROJECT.tasks + ' tasks', PROJECT.budget].join('  ·  ') }}
+              items={[
+                { label: 'Edit project', icon: <Icon name="square-pen" size={18} />, meta: <Icon name="chevron-right" size={16} /> },
+                { label: 'Share project', icon: <Icon name="share-2" size={18} />, meta: <Icon name="chevron-right" size={16} /> },
+                { divider: true },
+                { label: 'Delete project', icon: <Icon name="trash-2" size={18} />, tone: 'danger', confirm: { label: 'Delete ' + PROJECT.name + '?', hint: PROJECT.lists + ' lists and ' + PROJECT.tasks + ' tasks go with it.', action: 'Delete' } },
+              ]}
+            />
+          </header>
+
+          <div style={{ display: 'grid', gap: 'var(--gap-section)' }}>
+            <Masthead />
+
+            <section style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+              {/* Toolbar: how the tasks are shaped, not what they are. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                <SegmentedControl
+                  value={view}
+                  onChange={setView}
+                  options={[
+                    { value: 'board', label: 'Board', icon: <Icon name="columns-3" size={16} /> },
+                    { value: 'list', label: 'List', icon: <Icon name="list" size={16} /> },
+                  ]}
+                />
+                <Switch checked={showDone} onChange={setShowDone} size="sm" label="Show done" />
+                <span style={{ flex: 1 }} />
+                <Button
+                  variant={selectMode ? 'tint' : 'glass'}
+                  iconLeft={<Icon name={selectMode ? 'check-check' : 'list-checks'} size={16} />}
+                  onClick={() => { setSelectMode(!selectMode); setSelected(new Set()); }}
+                >
+                  {selectMode ? 'Selecting' : 'Select'}
+                </Button>
+                <Button iconLeft={<Icon name="plus" size={16} />} onClick={() => setQuickAdd(true)}>New task</Button>
+              </div>
+
+              {/* Quick add: one field, board-wide, morphing out of the
+                  New task button. Paste several lines to add several. */}
+              {quickAdd && (
+                <InlineField autoFocus icon="circle" action="Add" placeholder="Task title. Enter to add, paste lines for several." onClose={() => setQuickAdd(false)} />
+              )}
+
+              {!lists.length ? (
+                /* An empty project gets a sentence and one door, not a
+                   grid of dashed placeholders. */
+                <div style={{
+                  display: 'grid', gap: 'var(--sp-5)', justifyItems: 'start',
+                  padding: 'var(--sp-11) var(--pad-card)', borderRadius: 'var(--r-card-lg)',
+                  backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1), var(--glass-inner-1)',
+                }}>
+                  <span className="ag-kicker">Nothing here yet</span>
+                  <p style={{ font: 'var(--type-body)', color: 'var(--fg-3)', maxWidth: '44ch', textWrap: 'pretty' }}>
+                    Lists hold the work. Add the first one and tasks can go in it.
+                  </p>
+                  <AddList />
+                </div>
+              ) : view === 'board' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(auto-fit, minmax(408px, 1fr))' : '1fr', gap: 'var(--gap-card)', alignItems: 'start' }}>
+                  {lists.map((l) => (
+                    <ListPanel
+                      key={l.id}
+                      list={l}
+                      hue={PROJECT.hue}
+                      selectMode={selectMode}
+                      selected={selected}
+                      onSelect={onSelect}
+                      onToggle={onToggle}
+                      showDone={showDone}
+                      onOpen={openSheet}
+                    />
+                  ))}
+                  <AddList />
+                </div>
+              ) : (
+                <ListView lists={lists} wide={wide} selectMode={selectMode} selected={selected} onSelect={onSelect} onToggle={onToggle} showDone={showDone} onOpen={openSheet} />
+              )}
+            </section>
+          </div>
+        </div>
+
+        {/* Selection bar — the bridge from this view into the session.
+            Morphs up out of the toolbar's Select button. */}
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-9)', display: 'grid', placeItems: 'center', zIndex: 60, pointerEvents: 'none' }}>
+          <div style={{
+            pointerEvents: picked.length ? 'auto' : 'none',
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-6)',
+            minHeight: 60, padding: 'var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-8)',
+            borderRadius: 'var(--r-pill)',
+            backgroundImage: 'var(--glass-fill-3)',
+            backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+            boxShadow: 'var(--glass-shadow-pane)',
+            opacity: picked.length ? 1 : 0,
+            transform: picked.length ? 'translateY(0)' : 'translateY(6px)',
+            transition: 'opacity var(--dur-base) var(--ease-glass), transform var(--dur-base) var(--ease-glass)',
+          }}>
+            <span style={{ display: 'grid', gap: 1 }}>
+              <Mono size="var(--text-sm)" color="var(--fg-1)">{picked.length} selected</Mono>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                {mins(picked.reduce((n, t) => n + t.alloc, 0))} of work
+              </span>
+            </span>
+            <MorphCluster
+              label="Bulk actions"
+              trigger={<Button variant="glass" size="sm" iconRight={<Icon name="chevron-right" size={14} />}>Actions</Button>}
+            >
+              <IconButton label="Move to list" size="sm"><Icon name="folder-input" size={16} /></IconButton>
+              <IconButton label="Reschedule" size="sm"><Icon name="calendar-clock" size={16} /></IconButton>
+              <IconButton label="Archive" size="sm"><Icon name="archive" size={16} /></IconButton>
+            </MorphCluster>
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear</Button>
+            <Button variant="solid" iconLeft={<Icon name="zap" size={16} />}>Start session</Button>
+          </div>
+        </div>
+
+        {/* The task sheet. Opened by pressing a card, so it always has a
+            subject; the board stays behind it, blurred, for context. */}
+        {sheet && (
+          <TaskSheet
+            task={sheet}
+            now={SHEET_NOW}
+            lists={LIST_NAMES}
+            shareLists={SHARE_LISTS}
+            prereqs={ALL.map((x) => x.title)}
+            onClose={() => setSheet(null)}
+            onSave={() => setSheet(null)}
+            onDelete={() => setSheet(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Screen />);
+});
+</script>
+</body>
+</html>

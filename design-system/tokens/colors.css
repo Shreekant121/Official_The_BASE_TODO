@@ -1,0 +1,91 @@
+/* ---------------------------------------------------------------
+   COLOR — dark and near-monochrome. Emerald is THE accent: brand,
+   primary action, live. The spectrum below exists only for status —
+   small pills, dots, one icon — never for surfaces or decoration.
+   Any screen should read as black, white and a little green.
+   --------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+
+  /* ---- Base ladder. Indigo-cast blacks: glass looks lit, not grey. ---- */
+  --void-0: oklch(0.085 0.004 260);   /* page floor                      */
+  --void-1: oklch(0.130 0.005 260);   /* app chrome, rails               */
+  --void-2: oklch(0.185 0.006 260);   /* opaque card fallback            */
+  --void-3: oklch(0.245 0.006 260);   /* raised / hover fill             */
+  --void-4: oklch(0.305 0.006 260);   /* pressed / heavy divider         */
+
+  /* ---- Foreground ladder ---- */
+  --fg-1: oklch(0.99 0.004 275);      /* headings, primary               */
+  --fg-2: oklch(0.82 0.006 260);      /* body copy                       */
+  --fg-3: oklch(0.64 0.008 260);      /* labels, captions, metadata      */
+  --fg-4: oklch(0.48 0.008 260);      /* placeholder, disabled           */
+  --fg-on-accent: oklch(0.16 0.04 162);
+  --fg-on-light:  oklch(0.16 0.02 275);
+  --fg-on-brand: var(--fg-on-accent);
+
+  /* ---- Live accent. Emerald, from the product. ---- */
+  --accent:        oklch(0.74 0.165 162);
+  --accent-lift:   oklch(0.82 0.150 165);
+  --accent-sink:   oklch(0.62 0.140 161);
+  --accent-wash:   oklch(0.74 0.165 162 / 0.16);
+  --accent-hairline: oklch(0.74 0.165 162 / 0.40);
+
+  /* ---- Brand. Indigo — primary buttons, selection, focus. ---- */
+  --brand-base: var(--accent);
+  --brand-lift: var(--accent-lift);
+  --brand-sink: var(--accent-sink);
+  --brand-wash: var(--accent-wash);
+  --brand-hairline: var(--accent-hairline);
+
+  /* ---- The spectrum. Each hue owns a meaning. ---- */
+  --hue-indigo:  oklch(0.70 0.14 277);   /* brand · primary              */
+  --hue-violet:  oklch(0.72 0.14 300);   /* Atlas · AI · backburner       */
+  --hue-magenta: oklch(0.72 0.14 348);   /* streaks · highlight           */
+  --hue-rose:    oklch(0.70 0.15  18);   /* overrun · destructive         */
+  --hue-coral:   oklch(0.75 0.13  40);   /* deadlines · urgency           */
+  --hue-amber:   oklch(0.80 0.13  82);   /* review · attention            */
+  --hue-lime:    oklch(0.84 0.15 135);   /* done · complete               */
+  --hue-emerald: var(--accent);          /* live · running                */
+  --hue-cyan:    oklch(0.76 0.11 215);   /* queued · info                 */
+  --hue-sky:     oklch(0.74 0.12 240);   /* calendar · sync               */
+  --hue-grey:    oklch(0.72 0.02 275);
+
+  /* ---- Gradient ramps — for hero surfaces and gel, never for text. ---- */
+  --ramp-dusk:   linear-gradient(120deg, oklch(0.58 0.22 278), oklch(0.60 0.22 310) 50%, oklch(0.66 0.21 350));
+  --ramp-lagoon: linear-gradient(120deg, oklch(0.62 0.17 245), oklch(0.72 0.14 210) 50%, oklch(0.78 0.16 165));
+  --ramp-ember:  linear-gradient(120deg, oklch(0.84 0.16 85), oklch(0.76 0.17 55) 50%, oklch(0.68 0.19 28));
+  --ramp-bloom:  linear-gradient(120deg, oklch(0.72 0.20 348), oklch(0.76 0.16 30) 55%, oklch(0.84 0.16 82));
+  --ramp-aurora: linear-gradient(100deg, oklch(0.70 0.19 277), oklch(0.72 0.19 305), oklch(0.72 0.20 348), oklch(0.83 0.16 82), oklch(0.78 0.13 215), oklch(0.70 0.19 277));
+
+  /* ---- Semantic aliases — reach for these, not the raw values ---- */
+  --brand:          var(--brand-base);
+  --text-heading:   var(--fg-1);
+  --text-body:      var(--fg-2);
+  --text-muted:     var(--fg-3);
+  --text-disabled:  var(--fg-4);
+  --surface-page:   var(--void-0);
+  --surface-chrome: var(--void-1);
+  --surface-card:   var(--void-2);
+  --surface-raised: var(--void-3);
+
+  /* Task + session status, mapped to the app's real vocabulary */
+  --status-running:    var(--accent);
+  --status-queued:     var(--hue-cyan);
+  --status-review:     var(--hue-amber);
+  --status-done:       oklch(0.74 0.15 150);
+  --status-overrun:    var(--hue-rose);
+  --status-deadline:   var(--hue-coral);
+  --status-backburner: var(--hue-violet);
+  --status-archived:   var(--hue-grey);
+  --status-ai:         var(--hue-violet);
+
+  /* ---- Hairlines — tinted so edges catch colour. ---- */
+  --line-faint: oklch(1 0 0 / 0.06);
+  --line-soft: oklch(1 0 0 / 0.08);
+  --line-strong: oklch(1 0 0 / 0.18);
+
+  /* Focus. An outline, not a box-shadow. Indigo — focus is selection. */
+  --focus-ring-color: var(--brand-lift);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}

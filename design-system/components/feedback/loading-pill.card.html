@@ -1,0 +1,74 @@
+<!-- @dsCard group="Motion" viewport="720x440" name="Loading pill" subtitle="Near-black glass, mono numeral, the system's hues drifting under frost" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Loading pill</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD(['../feedback/LoadingPill.jsx']).then(function (AG) {
+  const { LoadingPill } = AG;
+  const E = 'var(--ease-glass)';
+
+  /* Realistic progress: uneven steps, a stall in the 80s, then done. */
+  function useFakeProgress(run) {
+    const [p, setP] = React.useState(0);
+    React.useEffect(() => {
+      if (!run) return undefined;
+      setP(0);
+      let v = 0, id;
+      const step = () => {
+        const stall = v > 82 && v < 90;
+        v = Math.min(100, v + (stall ? Math.random() * 1.2 : 2 + Math.random() * 7));
+        setP(v);
+        if (v < 100) id = setTimeout(step, stall ? 520 : 180 + Math.random() * 260);
+      };
+      id = setTimeout(step, 500);
+      return () => clearTimeout(id);
+    }, [run]);
+    return p;
+  }
+
+  function Demo() {
+    const [run, setRun] = React.useState(1);
+    const [ind, setInd] = React.useState(false);
+    const p = useFakeProgress(run);
+    const btn = { font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-2)', background: 'oklch(1 0 0 / 0.05)', border: 'var(--glass-hairline)', borderRadius: 'var(--r-pill)', height: 32, padding: '0 14px', cursor: 'pointer', transition: 'background-color var(--dur-fast) ' + E };
+    const lbl = { font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-3)' };
+    return (
+      <div style={{ padding: 'var(--sp-7)', display: 'grid', gap: 'var(--sp-6)', justifyItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', flexWrap: 'wrap', justifyContent: 'center', minHeight: 260 }}>
+          <div style={{ display: 'grid', gap: 'var(--sp-3)', justifyItems: 'center' }}>
+            <LoadingPill progress={ind ? null : p} label={ind ? 'Syncing' : 'Loading'} />
+            <span style={lbl}>md</span>
+          </div>
+          <div style={{ display: 'grid', gap: 'var(--sp-3)', justifyItems: 'center' }}>
+            <LoadingPill size="sm" progress={ind ? null : p} label={ind ? 'Syncing' : 'Loading'} />
+            <span style={lbl}>sm</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+          <button style={btn} onClick={() => { setInd(false); setRun((r) => r + 1); }}>Replay</button>
+          <button style={btn} onClick={() => setInd((v) => !v)}>{ind ? 'Show progress' : 'Indeterminate'}</button>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

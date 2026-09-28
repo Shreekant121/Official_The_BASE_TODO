@@ -1,0 +1,72 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Actions" subtitle="Pill buttons, round icon buttons, morphing segmented control" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Actions</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; display: block; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../material/GlassFilters.jsx',
+  '../core/Icon.jsx',
+  '../actions/Button.jsx',
+  '../actions/IconButton.jsx',
+  '../actions/SegmentedControl.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl } = AG;
+
+  function Demo() {
+    const [range, setRange] = React.useState('Weekly');
+    return (
+      <div style={{ padding: 'var(--sp-7) var(--sp-8)', display: 'grid', gap: 'var(--sp-6)' }}>
+        <GlassFilters />
+
+        <div className="row">
+          <Button variant="solid" iconLeft={<Icon name="play" size={16} />}>Start session</Button>
+          <Button variant="frost">Get in touch</Button>
+          <Button variant="tint" tone="accent" iconLeft={<Icon name="check" size={16} />}>Mark done</Button>
+          <Button>Reschedule</Button>
+          <Button variant="ghost">Cancel</Button>
+        </div>
+
+        <div className="row">
+          <Button size="lg" iconRight={<Icon name="arrow-right" size={18} />}>Large</Button>
+          <Button size="md">Medium</Button>
+          <Button size="sm">Small</Button>
+          <Button loading>Syncing</Button>
+          <Button disabled>Disabled</Button>
+        </div>
+
+        <div className="row" style={{ gap: 'var(--sp-5)' }}>
+          <IconButton label="Play" size="lg"><Icon name="play" size={22} /></IconButton>
+          <IconButton label="Notifications" badge={8}><Icon name="bell" size={18} /></IconButton>
+          <IconButton label="Focus" active variant="tint" tone="accent"><Icon name="target" size={18} /></IconButton>
+          <IconButton label="Add" square variant="tint" tone="frost"><Icon name="plus" size={18} /></IconButton>
+          <IconButton label="More" variant="ghost"><Icon name="ellipsis" size={18} /></IconButton>
+          <div style={{ flex: 1 }} />
+          <SegmentedControl options={['Daily', 'Weekly', 'Monthly']} value={range} onChange={setRange} />
+        </div>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!-- @dsCard group="Foundations" viewport="700x220" name="Backdrop" subtitle="The grid is what the glass refracts — without it, glass is a grey box" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Backdrop</title>
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body style="margin:0">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);height:220px">
+  <div class="ag-page" style="display:grid;place-items:end center;padding:var(--sp-5)"><span class="lbl">default</span></div>
+  <div class="ag-page ag-page--calm" style="display:grid;place-items:end center;padding:var(--sp-5)"><span class="lbl">calm</span></div>
+  <div class="ag-page ag-page--focal" style="display:grid;place-items:end center;padding:var(--sp-5)"><span class="lbl">focal</span></div>
+  <div class="ag-page ag-page--field" style="display:grid;place-items:end center;padding:var(--sp-5)"><span class="lbl">field</span></div>
+</div>
+</body>
+</html>

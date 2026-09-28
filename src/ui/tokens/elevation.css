@@ -1,0 +1,36 @@
+/* ---------------------------------------------------------------
+   ELEVATION & GLOW — two systems, never conflated.
+   SHADOW says "this is above that."
+   GLOW says "this is EMITTING" — running timers, live sessions,
+   selected rows, overruns. A resting neutral surface never glows.
+   The live app already uses this instinct on its boot spinner
+   (shadow-[0_0_15px_rgba(16,185,129,0.5)]).
+   --------------------------------------------------------------- */
+:root {
+  --shadow-0: none;
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.45);
+  --shadow-2: 0 4px 14px -4px oklch(0 0 0 / 0.55);
+  --shadow-3: 0 24px 48px -12px oklch(0 0 0 / 0.55);
+  --shadow-4: 0 40px 90px -22px oklch(0 0 0 / 0.72);
+  --shadow-5: 0 60px 140px -30px oklch(0 0 0 / 0.82);
+
+  /* Glow — emission. Emerald is the default because it is the accent. */
+  --glow-accent-sm: 0 0 0 1px oklch(0.70 0.15 162 / 0.34), 0 0 16px -2px oklch(0.70 0.15 162 / 0.45);
+  --glow-accent-md: 0 0 0 1px oklch(0.70 0.15 162 / 0.38), 0 0 30px -2px oklch(0.70 0.15 162 / 0.52), 0 0 80px -12px oklch(0.70 0.15 162 / 0.32);
+  --glow-accent-lg: 0 0 0 1px oklch(0.70 0.15 162 / 0.44), 0 0 48px 0 oklch(0.70 0.15 162 / 0.58), 0 0 130px -10px oklch(0.70 0.15 162 / 0.40);
+  --glow-cyan-md:   0 0 0 1px oklch(0.70 0.15 210 / 0.38), 0 0 30px -2px oklch(0.70 0.15 210 / 0.52), 0 0 80px -12px oklch(0.70 0.15 210 / 0.32);
+  --glow-violet-md: 0 0 0 1px oklch(0.70 0.15 296 / 0.38), 0 0 30px -2px oklch(0.70 0.15 296 / 0.52), 0 0 80px -12px oklch(0.70 0.15 296 / 0.32);
+  --glow-amber-md:  0 0 0 1px oklch(0.75 0.15  82 / 0.38), 0 0 30px -2px oklch(0.75 0.15  82 / 0.52), 0 0 80px -12px oklch(0.75 0.15  82 / 0.32);
+  --glow-rose-md:   0 0 0 1px oklch(0.70 0.15  20 / 0.38), 0 0 30px -2px oklch(0.70 0.15  20 / 0.52), 0 0 80px -12px oklch(0.70 0.15  20 / 0.32);
+  --glow-white-sm:  0 0 22px -4px oklch(1 0 0 / 0.28);
+
+  /* Text glow — for the countdown and other emitting numerals */
+  --text-glow-accent: 0 0 26px oklch(0.70 0.15 162 / 0.50);
+  --text-glow-white:  0 0 25px oklch(1 0 0 / 0.20);
+
+  /* Semantic */
+  --elev-chip:    var(--shadow-1);
+  --elev-card:    var(--shadow-3);
+  --elev-popover: var(--shadow-4);
+  --elev-sheet:   var(--shadow-5);
+}

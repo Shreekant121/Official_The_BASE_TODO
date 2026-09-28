@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Admin</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="Admin">
+<div id="root">
+  <div style="display:flex;height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:1140px;margin:0 auto;height:200px;border-radius:var(--r-card);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/data/SparkBars.jsx',
+  '../components/forms/Input.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/navigation/MiniNav.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, StatusPill, SparkBars, Input, Switch, MiniNav } = AG;
+
+  const NAV = [
+    { value: 'home',     label: 'Home',         icon: 'house',       href: 'home.html' },
+    { value: 'atlas',    label: 'Atlas',        icon: 'sparkles',    href: 'atlas.html' },
+    { value: 'session',  label: 'New Session',  icon: 'zap',         href: 'session.html' },
+    { value: 'log',      label: 'Action log',   icon: 'scroll-text', href: 'log.html' },
+    { value: 'host',     label: 'Atlas host',   icon: 'server',      href: 'atlas-host.html' },
+    { value: 'admin',    label: 'Admin',        icon: 'shield' },
+    { value: 'settings', label: 'Settings',     icon: 'settings',    href: 'settings.html' },
+  ];
+
+  /* Every account that has ever signed up. `mine` is the owner row — it
+     cannot be demoted, opened read-only, or switched off. */
+  const ACCOUNTS = [
+    { id: 'me',  name: 'You',             email: 'shreekant@mutineer.os', joined: '12 Feb 2026', last: 'now',    live: true,  projects: 6, tasks: 84, turns: 2140, myKey: true,  locked: true, assistant: true,  trend: [18, 26, 22, 31, 28, 40, 36] },
+    { id: 'a2',  name: 'Priya Shah',      email: 'priya.shah@gmail.com',  joined: '02 Sep 2026', last: '14 min', live: false, projects: 4, tasks: 61, turns: 412,  myKey: true,  assistant: true,  trend: [4, 9, 14, 11, 22, 19, 26] },
+    { id: 'a3',  name: 'Marcus Lindqvist',email: 'm.lindqvist@hey.com',   joined: '28 Aug 2026', last: '2 h',    live: false, projects: 3, tasks: 47, turns: 338,  myKey: false, assistant: true,  trend: [11, 8, 13, 9, 15, 12, 14] },
+    { id: 'a4',  name: 'Dana Okafor',     email: 'dana@okafor.studio',    joined: '21 Aug 2026', last: '5 h',    live: false, projects: 2, tasks: 38, turns: 291,  myKey: true,  assistant: true,  trend: [6, 12, 10, 18, 14, 21, 17] },
+    { id: 'a5',  name: 'Tomás Rivera',    email: 'tomas.r@proton.me',     joined: '14 Sep 2026', last: '1 d',    live: false, projects: 1, tasks: 12, turns: 64,   myKey: false, assistant: true,  trend: [0, 0, 3, 6, 9, 7, 11] },
+    { id: 'a6',  name: 'Aiko Tanaka',     email: 'aiko.tanaka@gmail.com', joined: '09 Sep 2026', last: '1 d',    live: false, projects: 2, tasks: 24, turns: 0,    myKey: false, assistant: false, trend: [2, 5, 4, 8, 6, 5, 7] },
+    { id: 'a7',  name: 'Ben Whitaker',    email: 'bwhitaker@fastmail.com',joined: '30 Aug 2026', last: '3 d',    live: false, projects: 1, tasks: 19, turns: 87,   myKey: false, assistant: true,  trend: [7, 5, 6, 3, 4, 2, 1] },
+    { id: 'a8',  name: 'Leila Haddad',    email: 'leila@haddad.dev',      joined: '11 Sep 2026', last: '4 d',    live: false, projects: 1, tasks: 7,  turns: 0,    myKey: false, assistant: false, trend: [0, 1, 3, 2, 1, 0, 0] },
+    { id: 'a9',  name: 'Oscar Melnyk',    email: 'o.melnyk@gmail.com',    joined: '06 Jul 2026', last: '19 d',   live: false, projects: 2, tasks: 33, turns: 143,  myKey: false, assistant: false, trend: [9, 6, 2, 0, 0, 0, 0] },
+    { id: 'a10', name: 'Ruth Nakamura',   email: 'ruth.n@icloud.com',     joined: '19 Jun 2026', last: '41 d',   live: false, projects: 1, tasks: 4,  turns: 21,   myKey: false, assistant: false, trend: [3, 1, 0, 0, 0, 0, 0] },
+  ];
+
+  /* A stranger's board, shown flat: no checkbox, no menu, no add row. */
+  const BOARD = [
+    { list: '⚡ Action Steps', tasks: [
+      ['Rewrite onboarding email', '45 min', 'running'],
+      ['Ship pricing table copy', '30 min', 'queued'],
+      ['Reply to Figma thread', '15 min', 'queued'] ] },
+    { list: '🧊 Backburner', tasks: [
+      ['Audit old Notion pages', '60 min', 'backburner'],
+      ['Rename asset folders', '25 min', 'backburner'] ] },
+    { list: '📚 Reference Materials', tasks: [
+      ['Brand voice notes', '—', 'archived'],
+      ['Q3 retro transcript', '—', 'archived'] ] },
+  ];
+
+  const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  const Kicker = ({ children, color = 'var(--fg-4)', style }) => (
+    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color, ...style }}>{children}</span>
+  );
+
+  const Num = ({ children, size = 'var(--text-md)', color = 'var(--fg-1)' }) => (
+    <span style={{ font: 'var(--type-numeric)', fontSize: size, color, fontVariantNumeric: 'tabular-nums' }}>{children}</span>
+  );
+
+  /* ---------------------------------------------------------------- *
+     The one decision this screen exists to make.
+
+     Two states in a trough, so the alternative is always visible and
+     the switch back is the same gesture as the switch over. "My key"
+     is frost — the loudest surface in the system — because it is the
+     only row state that costs me money. Emerald is not used: it means
+     LIVE, not "on".
+   * ---------------------------------------------------------------- */
+  function KeyControl({ mine, onChange, locked, size = 'md' }) {
+    const h = size === 'sm' ? 30 : 34;
+    const opts = [['own', 'Their own key'], ['mine', 'My key']];
+    return (
+      <div role="group" aria-label="Which AI key this account spends" style={{
+        display: 'inline-grid', gridAutoFlow: 'column', gap: 2, padding: 3,
+        borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)',
+        boxShadow: 'var(--glass-well-shadow)', opacity: locked ? 0.5 : 1,
+      }}>
+        {opts.map(([v, label]) => {
+          const on = (v === 'mine') === !!mine;
+          return (
+            <button key={v} type="button" disabled={locked} aria-pressed={on}
+              onClick={(e) => { e.stopPropagation(); if (!locked) onChange(v === 'mine'); }}
+              style={{
+                height: h, padding: '0 var(--sp-5)', border: 0, cursor: locked ? 'default' : 'pointer',
+                borderRadius: 'var(--r-pill)', whiteSpace: 'nowrap',
+                font: 'var(--type-numeric)', fontSize: 'var(--text-xs)',
+                background: 'transparent',
+                backgroundImage: on ? (v === 'mine' ? 'var(--glass-frost)' : 'var(--glass-fill-2)') : 'none',
+                boxShadow: on ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'none',
+                color: on ? (v === 'mine' ? 'var(--void-0)' : 'var(--fg-1)') : 'var(--fg-4)',
+                transition: 'var(--t-hover)',
+              }}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const GRID = '2.1fr 0.8fr 0.8fr 0.9fr 0.7fr 15.2rem 4.4rem';
+
+  function HeadRow() {
+    return (
+      <div style={{
+        display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 'var(--sp-5)',
+        padding: '0 var(--sp-6) var(--sp-4)',
+      }}>
+        {['Account', 'Joined', 'Last active', 'Projects · tasks', 'AI turns', 'Key', 'Assistant'].map((h, i) => (
+          <Kicker key={h} style={{ textAlign: i >= 1 && i <= 4 ? 'right' : 'left' }}>{h}</Kicker>
+        ))}
+      </div>
+    );
+  }
+
+  function Row({ a, onOpen, onKey, onAssistant }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <div
+        role="button" tabIndex={0}
+        onClick={() => !a.locked && onOpen(a.id)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !a.locked) onOpen(a.id); }}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 'var(--sp-5)',
+          padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+          cursor: a.locked ? 'default' : 'pointer',
+          backgroundImage: hover && !a.locked ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          boxShadow: a.myKey && !a.locked
+            ? 'var(--glass-rim-1), inset 2px 0 0 var(--fg-1)'
+            : 'var(--glass-rim-1)',
+          transition: 'var(--t-hover)',
+        }}>
+        <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', minWidth: 0 }}>
+            <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+            {a.locked && <Kicker>you</Kicker>}
+            {a.live && !a.locked && <StatusPill status="running" size="sm">Live</StatusPill>}
+          </span>
+          <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.email}</span>
+        </span>
+        <span style={{ textAlign: 'right' }}><Num size="var(--text-xs)" color="var(--fg-3)">{a.joined}</Num></span>
+        <span style={{ textAlign: 'right' }}><Num size="var(--text-xs)" color={a.live ? 'var(--accent)' : 'var(--fg-2)'}>{a.last}</Num></span>
+        <span style={{ textAlign: 'right' }}><Num size="var(--text-xs)" color="var(--fg-2)">{a.projects} · {a.tasks}</Num></span>
+        <span style={{ textAlign: 'right' }}><Num size="var(--text-xs)" color={a.turns ? 'var(--fg-1)' : 'var(--fg-4)'}>{a.turns.toLocaleString()}</Num></span>
+        <span><KeyControl mine={a.myKey} locked={a.locked} onChange={(v) => onKey(a.id, v)} /></span>
+        <span style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+          <Switch checked={a.assistant} disabled={a.locked} size="sm" onChange={(v) => onAssistant(a.id, v)} />
+        </span>
+      </div>
+    );
+  }
+
+  function Card({ a, onOpen, onKey, onAssistant }) {
+    return (
+      <div role="button" tabIndex={0}
+        onClick={() => !a.locked && onOpen(a.id)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !a.locked) onOpen(a.id); }}
+        style={{
+          display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)', borderRadius: 'var(--r-lg)',
+          backgroundImage: 'var(--glass-fill-1)',
+          boxShadow: a.myKey && !a.locked ? 'var(--glass-rim-1), inset 2px 0 0 var(--fg-1)' : 'var(--glass-rim-1)',
+        }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-5)' }}>
+          <span style={{ display: 'grid', gap: 2, flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+              <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>{a.name}</span>
+              {a.locked && <Kicker>you</Kicker>}
+              {a.live && !a.locked && <StatusPill status="running" size="sm">Live</StatusPill>}
+            </span>
+            <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.email}</span>
+          </span>
+          <span onClick={(e) => e.stopPropagation()} style={{ flex: '0 0 auto' }}>
+            <Switch checked={a.assistant} disabled={a.locked} size="sm" onChange={(v) => onAssistant(a.id, v)} />
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--sp-4)' }}>
+          {[['joined', a.joined], ['last active', a.last], ['proj · tasks', a.projects + ' · ' + a.tasks], ['ai turns', a.turns.toLocaleString()]].map(([k, v]) => (
+            <span key={k} style={{ display: 'grid', gap: 3 }}>
+              <Kicker>{k}</Kicker>
+              <Num size="var(--text-xs)" color={k === 'last active' && a.live ? 'var(--accent)' : 'var(--fg-2)'}>{v}</Num>
+            </span>
+          ))}
+        </div>
+        <div onClick={(e) => e.stopPropagation()}>
+          <KeyControl mine={a.myKey} locked={a.locked} onChange={(v) => onKey(a.id, v)} />
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+
+  function Admin() {
+    const [w, setW] = React.useState(window.innerWidth);
+    const [rows, setRows] = React.useState(ACCOUNTS);
+    const [sort, setSort] = React.useState('active');
+    const [q, setQ] = React.useState('');
+    const [open, setOpen] = React.useState(null);
+    const [solo, setSolo] = React.useState(false);
+
+    React.useEffect(() => {
+      const on = () => setW(window.innerWidth);
+      window.addEventListener('resize', on);
+      return () => window.removeEventListener('resize', on);
+    }, []);
+
+    const wide = w >= 1000;
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} /> }));
+    function go(v) { const it = NAV.find((n) => n.value === v); if (it && it.href) location.href = it.href; }
+
+    const pool = solo ? rows.filter((r) => r.locked) : rows;
+    const totals = {
+      accounts: pool.length,
+      week: pool.filter((r) => /now|min|h$|^1 d|^2 d|^3 d/.test(r.last)).length,
+      mine: pool.filter((r) => r.myKey && !r.locked).length,
+    };
+
+    const setKey = (id, v) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, myKey: v } : r)));
+    const setAssistant = (id, v) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, assistant: v } : r)));
+
+    let list = pool.filter((r) => {
+      const needle = q.trim().toLowerCase();
+      return !needle || r.name.toLowerCase().includes(needle) || r.email.toLowerCase().includes(needle);
+    });
+    if (sort === 'active') list = [...list].sort((a, b) => b.turns - a.turns);
+    if (sort === 'new') list = [...list].sort((a, b) => ACCOUNTS.indexOf(b) - ACCOUNTS.indexOf(a));
+    if (sort === 'key') list = list.filter((r) => r.myKey);
+
+    const account = open && rows.find((r) => r.id === open);
+
+    /* ---- Detail: someone else's account, read-only ---- */
+    if (account) {
+      const peak = Math.max(...account.trend);
+      return (
+        <div style={{ display: 'flex', height: '100vh' }}>
+          <GlassFilters />
+          {wide && (
+            <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+              <MiniNav orientation="vertical" items={navItems} value="admin" onChange={go} />
+            </div>
+          )}
+          <div className="ag-scroll" style={{
+            flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto', boxSizing: 'border-box',
+            padding: wide ? 'var(--sp-8) var(--gutter-page) var(--sp-12)' : 'var(--sp-7) var(--gutter-page-sm) 132px',
+          }}>
+            <div style={{ width: '100%', maxWidth: 1000, margin: '0 auto', display: 'grid', gap: 'var(--sp-7)' }}>
+
+              {/* The marker. Sticky, plain grey, states whose data this is. */}
+              <div style={{
+                position: 'sticky', top: 0, zIndex: 20, display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+                padding: 'var(--sp-4) var(--sp-6)', borderRadius: 'var(--r-pill)',
+                backgroundImage: 'var(--glass-fill-2)', backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+                boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+              }}>
+                <span style={{ display: 'flex', color: 'var(--fg-3)' }}><Icon name="lock" size={15} /></span>
+                <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-2)' }}>
+                  Read-only — {account.name}'s account. Nothing on this screen can be edited.
+                </span>
+                <span style={{ flex: 1 }} />
+                <Button size="sm" variant="ghost" iconLeft={<Icon name="arrow-left" size={14} />} onClick={() => setOpen(null)}>All accounts</Button>
+              </div>
+
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                <Kicker color="var(--fg-3)">Account</Kicker>
+                <h1 style={{ font: 'var(--type-display)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)', margin: 0 }}>{account.name}</h1>
+                <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>{account.email}</span>
+              </div>
+
+              <section style={{
+                display: 'grid', gap: 'var(--sp-7)', padding: 'var(--pad-card)', borderRadius: 'var(--r-card)',
+                backgroundImage: 'var(--glass-fill-2)', backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+                boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(5, 1fr)' : 'repeat(2, 1fr)', gap: 'var(--sp-6)' }}>
+                  {[['joined', account.joined], ['last active', account.last], ['projects', account.projects], ['tasks', account.tasks], ['ai turns', account.turns.toLocaleString()]].map(([k, v]) => (
+                    <span key={k} style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                      <Kicker>{k}</Kicker>
+                      <Num size="var(--text-xl)" color={k === 'last active' && account.live ? 'var(--accent)' : 'var(--fg-1)'}>{v}</Num>
+                    </span>
+                  ))}
+                </div>
+
+                <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+                {/* The two controls that are NOT read-only. Stated as such. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                    <Kicker color="var(--fg-3)">Spends</Kicker>
+                    <KeyControl mine={account.myKey} onChange={(v) => setKey(account.id, v)} />
+                  </span>
+                  <span style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                    <Kicker color="var(--fg-3)">Assistant</Kicker>
+                    <Switch checked={account.assistant} onChange={(v) => setAssistant(account.id, v)} label={account.assistant ? 'Available' : 'Off'} />
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', maxWidth: '34ch', textWrap: 'pretty' }}>
+                    These two are mine to set. Everything else below is theirs.
+                  </span>
+                </div>
+              </section>
+
+              <section style={{
+                display: 'grid', gap: 'var(--sp-6)', padding: 'var(--pad-card)', borderRadius: 'var(--r-card)',
+                backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                  <Kicker color="var(--fg-3)">AI turns · last 7 days</Kicker>
+                  <span style={{ flex: 1 }} />
+                  <Num size="var(--text-sm)" color="var(--fg-3)">peak {peak} / day</Num>
+                </div>
+                <SparkBars data={account.trend} activeIndex={account.trend.length - 1} labels={DAYS} height={104} />
+              </section>
+
+              {/* Their board. Flat rows: no checkbox, no menu, no add. */}
+              <section style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                  <Kicker color="var(--fg-3)">Their board</Kicker>
+                  <span style={{ flex: 1, height: 1, background: 'var(--line-faint)' }} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--fg-4)' }}>
+                    <Icon name="eye" size={14} />
+                    <Kicker>view only</Kicker>
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(3, 1fr)' : '1fr', gap: 'var(--sp-5)' }}>
+                  {BOARD.map((col) => (
+                    <div key={col.list} style={{
+                      display: 'grid', gap: 'var(--sp-4)', alignContent: 'start', padding: 'var(--sp-6)',
+                      borderRadius: 'var(--r-card)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                        <span style={{ font: 'var(--type-label)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)' }}>{col.list}</span>
+                        <span style={{ flex: 1 }} />
+                        <Num size="var(--text-xs)" color="var(--fg-4)">{col.tasks.length}</Num>
+                      </div>
+                      {col.tasks.map(([t, mins, status]) => (
+                        <div key={t} style={{
+                          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+                          padding: 'var(--sp-4) var(--sp-5)', borderRadius: 'var(--r-md)',
+                          backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                          cursor: 'default', userSelect: 'none',
+                        }}>
+                          <span style={{
+                            width: 5, height: 5, flex: '0 0 auto', borderRadius: '50%',
+                            background: status === 'running' ? 'var(--accent)' : 'var(--fg-4)',
+                          }} />
+                          <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t}</span>
+                          <Num size="var(--text-xs)" color="var(--fg-4)">{mins}</Num>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+                  Their tasks, their calendar, their allocations. BASE has no write path into another account.
+                </span>
+              </section>
+            </div>
+          </div>
+
+          {!wide && (
+            <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+              <span style={{ pointerEvents: 'auto' }}><MiniNav items={navItems} value="admin" onChange={go} /></span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ---- List ---- */
+    return (
+      <div style={{ display: 'flex', height: '100vh' }}>
+        <GlassFilters />
+        {wide && (
+          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="admin" onChange={go} />
+          </div>
+        )}
+
+        <div className="ag-scroll" style={{
+          flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto', boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-12)' : 'var(--sp-8) var(--gutter-page-sm) 132px',
+        }}>
+          <div style={{ width: '100%', maxWidth: 1180, margin: '0 auto', display: 'grid', gap: 'var(--sp-8)' }}>
+
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 220 }}>
+                <Kicker color="var(--fg-3)">Visible to your account only</Kicker>
+                <h1 style={{ font: 'var(--type-display)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)', margin: 0 }}>Admin</h1>
+              </div>
+              {/* Demo control: draws the quiet day. Not product UI. */}
+              <Switch checked={solo} onChange={setSolo} size="sm" label="Quiet day" />
+            </div>
+
+            {/* Three numbers. Mono. No chart. */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: wide ? 'repeat(3, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))',
+              padding: 'var(--sp-6) var(--sp-7)', borderRadius: 'var(--r-card)',
+              backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+            }}>
+              {[['accounts', totals.accounts], ['active this week', totals.week], ['on my key', totals.mine]].map(([k, v], i) => (
+                <span key={k} style={{
+                  display: 'grid', gap: 'var(--sp-3)', paddingLeft: i ? 'var(--sp-7)' : 0,
+                  borderLeft: i ? '1px solid var(--line-faint)' : 'none',
+                }}>
+                  <Kicker>{k}</Kicker>
+                  <Num size={wide ? 'var(--text-3xl)' : 'var(--text-2xl)'}>{String(v).padStart(2, '0')}</Num>
+                </span>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+              <span style={{ flex: '1 1 240px', maxWidth: 340 }}>
+                <Input size="sm" placeholder="Name or email" value={q} onChange={(e) => setQ(e.target.value)} iconLeft={<Icon name="search" size={15} />} />
+              </span>
+              <span style={{ flex: '0 0 auto' }}>
+                <SegmentedControl size="sm" value={sort} onChange={setSort}
+                  options={[
+                    { value: 'active', label: 'Most active' },
+                    { value: 'new', label: 'Newest' },
+                    { value: 'key', label: 'Spending my key' },
+                  ]} />
+              </span>
+              <span style={{ flex: 1 }} />
+              <Num size="var(--text-xs)" color="var(--fg-4)">{list.length} shown</Num>
+            </div>
+
+            {list.length === 0 ? (
+              <div style={{
+                display: 'grid', gap: 'var(--sp-4)', justifyItems: 'start',
+                padding: 'var(--sp-9) var(--sp-7)', borderRadius: 'var(--r-card)',
+                backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+              }}>
+                <Kicker>nothing matches</Kicker>
+                <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>
+                  No account is spending my key right now.
+                </span>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: wide ? 'var(--sp-3)' : 'var(--sp-4)' }}>
+                {wide && <HeadRow />}
+                {list.map((a) => (wide
+                  ? <Row key={a.id} a={a} onOpen={setOpen} onKey={setKey} onAssistant={setAssistant} />
+                  : <Card key={a.id} a={a} onOpen={setOpen} onKey={setKey} onAssistant={setAssistant} />
+                ))}
+              </div>
+            )}
+
+            {/* The quiet day. One account, mine, and the reason it is quiet. */}
+            {solo && (
+              <div style={{ display: 'grid', gap: 'var(--sp-5)', justifyItems: 'start', padding: 'var(--sp-8) var(--sp-7)', borderRadius: 'var(--r-card)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)' }}>
+                <Kicker>signup</Kicker>
+                <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', maxWidth: '46ch', textWrap: 'pretty' }}>
+                  Open. Anyone who signs up gets their own tasks and their own calendar, on their own key, with the assistant off.
+                </span>
+                <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)' }}>
+                  Last signup 41 days ago · no accounts awaiting anything
+                </span>
+              </div>
+            )}
+
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+              Switching an account onto my key takes effect on their next turn, and switching it back takes effect the same way.
+            </span>
+          </div>
+        </div>
+
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}><MiniNav items={navItems} value="admin" onChange={go} /></span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Admin />);
+});
+</script>
+</body>
+</html>

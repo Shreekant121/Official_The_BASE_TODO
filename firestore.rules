@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // BUILD-6 — the admin. His email, and proved to be his: sign-in is email
+    // and password, so a token carries whatever address was typed, and only
+    // `email_verified` says somebody opened the mail sent to it. Must match
+    // OWNER_EMAIL in src/lib/adminAccess.ts (server/rules.test.ts checks).
+    //
+    // This is the lock. The app also hides the admin screen from everyone
+    // else, but a check in the browser only hides a button.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'owner@example.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // BUILD-6 — the admin may READ another account's board, and nothing
+      // else under it: not their Trash, not their devices, not the Gemini keys
+      // they saved at settings/agentKeys. There is no write here for him, so
+      // BASE has no write path into another account; the owner rule above is
+      // the only write rule under /users. Rules OR together, so this adds a
+      // reader without taking anything from the owner.
+      match /data/main {
+        allow read: if isAdmin();
+      }
+    }
+
+    // BUILD-6 — the two switches the admin sets per account: `assistant` (the
+    // in-browser Gemini assistant is available) and `ownerKey` (its turns are
+    // paid for by his key). The account can read its own, so the app knows
+    // which way to route; only the admin can write, and only those fields.
+    // `server/keyAccess.ts` reads this with the Admin SDK on every proxy call.
+    // No document means both off — a new account brings its own key.
+    match /accountAccess/{userId} {
+      allow read: if isAdmin()
+        || (request.auth != null && request.auth.uid == userId);
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['assistant', 'ownerKey', 'updatedAt'])
+        && request.resource.data.assistant is bool
+        && request.resource.data.ownerKey is bool;
+      allow delete: if isAdmin();
+    }
+
+    // BUILD-6 — how many requests each account has sent through his key.
+    // Written only by the proxy (Admin SDK, which ignores these rules).
+    match /keyUsage/{userId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Google OAuth refresh tokens — one document per Firebase uid, written and
+    // read ONLY by the Admin SDK inside api/google-connect.ts and
+    // api/refresh-token.ts (the Admin SDK bypasses these rules entirely).
+    //
+    // A refresh token is a permanent key to the user's Google Calendar, so it
+    // must never reach a browser — not even the browser of the user it belongs
+    // to. Hence `if false` rather than the usual owner check: there is no
+    // legitimate client read, so the safest rule is the one that has no
+    // exception to get wrong. Deliberately a TOP-LEVEL collection and not
+    // `users/{uid}/…`, because the rule above grants the signed-in owner full
+    // access to everything nested under their own user document.
+    match /googleTokens/{userId} {
+      allow read, write: if false;
+    }
+
+    // Public, read-only shared views (tasks / lists / projects). Anyone with
+    // the link can READ the denormalized snapshot — this is the whole point of
+    // a "sharable link". Writes are always restricted to the signed-in owner
+    // (the client that owns the underlying data), so anonymous viewers can
+    // never create, tamper with, or delete a share. Nothing under
+    // `users/{uid}` is ever exposed here — SharePage only ever reads these
+    // self-contained mirror docs.
+    match /publicShares/{shareId} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+
+      // Outsourcing submissions: one doc per task. Anonymous workers (the people
+      // the owner sends the link to) may claim/submit tasks WITHOUT signing in,
+      // but ONLY when the parent share opted into contributions, and only to the
+      // non-final states below with a name attached — they can never mark a task
+      // "approved/done" themselves. The signed-in owner of the underlying data
+      // has full control (to approve → delete, or reject → reset).
+      function parentShare() {
+        return get(/databases/$(database)/documents/publicShares/$(shareId)).data;
+      }
+
+      match /submissions/{taskId} {
+        allow read: if true;
+        allow write: if request.auth != null
+          && parentShare().ownerId == request.auth.uid;
+        // `released` (BUILD-14): the worker gave the task back.
+        allow create, update: if
+          parentShare().allowContributions == true
+          && request.resource.data.taskId == taskId
+          && request.resource.data.state in ['in_progress', 'submitted', 'released']
+          && request.resource.data.workerName is string
+          && request.resource.data.workerName.size() > 0
+          && request.resource.data.workerName.size() <= 60;
+      }
+
+      // BUILD-14: what a worker sends the owner and nobody else — the email
+      // they claim with, and the link and note they submit. The submission
+      // above is public to everyone holding the link; this is not. A stranger
+      // may write it, on an outsourcing share only; only the owner reads it.
+      match /details/{taskId} {
+        allow read, delete: if request.auth != null
+          && parentShare().ownerId == request.auth.uid;
+        allow create, update: if
+          parentShare().allowContributions == true
+          && request.resource.data.taskId == taskId
+          && request.resource.data.keys().hasOnly(['taskId', 'email', 'link', 'note', 'updatedAt'])
+          && (!('email' in request.resource.data)
+              || (request.resource.data.email is string && request.resource.data.email.size() <= 254))
+          && (!('link' in request.resource.data)
+              || (request.resource.data.link is string && request.resource.data.link.size() <= 2000))
+          && (!('note' in request.resource.data)
+              || (request.resource.data.note is string && request.resource.data.note.size() <= 2000));
+      }
+    }
+  }
+}

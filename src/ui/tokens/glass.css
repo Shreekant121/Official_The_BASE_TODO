@@ -1,0 +1,138 @@
+/* ---------------------------------------------------------------
+   GLASS — the material. The live app already has a good instinct
+   (.liquid-glass in src/index.css); this keeps its DNA — 135deg white
+   gradient, 28px blur, hairline border, deep cast plus a bright top
+   inset — and formalises it into three thicknesses with the two layers
+   it was missing: a saturation lift so the glass picks up colour, and
+   a floor shade so the bottom edge sits down.
+
+   Five stacked facts per surface. Drop one and it looks like a grey box.
+     1  BACKDROP   blur + saturate + brightness on what's behind
+     2  FILL       directional tint gradient (light enters upper-left)
+     3  RIM        1px specular edge, brightest along the top
+     4  INNER      soft glow under the top edge + a floor shade
+     5  CAST       outer shadow so the pane floats
+
+   Optional 6th: REFRACTION — a displacement map on the backdrop so
+   edges BEND the grid behind them instead of only softening it. Mount
+   <GlassFilters /> once, then use --glass-bd-*-refract. Chrome/Edge
+   honour it; Safari and Firefox fall back to the blur.
+   --------------------------------------------------------------- */
+:root {
+  /* --- 1. Backdrop ------------------------------------------------ */
+  --glass-blur-xs: 8px;
+  --glass-blur-sm: 16px;
+  --glass-blur-md: 28px;   /* the product's existing value */
+  --glass-blur-lg: 44px;
+  --glass-blur-xl: 72px;
+  --glass-sat: 1.7;        /* colour pickup — glass is never dead grey */
+  --glass-bright: 1.05;
+
+  --glass-bd-xs: blur(var(--glass-blur-xs)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-sm: blur(var(--glass-blur-sm)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-md: blur(var(--glass-blur-md)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-lg: blur(var(--glass-blur-lg)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-xl: blur(var(--glass-blur-xl)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+
+  --glass-bd-sm-refract: url(#ag-refract-sm) blur(var(--glass-blur-sm)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-md-refract: url(#ag-refract-md) blur(var(--glass-blur-md)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-lg-refract: url(#ag-refract-lg) blur(var(--glass-blur-lg)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+
+  /* --- 2. Fill (155deg — light from upper-left) ------------------- */
+  /* THE FLOOR (2026-09-24, Shreekant: "make all of them opaque", buttons
+     too). Every fill and tint below ends in this layer, so glass is a
+     92%-opaque dark pane that keeps its sheen, rim and cast — the page's
+     field and whatever scrolls underneath no longer read through it. The
+     project lists (`LIST_PANE_FLOOR`) and the Score bar were the first
+     two; this is the same answer everywhere. Wells, frost, gel and
+     `--glass-fill-solid` are not glass panes and are left alone. */
+  --glass-floor: color-mix(in oklch, var(--void-1) 92%, transparent);
+  --glass-floor-layer: linear-gradient(var(--glass-floor), var(--glass-floor));
+  /* The sheen at half strength over the floor, as `v3.css`. */
+  --glass-fill-1: linear-gradient(155deg, oklch(1 0 0 / 0.036) 0%, oklch(1 0 0 / 0.009) 100%), var(--glass-floor-layer);
+  --glass-fill-2: linear-gradient(155deg, oklch(1 0 0 / 0.062) 0%, oklch(1 0 0 / 0.017) 52%, oklch(1 0 0 / 0.031) 100%), var(--glass-floor-layer);
+  --glass-fill-3: linear-gradient(155deg, oklch(1 0 0 / 0.082) 0%, oklch(1 0 0 / 0.024) 52%, oklch(1 0 0 / 0.042) 100%), var(--glass-floor-layer);
+  --glass-fill-solid: linear-gradient(155deg, oklch(1 0 0 / 0.30) 0%, oklch(1 0 0 / 0.14) 52%, oklch(1 0 0 / 0.20) 100%);
+
+  /* Recessed fill — troughs, input wells, progress tracks. Reads as
+     carved INTO the surface rather than sitting on it. */
+  --glass-well: linear-gradient(180deg, oklch(0 0 0 / 0.30) 0%, oklch(0 0 0 / 0.14) 100%);
+  --glass-well-shadow: inset 0 2px 6px oklch(0 0 0 / 0.45), inset 0 -1px 0 oklch(1 0 0 / 0.06);
+
+  /* Tinted glass — a hue pulled THROUGH the pane. Emerald is brand;
+     the rest are status-only. */
+  --glass-tint-accent: linear-gradient(155deg, oklch(0.70 0.15 162 / 0.28) 0%, oklch(0.70 0.15 162 / 0.08) 55%, oklch(0.70 0.15 162 / 0.16) 100%), var(--glass-floor-layer);
+  --glass-tint-cyan:   linear-gradient(155deg, oklch(0.70 0.15 210 / 0.28) 0%, oklch(0.70 0.15 210 / 0.08) 55%, oklch(0.70 0.15 210 / 0.16) 100%), var(--glass-floor-layer);
+  --glass-tint-violet: linear-gradient(155deg, oklch(0.70 0.15 296 / 0.28) 0%, oklch(0.70 0.15 296 / 0.08) 55%, oklch(0.70 0.15 296 / 0.16) 100%), var(--glass-floor-layer);
+  --glass-tint-amber:  linear-gradient(155deg, oklch(0.75 0.15  82 / 0.28) 0%, oklch(0.75 0.15  82 / 0.08) 55%, oklch(0.75 0.15  82 / 0.16) 100%), var(--glass-floor-layer);
+  --glass-tint-rose:   linear-gradient(155deg, oklch(0.70 0.15  20 / 0.28) 0%, oklch(0.70 0.15  20 / 0.08) 55%, oklch(0.70 0.15  20 / 0.16) 100%), var(--glass-floor-layer);
+
+  /* --- 3. Rim light ---------------------------------------------- */
+  /* Turned well down with the floor (2026-09-24), as `v3.css`. */
+  --glass-rim-1:
+    inset 0  1px 0 0 oklch(1 0 0 / 0.08),
+    inset 0 -1px 0 0 oklch(0 0 0 / 0.22),
+    inset  1px 0 0 0 oklch(1 0 0 / 0.03),
+    inset -1px 0 0 0 oklch(1 0 0 / 0.03);
+  --glass-rim-2:
+    inset 0  1px 1px 0 oklch(1 0 0 / 0.16),
+    inset 0 -1px 1px 0 oklch(0 0 0 / 0.30),
+    inset  1px 0 0 0 oklch(1 0 0 / 0.05),
+    inset -1px 0 0 0 oklch(1 0 0 / 0.05);
+  --glass-rim-3:
+    inset 0  1px 1px 0 oklch(1 0 0 / 0.22),
+    inset 0 -1px 1px 0 oklch(0 0 0 / 0.38),
+    inset  1px 0 0 0 oklch(1 0 0 / 0.08),
+    inset -1px 0 0 0 oklch(1 0 0 / 0.08);
+
+  /* Hairline border, matching the product's rgba(255,255,255,0.06) */
+  --glass-hairline: 1px solid var(--line-faint);
+  --glass-hairline-hover: 1px solid var(--line-strong);
+
+  /* --- 4. Inner glow + floor shade ------------------------------- */
+  --glass-inner-1: inset 0 10px 20px -14px oklch(1 0 0 / 0.06), inset 0 -14px 24px -18px oklch(0 0 0 / 0.55);
+  --glass-inner-2: inset 0 16px 30px -18px oklch(1 0 0 / 0.08), inset 0 -20px 34px -22px oklch(0 0 0 / 0.68);
+
+  /* --- 5. Cast shadow ------------------------------------------- */
+  --glass-cast-1: 0 4px 14px -6px oklch(0 0 0 / 0.55);
+  --glass-cast-2: 0 24px 48px -12px oklch(0 0 0 / 0.55), 0 2px 6px -2px oklch(0 0 0 / 0.45);
+  --glass-cast-3: 0 40px 90px -22px oklch(0 0 0 / 0.72), 0 6px 16px -6px oklch(0 0 0 / 0.50);
+
+  /* --- Composed: drop straight into box-shadow ------------------- */
+  --glass-shadow-thin:  var(--glass-rim-1), var(--glass-inner-1), var(--glass-cast-1);
+  --glass-shadow-pane:  var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2);
+  --glass-shadow-thick: var(--glass-rim-3), var(--glass-inner-2), var(--glass-cast-3);
+
+  /* --- Frost: near-opaque white pane, carries dark text ---------- */
+  --glass-frost: linear-gradient(155deg, oklch(1 0 0 / 0.94) 0%, oklch(0.93 0 0 / 0.82) 100%);
+}
+
+/* Utility classes for quick prototyping. Components use the tokens
+   inline; these exist for the pseudo-element states inline styles
+   cannot express.
+
+   PORTED-COPY EDIT — the declaration order below is REVERSED from the
+   design-system/ mirror, and deliberately so. See the INVARIANT at the
+   top of src/index.css: `-webkit-backdrop-filter` must be written
+   FIRST and the unprefixed `backdrop-filter` LAST. CSS minifiers that
+   treat the two as one property (Lightning CSS) keep only the last
+   declaration, and Chromium does not support the `-webkit-` form, so
+   the design project's order would ship these two classes with zero
+   blur under a minifier this repo has already been bitten by.
+   UI-20 retired the build check that used to assert this against
+   dist/ (`scripts/check-glass-css.mjs`) after measuring that current
+   Lightning CSS keeps both declarations; the ordering stays because it
+   is what makes a future collapse harmless rather than invisible.
+
+   Components do not depend on this: <GlassSurface> writes both
+   properties as React inline styles, which never reach the minifier. */
+.ag-glass {
+  position: relative;
+  background-image: var(--glass-fill-2);
+  -webkit-backdrop-filter: var(--glass-bd-md);
+  backdrop-filter: var(--glass-bd-md);
+  box-shadow: var(--glass-shadow-pane);
+  border-radius: var(--r-card);
+}
+.ag-glass--thin  { background-image: var(--glass-fill-1); -webkit-backdrop-filter: var(--glass-bd-sm); backdrop-filter: var(--glass-bd-sm); box-shadow: var(--glass-shadow-thin); }
+.ag-glass--thick { background-image: var(--glass-fill-3); -webkit-backdrop-filter: var(--glass-bd-lg); backdrop-filter: var(--glass-bd-lg); box-shadow: var(--glass-shadow-thick); }

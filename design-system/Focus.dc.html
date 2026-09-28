@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+body{margin:0;background:oklch(0.085 0.004 260);-webkit-font-smoothing:antialiased}
+a{color:oklch(0.82 0.15 165)}a:hover{color:oklch(0.9 0.1 165)}
+@keyframes fc-pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes fc-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+input::placeholder{color:oklch(0.6 0.01 200)}
+</style>
+</helmet>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="fc-lens" x="0" y="0" width="1" height="1" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+    <feImage ref="{{ mapRef }}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="m"></feImage>
+    <feDisplacementMap in="SourceGraphic" in2="m" scale="0.075" xChannelSelector="R" yChannelSelector="G" result="dr"></feDisplacementMap>
+    <feColorMatrix in="dr" type="matrix" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="r"></feColorMatrix>
+    <feDisplacementMap in="SourceGraphic" in2="m" scale="0.065" xChannelSelector="R" yChannelSelector="G" result="dg"></feDisplacementMap>
+    <feColorMatrix in="dg" type="matrix" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="g"></feColorMatrix>
+    <feDisplacementMap in="SourceGraphic" in2="m" scale="0.055" xChannelSelector="R" yChannelSelector="G" result="db"></feDisplacementMap>
+    <feColorMatrix in="db" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="b"></feColorMatrix>
+    <feBlend in="r" in2="g" mode="screen" result="rg"></feBlend><feBlend in="rg" in2="b" mode="screen"></feBlend>
+  </filter>
+</svg>
+<div style="min-height:100vh;padding:64px 56px 96px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif;font-feature-settings:'cv11','ss03';color:oklch(0.86 0.006 260)">
+<div style="display:grid;gap:10px;margin-bottom:48px;max-width:720px">
+  <div style="font-size:13px;font-weight:600;color:oklch(0.82 0.15 165)">Aurora Glass</div>
+  <h1 style="margin:0;font-size:48px;letter-spacing:-0.035em;font-weight:700;color:#fff;line-height:1.05">Focus</h1>
+  <p style="margin:0;font-size:17px;line-height:1.45;color:oklch(0.66 0.008 260)">One task, one clock. Everything else waits.</p>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<div style="display:grid;gap:14px">
+<div style="font-size:13px;font-weight:500;color:oklch(0.6 0.008 260)">Laptop · 1280 × 800</div>
+<div data-screen-label="Focus laptop" style="width:1280px;height:800px;border-radius:28px;padding:10px;background:linear-gradient(160deg,oklch(0.30 0.004 260),oklch(0.14 0.004 260));box-shadow:0 0 0 1px oklch(1 0 0 / 0.08),0 60px 120px -30px oklch(0 0 0 / 0.9)">
+<div style="position:relative;width:100%;height:100%;border-radius:20px;overflow:hidden;background:oklch(0.09 0.008 200);display:grid;grid-template-columns:96px 1fr 380px;isolation:isolate">
+  <div style="position:absolute;inset:0;z-index:-1;overflow:hidden">
+    <div style="position:absolute;width:760px;height:760px;left:230px;top:-10px;border-radius:50%;background:oklch(0.40 0.11 166);filter:blur(150px);opacity:.42"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(oklch(1 0 0 / 0.035) 1px,transparent 1px),linear-gradient(90deg,oklch(1 0 0 / 0.035) 1px,transparent 1px);background-size:64px 64px"></div>
+  </div>
+
+  <nav style="position:relative;margin:18px 0 18px 18px;border-radius:40px;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:8px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),linear-gradient(135deg,oklch(1 0 0 / 0.09),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.05));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#fc-lens) blur(10px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 20px 50px -14px oklch(0 0 0 / 0.6)">
+    <img src="assets/mark-white.png" alt="" style="width:26px;height:26px;object-fit:contain;margin:6px 0 12px"></img>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="6">
+      <button aria-label="{{ r.label }}" style="position:relative;width:52px;height:52px;border:0;padding:0;border-radius:50%;display:grid;place-items:center;background:transparent;color:#fff;cursor:pointer"><span style="{{ r.glow }}"></span><span style="{{ r.plate }}"></span><i class="ph-fill {{ r.icon }}" style="{{ r.glyph }}"></i></button>
+    </sc-for>
+  </nav>
+
+  <main style="display:grid;grid-template-rows:auto 1fr auto;gap:18px;padding:28px 30px 24px;min-width:0">
+    <div style="display:grid;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:15px;font-weight:600;color:#fff">Session</span><span style="font-size:14px;color:oklch(0.7 0.01 200)">{{ doneOf }} · {{ sessionLeft }} left</span><div style="flex:1"></div><span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:oklch(0.86 0.13 165)"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.82 0.16 162);box-shadow:0 0 10px oklch(0.74 0.16 162);animation:fc-pulse 1.6s infinite"></span>{{ liveLabel }}</span></div>
+      <div style="display:flex;gap:6px;height:12px">
+        <sc-for list="{{ segs }}" as="sg" hint-placeholder-count="3"><span style="{{ sg.outer }}"><span style="{{ sg.inner }}"></span></span></sc-for>
+      </div>
+    </div>
+
+    <div style="display:grid;place-items:center;align-content:center;gap:26px">
+      <div style="display:grid;justify-items:center;gap:8px;text-align:center">
+        <div style="display:flex;gap:8px"><span style="height:28px;padding:0 12px;border-radius:14px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#fff;background:oklch(1 0 0 / 0.08);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.4)">{{ task.list }}</span><span style="{{ dueChip }}"><i class="ph-fill ph-calendar-dots" style="font-size:14px"></i>{{ task.dueText }}</span></div>
+        <div style="font-size:30px;font-weight:700;letter-spacing:-0.028em;color:#fff;max-width:560px;text-wrap:balance">{{ task.title }}</div>
+      </div>
+      <div style="position:relative;width:360px;height:360px;display:grid;place-items:center">
+        <div style="position:absolute;inset:40px;border-radius:50%;background:{{ ringGlow }};filter:blur(60px);opacity:.38;transition:background 600ms ease"></div>
+        <svg width="360" height="360" viewBox="0 0 360 360" style="position:absolute;inset:0;transform:rotate(-90deg)">
+          <circle cx="180" cy="180" r="160" fill="none" stroke="oklch(1 0 0 / 0.07)" stroke-width="18"></circle>
+          <circle cx="180" cy="180" r="160" fill="none" stroke="{{ ringColor }}" stroke-width="18" stroke-linecap="round" stroke-dasharray="{{ ringDash }}" style="transition:stroke-dasharray 1s linear, stroke 600ms ease"></circle>
+        </svg>
+        <div style="position:relative;width:268px;height:268px;border-radius:50%;display:grid;place-items:center;align-content:center;gap:4px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:url(#fc-lens) blur(14px) saturate(1.8) brightness(1.1);box-shadow:inset 2px 2px 1px -1px oklch(1 0 0 / 0.7),inset -1.5px -1.5px 1px -1px oklch(1 0 0 / 0.3),inset 0 14px 26px -14px oklch(1 0 0 / 0.18),inset 0 -16px 30px -16px oklch(0 0 0 / 0.5),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+          <span style="font-size:14px;font-weight:600;color:{{ leftTone }}">{{ leftLabel }}</span>
+          <span style="font-size:64px;font-weight:600;letter-spacing:-0.045em;line-height:1;color:#fff;font-variant-numeric:tabular-nums">{{ clock }}</span>
+          <span style="font-size:14px;color:oklch(0.7 0.01 200)">of {{ task.allocText }}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button onClick="{{ defer }}" style="height:52px;padding:0 22px;border:0;border-radius:26px;cursor:pointer;font:inherit;font-size:15px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px;background:oklch(1 0 0 / 0.08);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.5),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.18)"><i class="ph-fill ph-skip-forward" style="font-size:17px"></i>Defer</button>
+        <button onClick="{{ toggleRun }}" aria-label="{{ runLabel }}" style="width:68px;height:68px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.2),transparent 42%),oklch(1 0 0 / 0.12);box-shadow:inset 2px 2px 1px -1px oklch(1 0 0 / 0.75),inset -1.5px -1.5px 1px -1px oklch(1 0 0 / 0.3),0 14px 30px -12px oklch(0 0 0 / 0.6)"><i class="{{ runIcon }}" style="font-size:26px;filter:drop-shadow(0 2px 6px oklch(0 0 0 / 0.4))"></i></button>
+        <button onClick="{{ markDone }}" style="height:52px;padding:0 24px;border:0;border-radius:26px;cursor:pointer;font:inherit;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;color:oklch(0.18 0.05 165);background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),inset 0 -2px 6px oklch(0.45 0.12 165 / 0.5),0 14px 30px -10px oklch(0.7 0.16 162 / 0.55)"><i class="ph-bold ph-check" style="font-size:17px"></i>Mark done</button>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;height:54px;padding:0 6px 0 18px;border-radius:27px;max-width:620px;width:100%;justify-self:center;background:oklch(0 0 0 / 0.22);box-shadow:inset 0 1px 3px oklch(0 0 0 / 0.35),inset 0 -1px 0 oklch(1 0 0 / 0.08)">
+      <i class="ph-fill ph-lightbulb" style="font-size:18px;color:oklch(0.84 0.13 85)"></i>
+      <input value="{{ cap }}" onChange="{{ onCap }}" onKeyDown="{{ onCapKey }}" placeholder="Capture a thought without leaving focus" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:#fff;font:inherit;font-size:15px"></input>
+      <span style="height:32px;padding:0 12px;border-radius:16px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#fff;background:oklch(1 0 0 / 0.08)">⚡ Action Steps</span>
+      <button onClick="{{ saveCap }}" aria-label="Save" style="width:42px;height:42px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;background:oklch(1 0 0 / 0.12);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.55)"><i class="ph-bold ph-arrow-up" style="font-size:16px"></i></button>
+    </div>
+  </main>
+
+  <aside style="margin:18px 18px 18px 0;border-radius:34px;padding:22px;display:grid;grid-template-rows:auto auto 1fr auto;gap:16px;min-height:0;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:url(#fc-lens) blur(14px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 30px 60px -20px oklch(0 0 0 / 0.6)">
+    <div style="display:flex;padding:4px;border-radius:22px;background:oklch(0 0 0 / 0.22);box-shadow:inset 0 1px 3px oklch(0 0 0 / 0.35),inset 0 -1px 0 oklch(1 0 0 / 0.08)">
+      <sc-for list="{{ panelTabs }}" as="pt" hint-placeholder-count="3"><button onClick="{{ pt.go }}" style="{{ pt.style }}">{{ pt.label }}</button></sc-for>
+    </div>
+    <sc-if value="{{ showSubs }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;gap:8px"><div style="display:flex;justify-content:space-between"><span style="font-size:15px;font-weight:600;color:#fff">{{ subsDone }} of {{ subsTotal }} done</span><span style="font-size:13px;color:oklch(0.7 0.01 200)">{{ subsPct }}%</span></div>
+        <div style="height:8px;border-radius:4px;background:oklch(0 0 0 / 0.25);box-shadow:inset 0 1px 2px oklch(0 0 0 / 0.4);overflow:hidden"><div style="width:{{ subsPct }}%;height:100%;border-radius:4px;background:linear-gradient(90deg,oklch(0.7 0.16 162),oklch(0.86 0.14 165));box-shadow:0 0 12px oklch(0.74 0.16 162 / 0.7);transition:width 500ms cubic-bezier(0.34,1.32,0.64,1)"></div></div></div>
+    </sc-if>
+    <sc-if value="{{ showDetails }}" hint-placeholder-val="{{ false }}"><span style="font-size:15px;font-weight:600;color:#fff">{{ task.title }}</span></sc-if>
+    <sc-if value="{{ showQueue }}" hint-placeholder-val="{{ false }}"><span style="font-size:15px;font-weight:600;color:#fff">Up next · {{ queueCount }}</span></sc-if>
+
+    <div style="display:grid;gap:2px;align-content:start;overflow:hidden;min-height:0">
+      <sc-if value="{{ showSubs }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ subs }}" as="st" hint-placeholder-count="4">
+          <button onClick="{{ st.toggle }}" style="{{ st.row }}">
+            <span style="{{ st.check }}"><i class="ph-bold ph-check" style="font-size:12px"></i></span>
+            <span style="{{ st.title }}">{{ st.label }}</span>
+            <span style="font-size:12px;color:oklch(0.6 0.01 200);flex:0 0 auto">{{ st.alloc }}</span>
+          </button>
+        </sc-for>
+      </sc-if>
+      <sc-if value="{{ showDetails }}" hint-placeholder-val="{{ false }}">
+        <p style="margin:0 0 10px;font-size:14px;line-height:1.55;color:oklch(0.82 0.008 260)">{{ task.desc }}</p>
+        <sc-for list="{{ facts }}" as="fc"><div style="display:flex;justify-content:space-between;padding:10px 4px;box-shadow:inset 0 -1px 0 oklch(1 0 0 / 0.06)"><span style="font-size:14px;color:oklch(0.66 0.01 200)">{{ fc.k }}</span><span style="font-size:14px;font-weight:600;color:#fff">{{ fc.v }}</span></div></sc-for>
+      </sc-if>
+      <sc-if value="{{ showQueue }}" hint-placeholder-val="{{ false }}">
+        <sc-for list="{{ upNext }}" as="q"><div style="display:flex;align-items:center;gap:12px;padding:12px 8px;border-radius:18px"><span style="width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;color:#fff;background:oklch(1 0 0 / 0.08);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.4)">{{ q.n }}</span><span style="flex:1;min-width:0;display:grid"><span style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ q.title }}</span><span style="font-size:12px;color:oklch(0.62 0.01 200)">{{ q.meta }}</span></span></div></sc-for>
+      </sc-if>
+    </div>
+    <div style="font-size:12px;color:oklch(0.58 0.01 200);text-align:center">Space pause · D done · → defer</div>
+  </aside>
+
+  <div style="{{ toastStyle }}"><i class="ph-fill {{ toastIcon }}" style="font-size:18px;color:oklch(0.84 0.15 165)"></i><span style="font-size:14px;font-weight:600;color:#fff">{{ toast }}</span></div>
+</div>
+</div>
+</div>
+
+<div style="display:grid;gap:14px">
+<div style="font-size:13px;font-weight:500;color:oklch(0.6 0.008 260)">Phone · 390 × 844</div>
+<div data-screen-label="Focus phone" style="width:390px;height:844px;border-radius:58px;padding:10px;background:linear-gradient(160deg,oklch(0.30 0.004 260),oklch(0.14 0.004 260));box-shadow:0 0 0 1px oklch(1 0 0 / 0.1),0 60px 120px -30px oklch(0 0 0 / 0.9)">
+<div style="position:relative;width:100%;height:100%;border-radius:48px;overflow:hidden;background:oklch(0.09 0.008 200);isolation:isolate;display:grid;grid-template-rows:54px auto 1fr auto">
+  <div style="position:absolute;inset:0;z-index:-1;overflow:hidden">
+    <div style="position:absolute;width:520px;height:520px;left:-75px;top:120px;border-radius:50%;background:oklch(0.40 0.11 166);filter:blur(110px);opacity:.45"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(oklch(1 0 0 / 0.035) 1px,transparent 1px),linear-gradient(90deg,oklch(1 0 0 / 0.035) 1px,transparent 1px);background-size:48px 48px"></div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:0 32px 0 38px;font-size:16px;font-weight:600;color:#fff"><span>19:22</span><span style="width:122px;height:36px;border-radius:20px;background:#000"></span><span style="display:flex;gap:6px"><i class="ph-fill ph-cell-signal-full" style="font-size:16px"></i><i class="ph-fill ph-battery-full" style="font-size:20px"></i></span></div>
+  <div style="display:grid;gap:10px;padding:8px 22px 0">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:oklch(0.86 0.13 165)"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.82 0.16 162);box-shadow:0 0 10px oklch(0.74 0.16 162);animation:fc-pulse 1.6s infinite"></span>{{ liveLabel }}</span><span style="font-size:13px;color:oklch(0.7 0.01 200)">{{ doneOf }} · {{ sessionLeft }}</span></div>
+    <div style="display:flex;gap:5px;height:8px"><sc-for list="{{ segs }}" as="sg" hint-placeholder-count="3"><span style="{{ sg.outer }}"><span style="{{ sg.inner }}"></span></span></sc-for></div>
+  </div>
+  <div style="display:grid;justify-items:center;align-content:center;gap:22px;padding:0 22px;text-align:center">
+    <div style="display:grid;gap:6px;justify-items:center"><span style="{{ dueChip }}"><i class="ph-fill ph-calendar-dots" style="font-size:13px"></i>{{ task.dueText }}</span><span style="font-size:24px;font-weight:700;letter-spacing:-0.025em;color:#fff;text-wrap:balance">{{ task.title }}</span></div>
+    <div style="position:relative;width:280px;height:280px;display:grid;place-items:center">
+      <div style="position:absolute;inset:30px;border-radius:50%;background:{{ ringGlow }};filter:blur(46px);opacity:.4"></div>
+      <svg width="280" height="280" viewBox="0 0 280 280" style="position:absolute;inset:0;transform:rotate(-90deg)"><circle cx="140" cy="140" r="124" fill="none" stroke="oklch(1 0 0 / 0.07)" stroke-width="14"></circle><circle cx="140" cy="140" r="124" fill="none" stroke="{{ ringColor }}" stroke-width="14" stroke-linecap="round" stroke-dasharray="{{ ringDashSm }}" style="transition:stroke-dasharray 1s linear, stroke 600ms ease"></circle></svg>
+      <div style="position:relative;width:206px;height:206px;border-radius:50%;display:grid;place-items:center;align-content:center;gap:2px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:url(#fc-lens) blur(14px) saturate(1.8) brightness(1.1);box-shadow:inset 2px 2px 1px -1px oklch(1 0 0 / 0.7),inset -1.5px -1.5px 1px -1px oklch(1 0 0 / 0.3),inset 0 -16px 30px -16px oklch(0 0 0 / 0.5),0 24px 50px -18px oklch(0 0 0 / 0.6)">
+        <span style="font-size:13px;font-weight:600;color:{{ leftTone }}">{{ leftLabel }}</span>
+        <span style="font-size:48px;font-weight:600;letter-spacing:-0.045em;line-height:1;color:#fff;font-variant-numeric:tabular-nums">{{ clock }}</span>
+        <span style="font-size:13px;color:oklch(0.7 0.01 200)">of {{ task.allocText }}</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <button onClick="{{ defer }}" aria-label="Defer" style="width:56px;height:56px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background:oklch(1 0 0 / 0.08);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.5),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.18)"><i class="ph-fill ph-skip-forward" style="font-size:21px"></i></button>
+      <button onClick="{{ toggleRun }}" aria-label="{{ runLabel }}" style="width:72px;height:72px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.2),transparent 42%),oklch(1 0 0 / 0.12);box-shadow:inset 2px 2px 1px -1px oklch(1 0 0 / 0.75),inset -1.5px -1.5px 1px -1px oklch(1 0 0 / 0.3),0 14px 30px -12px oklch(0 0 0 / 0.6)"><i class="{{ runIcon }}" style="font-size:28px"></i></button>
+      <button onClick="{{ markDone }}" aria-label="Mark done" style="width:56px;height:56px;border:0;border-radius:50%;display:grid;place-items:center;color:oklch(0.18 0.05 165);background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),0 12px 26px -10px oklch(0.7 0.16 162 / 0.6)"><i class="ph-bold ph-check" style="font-size:22px"></i></button>
+    </div>
+  </div>
+  <div style="padding:0 14px 30px">
+    <div style="display:grid;gap:10px;padding:14px 16px;border-radius:30px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#fc-lens) blur(12px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 20px 40px -12px oklch(0 0 0 / 0.6)">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;font-weight:600;color:#fff">Subtasks · {{ subsDone }}/{{ subsTotal }}</span><span style="width:28px;height:4px;border-radius:2px;background:oklch(1 0 0 / 0.3)"></span></div>
+      <div style="height:6px;border-radius:3px;background:oklch(0 0 0 / 0.25);overflow:hidden"><div style="width:{{ subsPct }}%;height:100%;background:linear-gradient(90deg,oklch(0.7 0.16 162),oklch(0.86 0.14 165));box-shadow:0 0 10px oklch(0.74 0.16 162 / 0.7);transition:width 500ms cubic-bezier(0.34,1.32,0.64,1)"></div></div>
+      <sc-if value="{{ nextSub }}" hint-placeholder-val="{{ true }}"><button onClick="{{ nextSubToggle }}" style="display:flex;align-items:center;gap:10px;min-height:44px;border:0;padding:0;background:transparent;text-align:left;font:inherit;color:#fff"><span style="width:24px;height:24px;border-radius:50%;box-shadow:inset 0 0 0 1.5px oklch(1 0 0 / 0.3);flex:0 0 auto"></span><span style="font-size:14px;font-weight:500">Next: {{ nextSubLabel }}</span></button></sc-if>
+    </div>
+  </div>
+  <div style="position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:oklch(1 0 0 / 0.7)"></div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { i: 0, left: 90 * 60 - 1754, run: true, panel: 0, cap: '', toast: '', done: [],
+    subs: { moa: true, aoa: true, cert: false, scan: false, sig: false } };
+  mapRef = React.createRef();
+  Q = [
+    { id: 'inc', title: 'File the incorporation paperwork', list: 'Operations', alloc: 90, due: 'Due in 21h', hot: true, desc: 'Form INC-32 plus the MOA and AOA. The CA has the drafts; they need signing and uploading.', tags: 'legal, blocking', score: '11.0' },
+    { id: 'copy', title: 'Rewrite the landing page copy', list: 'Build', alloc: 150, due: 'Due 19 Sep', hot: false, desc: 'Hero, three proof blocks, one call to action. Ship the draft to review, not to production.', tags: 'marketing', score: '7.5' },
+    { id: 'mca', title: 'Upload to the MCA portal', list: 'Operations', alloc: 30, due: 'Due in 21h', hot: true, desc: 'Portal accepts the signed set only after the certification step clears.', tags: 'legal', score: '4.0' },
+  ];
+  SUBS = [['moa', 'Sign the MOA', 15, 0], ['aoa', 'Sign the AOA', 15, 0], ['cert', 'Certify the signed set', 20, 0], ['scan', 'Scan the signed pages', 10, 1], ['sig', 'Attach the digital signature', 10, 1]];
+  componentDidMount() {
+    const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const ctx = cv.getContext('2d'), img = ctx.createImageData(N, N);
+    const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const nx = x / (N - 1) * 2 - 1, ny = y / (N - 1) * 2 - 1, i = (y * N + x) * 4;
+      img.data[i] = 128 - Math.sign(nx) * (ss(0.45, 1, Math.abs(nx)) * 0.85 + Math.abs(nx) * 0.15) * 127;
+      img.data[i + 1] = 128 - Math.sign(ny) * (ss(0.45, 1, Math.abs(ny)) * 0.85 + Math.abs(ny) * 0.15) * 127;
+      img.data[i + 2] = 128; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const el = this.mapRef.current, url = cv.toDataURL();
+    if (el) { el.setAttribute('href', url); el.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url); }
+    this.t = setInterval(() => { if (this.state.run) this.setState(s => ({ left: s.left - 1 })); }, 1000);
+    this.key = (e) => { if (e.target.tagName === 'INPUT') return; if (e.code === 'Space') { e.preventDefault(); this.setState(s => ({ run: !s.run })); } if (e.key === 'd') this.done(); if (e.key === 'ArrowRight') this.defer(); };
+    window.addEventListener('keydown', this.key);
+  }
+  componentWillUnmount() { clearInterval(this.t); clearTimeout(this.tt); window.removeEventListener('keydown', this.key); }
+  say(msg) { clearTimeout(this.tt); this.setState({ toast: msg }); this.tt = setTimeout(() => this.setState({ toast: '' }), 2600); }
+  order() { const s = this.state; const rest = this.Q.map((_, k) => k).filter(k => !s.done.includes(k)); const a = rest.indexOf(s.i); return rest.slice(a).concat(rest.slice(0, a)); }
+  done() { const s = this.state; const o = this.order(); const nx = o[1]; this.setState({ done: [...s.done, s.i], i: nx ?? s.i, left: nx != null ? this.Q[nx].alloc * 60 : 0 }); this.say(nx != null ? 'Done. Next task is up.' : 'Session complete.'); }
+  defer() { const o = this.order(); if (o.length < 2) return; this.setState({ i: o[1], left: this.Q[o[1]].alloc * 60 }); this.say('Deferred · +1 quasi-need, moved to the end'); }
+  renderVals() {
+    const s = this.state, T = this.Q[s.i];
+    const pad = n => String(n).padStart(2, '0');
+    const a = Math.abs(s.left), over = s.left < 0;
+    const clock = (over ? '+' : '') + (a >= 3600 ? Math.floor(a / 3600) + ':' : '') + pad(Math.floor(a % 3600 / 60)) + ':' + pad(a % 60);
+    const frac = over ? 1 : 1 - s.left / (T.alloc * 60);
+    const C = 2 * Math.PI * 160, C2 = 2 * Math.PI * 124;
+    const hm = m => m >= 60 ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '') : m + 'm';
+    const remaining = this.Q.filter((_, k) => !s.done.includes(k) && k !== s.i).reduce((n, q) => n + q.alloc, 0) + Math.max(0, Math.round(s.left / 60));
+    const segs = this.Q.map((q, k) => {
+      const d = s.done.includes(k), live = k === s.i && !d;
+      return { outer: `position:relative;flex:${q.alloc} 1 0;border-radius:6px;overflow:hidden;background:${d ? 'oklch(0.74 0.16 162 / 0.45)' : 'oklch(1 0 0 / 0.08)'};box-shadow:inset 0 1px 2px oklch(0 0 0 / 0.35)`,
+        inner: `position:absolute;left:0;top:0;bottom:0;border-radius:6px;width:${live ? frac * 100 : 0}%;background:linear-gradient(90deg,oklch(0.7 0.16 162),oklch(0.86 0.14 165));box-shadow:0 0 12px oklch(0.74 0.16 162 / 0.8);transition:width 1s linear` };
+    });
+    const rail = [['ph-squares-four', 'Home'], ['ph-list-checks', 'Queue'], ['ph-calendar-dots', 'Deadlines'], ['ph-target', 'Focus'], ['ph-sparkle', 'Atlas'], ['ph-gear-six', 'Settings']].map(([icon, label], i) => {
+      const on = i === 3;
+      return { icon, label, glow: `position:absolute;inset:6px;border-radius:50%;background:oklch(0.74 0.16 162);filter:blur(14px);opacity:${on ? 0.7 : 0}`,
+        plate: `position:absolute;inset:0;border-radius:50%;opacity:${on ? 1 : 0};background:oklch(1 0 0 / 0.14);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.7),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25)`,
+        glyph: `position:relative;font-size:22px;opacity:${on ? 1 : 0.55};filter:drop-shadow(0 2px 5px oklch(0 0 0 / 0.45))` };
+    });
+    const subsOn = T.id === 'inc';
+    const subs = subsOn ? this.SUBS.map(([id, label, al, depth]) => {
+      const d = s.subs[id];
+      return { label, alloc: al + 'm', toggle: () => this.setState(p => ({ subs: { ...p.subs, [id]: !p.subs[id] } })),
+        row: `display:flex;align-items:center;gap:12px;padding:11px 10px 11px ${10 + depth * 28}px;border:0;border-radius:16px;text-align:left;cursor:pointer;font:inherit;background:transparent;animation:fc-in 360ms ease both`,
+        check: `flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;transition:all 320ms cubic-bezier(0.34,1.32,0.64,1);transform:scale(${d ? 1 : 0.9});color:${d ? 'oklch(0.2 0.05 165)' : 'transparent'};background:${d ? 'linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162))' : 'transparent'};box-shadow:${d ? 'inset 0 1px 1px oklch(1 0 0 / 0.7),0 4px 12px -2px oklch(0.72 0.16 162 / 0.5)' : 'inset 0 0 0 1.5px oklch(1 0 0 / 0.25)'}`,
+        title: `flex:1;min-width:0;font-size:14px;font-weight:500;color:${d ? 'oklch(0.55 0.01 200)' : '#fff'};text-decoration:${d ? 'line-through' : 'none'}` };
+    }) : [];
+    const subsDone = subsOn ? Object.values(s.subs).filter(Boolean).length : 0, subsTotal = subsOn ? 5 : 0;
+    const next = subsOn ? this.SUBS.find(([id]) => !s.subs[id]) : null;
+    const o = this.order();
+    const tabs = ['Subtasks', 'Details', 'Queue'].map((label, i) => ({ label, go: () => this.setState({ panel: i }),
+      style: `flex:1;height:34px;border:0;border-radius:17px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;transition:all 380ms cubic-bezier(0.34,1.32,0.64,1);color:${s.panel === i ? '#fff' : 'oklch(0.66 0.01 200)'};background:${s.panel === i ? 'oklch(1 0 0 / 0.14)' : 'transparent'};box-shadow:${s.panel === i ? 'inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.2)' : 'none'}` }));
+    const ring = over ? 'oklch(0.70 0.19 25)' : 'oklch(0.82 0.16 163)';
+    return {
+      mapRef: this.mapRef, rail, segs, clock,
+      task: { ...T, dueText: T.due, allocText: hm(T.alloc) },
+      dueChip: `height:28px;padding:0 12px;border-radius:14px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:${T.hot ? 'oklch(0.9 0.09 40)' : '#fff'};background:${T.hot ? 'oklch(0.72 0.13 40 / 0.2)' : 'oklch(1 0 0 / 0.08)'}`,
+      ringDash: `${C * frac} ${C}`, ringDashSm: `${C2 * frac} ${C2}`, ringColor: ring, ringGlow: ring,
+      leftLabel: over ? 'Over time' : s.run ? 'Remaining' : 'Paused', leftTone: over ? 'oklch(0.8 0.14 25)' : s.run ? 'oklch(0.86 0.13 165)' : 'oklch(0.72 0.01 200)',
+      liveLabel: s.run ? 'Live' : 'Paused',
+      doneOf: s.done.length + ' of 3 done', sessionLeft: hm(remaining),
+      runIcon: s.run ? 'ph-fill ph-pause' : 'ph-fill ph-play', runLabel: s.run ? 'Pause' : 'Resume',
+      toggleRun: () => this.setState(p => ({ run: !p.run })), markDone: () => this.done(), defer: () => this.defer(),
+      panelTabs: tabs, showSubs: s.panel === 0, showDetails: s.panel === 1, showQueue: s.panel === 2,
+      subs, subsDone, subsTotal, subsPct: subsTotal ? Math.round(subsDone / subsTotal * 100) : 0,
+      nextSub: !!next, nextSubLabel: next ? next[1] : '', nextSubToggle: () => next && this.setState(p => ({ subs: { ...p.subs, [next[0]]: true } })),
+      facts: [['Project list', T.list], ['Due', T.due], ['Allocated', hm(T.alloc)], ['Score', T.score], ['Tags', T.tags]].map(([k, v]) => ({ k, v })),
+      upNext: o.slice(1).map((k, n) => ({ n: n + 1, title: this.Q[k].title, meta: this.Q[k].list + ' · ' + hm(this.Q[k].alloc) })), queueCount: o.length - 1,
+      cap: s.cap, onCap: e => this.setState({ cap: e.target.value }),
+      onCapKey: e => { if (e.key === 'Enter' && s.cap.trim()) { this.setState({ cap: '' }); this.say('Captured to ⚡ Action Steps'); } },
+      saveCap: () => { if (s.cap.trim()) { this.setState({ cap: '' }); this.say('Captured to ⚡ Action Steps'); } },
+      toast: s.toast, toastIcon: 'ph-check-circle',
+      toastStyle: `position:absolute;left:50%;top:22px;display:flex;align-items:center;gap:10px;height:46px;padding:0 18px;border-radius:23px;transition:all 420ms cubic-bezier(0.34,1.32,0.64,1);transform:translate(-50%, ${s.toast ? 0 : -80}px);opacity:${s.toast ? 1 : 0};background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.18),transparent 42%),oklch(0.2 0.01 200 / 0.6);-webkit-backdrop-filter:blur(14px);backdrop-filter:url(#fc-lens) blur(14px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),0 20px 40px -12px oklch(0 0 0 / 0.6)`,
+    };
+  }
+}
+</script>
+</body>
+</html>

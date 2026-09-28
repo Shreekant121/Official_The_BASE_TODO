@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="../styles.css">
+<style>
+  input::placeholder { color: var(--fg-4); opacity: 1; }
+</style>
+</helmet>
+<div ref="{{ rootRef }}" tabIndex="-1" onMouseEnter="{{ onEnter }}" onMouseLeave="{{ onLeave }}" style="display:grid;gap:var(--sp-5);min-width:0;outline:none">
+
+  <sc-if value="{{ asking }}" hint-placeholder-val="{{ true }}">
+    <div style="display:grid;min-width:0;border-radius:var(--r-card);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-rim-2), var(--glass-cast-2), 0 0 0 1px oklch(0.78 0.13 75 / 0.30), 0 0 36px -14px oklch(0.78 0.13 75 / 0.45);opacity:{{ cardOp }};transform:{{ cardTf }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass)">
+
+      <div style="display:grid;gap:var(--sp-3);padding:{{ padTop }}">
+        <div style="display:flex;align-items:center;gap:var(--sp-3);min-width:0">
+          {{ waitDot }}
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--status-review);white-space:nowrap">Waiting on you</span>
+          <span style="flex:1"></span>
+          <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap;font-variant-numeric:tabular-nums">{{ progress }}</span>
+        </div>
+        <span style="font:var(--type-title);font-size:{{ titleSize }};letter-spacing:var(--tracking-title);color:var(--fg-1);text-wrap:pretty">{{ title }}</span>
+      </div>
+
+      <div style="display:grid;min-width:0">
+        <sc-for list="{{ qs }}" as="q" hint-placeholder-count="4">
+          <div style="display:grid;min-width:0;border-top:{{ q.line }};opacity:{{ q.inOp }};transform:{{ q.inTf }};transition:opacity var(--dur-slow) var(--ease-glass) {{ q.delay }}, transform var(--dur-slow) var(--ease-glass) {{ q.delay }}, background-color var(--dur-base) var(--ease-glass);background-color:{{ q.bg }}">
+
+            <sc-if value="{{ q.showHead }}" hint-placeholder-val="{{ true }}">
+              <button type="button" onClick="{{ q.open }}" aria-expanded="{{ q.isOpen }}" style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:var(--sp-4);min-height:52px;padding:0 {{ padX }};border:0;background:transparent;text-align:left;cursor:pointer;color:inherit">
+                <span style="display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:{{ q.numBg }};box-shadow:{{ q.numSh }};color:{{ q.numInk }};font:var(--type-numeric);font-size:10px;transition:background-color var(--dur-base) var(--ease-glass)">{{ q.num }}</span>
+                <span style="min-width:0;font:var(--type-body);font-size:var(--text-sm);color:{{ q.headInk }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color var(--dur-base) var(--ease-glass)">{{ q.q }}</span>
+                <span style="display:inline-flex;align-items:center;gap:var(--sp-3);font:{{ q.ansFont }};font-size:var(--text-sm);color:{{ q.ansInk }};white-space:nowrap;opacity:{{ q.ansOp }};transition:opacity var(--dur-base) var(--ease-glass)">{{ q.answer }}<span style="display:flex;color:var(--fg-4);opacity:{{ q.editOp }}">{{ icPencil }}</span></span>
+              </button>
+            </sc-if>
+
+            <div style="display:grid;grid-template-rows:{{ q.rows }};opacity:{{ q.bodyOp }};transition:grid-template-rows var(--dur-sheet) var(--ease-glass), opacity var(--dur-base) var(--ease-glass)">
+              <div style="overflow:hidden;min-height:0">
+                <div style="display:grid;gap:var(--sp-4);padding:{{ q.bodyPad }}">
+
+                  <sc-if value="{{ q.isSingle }}" hint-placeholder-val="{{ false }}">
+                    <span style="font:var(--type-body);font-size:var(--text-md);color:var(--fg-1)">{{ q.q }}</span>
+                  </sc-if>
+
+                  <sc-if value="{{ q.isChoice }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-wrap:wrap;gap:var(--sp-3)">
+                      <sc-for list="{{ q.opts }}" as="o" hint-placeholder-count="4">
+                        <button type="button" onClick="{{ o.pick }}" aria-pressed="{{ o.sel }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-5) 0 {{ o.padL }};border:0;border-radius:var(--r-pill);background-color:transparent;background-image:{{ o.fill }};box-shadow:{{ o.rim }};color:{{ o.ink }};font:var(--type-body);font-size:var(--text-sm);white-space:nowrap;cursor:pointer;transition:var(--t-hover)" style-hover="background-color:oklch(1 0 0 / 0.04)" style-active="transform:scale(0.965)">
+                          <sc-if value="{{ o.showKey }}" hint-placeholder-val="{{ false }}"><span style="display:grid;place-items:center;min-width:20px;height:20px;border-radius:6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);font:var(--type-numeric);font-size:10px;color:var(--fg-3)">{{ o.key }}</span></sc-if>
+                          <sc-if value="{{ o.isMany }}" hint-placeholder-val="{{ false }}"><span style="display:grid;place-items:center;width:16px;height:16px;border-radius:5px;background:{{ o.boxBg }};box-shadow:{{ o.boxSh }};color:var(--void-0);transition:background-color var(--dur-fast) var(--ease-glass)">{{ o.boxGlyph }}</span></sc-if>
+                          <span style="font:{{ o.font }};font-size:var(--text-sm)">{{ o.l }}</span>
+                          <sc-if value="{{ o.s }}" hint-placeholder-val="{{ false }}"><span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3)">{{ o.s }}</span></sc-if>
+                          <sc-if value="{{ o.sug }}" hint-placeholder-val="{{ false }}"><span title="Suggested" style="width:6px;height:6px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--status-review)"></span></sc-if>
+                        </button>
+                      </sc-for>
+
+                      <sc-if value="{{ q.customOpen }}" hint-placeholder-val="{{ false }}">
+                        <label style="flex:1 1 200px;display:flex;align-items:center;gap:var(--sp-3);height:44px;min-width:0;padding:0 5px 0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), 0 0 0 1px var(--line-strong);animation:ag-condense var(--dur-base) var(--ease-glass) both">
+                          <span style="display:flex;color:var(--fg-4)">{{ icPencil }}</span>
+                          <input autoFocus="{{ true }}" value="{{ q.customVal }}" onChange="{{ q.onCustom }}" onKeyDown="{{ q.onCustomKey }}" placeholder="{{ q.customPh }}" aria-label="{{ q.q }}" style="flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--fg-1);font:var(--type-body);font-size:var(--text-sm)"></input>
+                          <button type="button" onClick="{{ q.commitCustom }}" aria-label="Use this answer" style="display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background-image:{{ q.goFill }};box-shadow:{{ q.goRim }};color:{{ q.goInk }};cursor:pointer;transition:var(--t-hover)">{{ icEnter }}</button>
+                        </label>
+                      </sc-if>
+                      <sc-if value="{{ q.customClosed }}" hint-placeholder-val="{{ true }}">
+                        <button type="button" onClick="{{ q.openCustom }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-3);font:var(--type-body);font-size:var(--text-sm);white-space:nowrap;cursor:pointer;transition:var(--t-hover)" style-hover="color:var(--fg-1);background-color:oklch(1 0 0 / 0.04)">{{ icPencil }}{{ q.customLabel }}</button>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ q.isScale }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:grid;gap:var(--sp-3)">
+                      <div role="radiogroup" aria-label="{{ q.q }}" style="display:flex;gap:3px;padding:3px;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)">
+                        <sc-for list="{{ q.segs }}" as="g" hint-placeholder-count="9">
+                          <button type="button" role="radio" aria-checked="{{ g.sel }}" onClick="{{ g.pick }}" style="flex:1 1 0;min-width:0;height:40px;border:0;border-radius:{{ g.r }};background-color:{{ g.bg }};background-image:{{ g.fill }};box-shadow:{{ g.rim }};color:{{ g.ink }};font:var(--type-numeric);font-size:var(--text-sm);font-variant-numeric:tabular-nums;cursor:pointer;transition:background-color var(--dur-fast) var(--ease-glass), box-shadow var(--dur-fast) var(--ease-glass), color var(--dur-fast) var(--ease-glass), transform var(--dur-fast) var(--ease-glass)" style-hover="color:var(--fg-1)" style-active="transform:scale(0.93)">{{ g.n }}</button>
+                        </sc-for>
+                      </div>
+                      <div style="display:flex;align-items:baseline;gap:var(--sp-4);padding:0 var(--sp-3)">
+                        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4);white-space:nowrap">1 · {{ q.lo }}</span>
+                        <span style="flex:1;text-align:center;font:var(--type-caption);color:var(--fg-1);white-space:nowrap;opacity:{{ q.scaleOp }};transition:opacity var(--dur-fast) var(--ease-glass)">{{ q.scaleWord }}</span>
+                        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4);white-space:nowrap">{{ q.hi }} · 9</span>
+                      </div>
+                    </div>
+                  </sc-if>
+
+                  <div style="display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap;min-height:20px">
+                    <span style="flex:1 1 200px;display:flex;align-items:center;gap:var(--sp-3);font:var(--type-caption);color:var(--fg-3);text-wrap:pretty"><span style="flex:0 0 auto;width:6px;height:6px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--status-review)"></span>{{ q.why }}</span>
+                    <sc-if value="{{ q.isMany }}" hint-placeholder-val="{{ false }}">
+                      <button type="button" onClick="{{ q.confirm }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-2);box-shadow:var(--glass-rim-2);color:var(--fg-1);font:var(--type-label);white-space:nowrap;cursor:pointer;transition:var(--t-hover)" style-active="transform:scale(0.965)">{{ q.confirmLabel }}<span style="display:flex;color:var(--fg-3)">{{ icEnter }}</span></button>
+                    </sc-if>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:var(--sp-3) var(--sp-4);flex-wrap:wrap;padding:{{ padFoot }};border-top:1px solid var(--line-faint)">
+        <sc-if value="{{ showKeysHint }}" hint-placeholder-val="{{ true }}">
+          <span style="display:inline-flex;align-items:center;gap:var(--sp-3);font:var(--type-caption);color:var(--fg-4);white-space:nowrap">
+            <span style="display:grid;place-items:center;min-width:20px;height:20px;padding:0 4px;box-sizing:border-box;border-radius:6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);font:var(--type-numeric);font-size:10px;color:var(--fg-3)">{{ keyRange }}</span>pick
+            <span style="display:grid;place-items:center;min-width:20px;height:20px;border-radius:6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);color:var(--fg-3)">{{ icEnterS }}</span>confirm
+            <span style="display:grid;place-items:center;min-width:20px;height:20px;padding:0 4px;box-sizing:border-box;border-radius:6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);font:var(--type-numeric);font-size:9px;color:var(--fg-3)">esc</span>decide for me
+          </span>
+        </sc-if>
+        <span style="flex:1"></span>
+        <button type="button" onClick="{{ decide }}" style="height:44px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;color:var(--fg-2);font:var(--type-label);white-space:nowrap;cursor:pointer;transition:var(--t-hover)" style-hover="background-color:oklch(1 0 0 / 0.05);color:var(--fg-1)">{{ decideLabel }}</button>
+        <sc-if value="{{ hasSubmit }}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{ submit }}" disabled="{{ submitOff }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-6);border:0;border-radius:var(--r-pill);background-image:{{ submitFill }};box-shadow:{{ submitRim }};color:{{ submitInk }};font:var(--type-label);white-space:nowrap;cursor:{{ submitCursor }};transition:var(--t-hover)" style-active="transform:scale(0.965)">{{ icCheck }}{{ submitLabel }}</button>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ answered }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:var(--sp-3) var(--sp-4);flex-wrap:wrap;min-height:48px;padding:var(--sp-3) var(--sp-5);border-radius:var(--r-lg);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);animation:ag-condense var(--dur-base) var(--ease-glass) both">
+      <span style="display:flex;color:var(--fg-2)">{{ icCheck }}</span>
+      <span style="font:var(--type-caption);font-size:var(--text-sm);color:var(--fg-2);white-space:nowrap">{{ receipt }}</span>
+      <span style="display:flex;flex-wrap:wrap;gap:var(--sp-2)">
+        <sc-for list="{{ summary }}" as="sm" hint-placeholder-count="3">
+          <span style="display:inline-flex;align-items:center;height:26px;padding:0 var(--sp-3);border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-1);white-space:nowrap">{{ sm }}</span>
+        </sc-for>
+      </span>
+      <span style="flex:1"></span>
+      <button type="button" onClick="{{ reopen }}" style="height:32px;padding:0 var(--sp-4);border:0;border-radius:var(--r-pill);background:transparent;color:var(--fg-3);font:var(--type-caption);cursor:pointer" style-hover="color:var(--fg-1);background-color:oklch(1 0 0 / 0.05)">Change</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ working }}" hint-placeholder-val="{{ false }}">
+    <div style="justify-self:start;display:inline-flex;align-items:center;gap:var(--sp-4);min-height:38px;padding:0 var(--sp-6) 0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1), var(--glass-cast-1);animation:ag-condense var(--dur-base) var(--ease-glass) both">
+      {{ liveDot }}
+      <span style="font:var(--type-caption);color:var(--fg-2);white-space:nowrap">{{ workLabel }}</span>
+      <span style="padding-left:var(--sp-4);border-left:1px solid var(--line-faint);font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">create_task</span>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ done }}" hint-placeholder-val="{{ false }}">
+    <div style="display:grid;gap:var(--sp-4);min-width:0;opacity:{{ doneOp }};transition:opacity var(--dur-base) var(--ease-glass);animation:ag-condense var(--dur-slow) var(--ease-glass) both">
+      <div style="display:flex;align-items:center;gap:var(--sp-3);min-width:0;color:var(--fg-3)">
+        {{ icList }}
+        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-3)">create_task</span>
+        <span style="flex:1;height:1px;background:var(--line-faint)"></span>
+        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">{{ doneCount }}</span>
+      </div>
+      <div style="display:grid;min-width:0;padding:0 var(--sp-4);border-radius:var(--r-sm);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)">
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--sp-4);min-height:40px;padding:var(--sp-2) {{ r.pad }};border-top:{{ r.line }}">
+            <span style="min-width:0;font:var(--type-body);font-size:{{ r.size }};color:{{ r.ink }};text-decoration:{{ r.strike }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.label }}</span>
+            <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap">{{ r.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin:0;max-width:60ch;font:var(--type-body);font-size:{{ bodySize }};line-height:var(--leading-normal);color:var(--fg-2);text-wrap:pretty">{{ reply }}</p>
+      <div style="display:flex;align-items:center;gap:var(--sp-4);min-height:44px">
+        <span style="display:flex;color:{{ undoIconInk }}">{{ undoIcon }}</span>
+        <span style="flex:1;min-width:0;font:var(--type-caption);color:var(--fg-3)">{{ undoLine }}</span>
+        <sc-if value="{{ canUndo }}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{ undo }}" style="display:inline-flex;align-items:center;gap:var(--sp-2);height:44px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background-color:oklch(1 0 0 / 0.05)">{{ icUndo }}Undo</button>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:760,&quot;height&quot;:640},&quot;set&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;task&quot;,&quot;list&quot;],&quot;default&quot;:&quot;task&quot;,&quot;tsType&quot;:&quot;'task' | 'list'&quot;},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;run&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number&quot;},&quot;onPhase&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(phase: 'ask'|'work'|'done', info?: object) =&gt; void&quot;}}">
+const SCALE_WORD = n => !n ? '' : n <= 2 ? 'Can slip' : n <= 4 ? 'Worth doing' : n <= 6 ? 'Matters this week' : n <= 8 ? 'High — protect the slot' : 'Drop everything';
+const SETS = {
+  task: {
+    title: 'Four things before I add “Call the CA”', submit: 'Add task', work: 'Adding the task',
+    qs: [
+      { id: 'due', kind: 'one', q: 'When is it due?', req: true, suggest: 2, why: 'Suggested Friday — four days before the 30 Sep filing date.', short: 'due',
+        opts: [{ l: 'Today', s: 'Tue 23' }, { l: 'Tomorrow', s: 'Wed 24' }, { l: 'Friday', s: '26 Sep' }, { l: 'Next week', s: 'Mon 29' }], customLabel: 'Pick a date', customPh: 'e.g. 2 Oct, before noon' },
+      { id: 'est', kind: 'one', q: 'How long will it take?', req: true, suggest: 1, mono: true, why: 'Suggested 30 min — your last two CA calls ran 24 and 31 min.',
+        opts: [{ l: '15 min' }, { l: '30 min' }, { l: '45 min' }, { l: '1 h' }], customLabel: 'Other', customPh: 'e.g. 20 min' },
+      { id: 'imp', kind: 'scale', q: 'How important, out of 9?', req: true, suggest: 7, why: 'Suggested 7 — filing deadlines score 7 across your lists.', lo: 'Can slip', hi: 'Drop everything' },
+      { id: 'prep', kind: 'many', q: 'Prepare anything first?', req: false, suggest: [0, 1], why: 'Optional. Each one becomes a subtask.',
+        opts: [{ l: 'Gather Form 16' }, { l: 'Pull bank statements' }, { l: 'List questions for the CA' }], customLabel: 'Add another', customPh: 'Name the subtask' },
+    ],
+  },
+  list: {
+    title: null, submit: null, work: 'Adding the task',
+    qs: [
+      { id: 'list', kind: 'one', q: 'Which list does “Call the CA” go in?', req: true, suggest: 0, why: 'Suggested Admin — it holds your other tax tasks.',
+        opts: [{ l: 'Admin', s: 'Mutineer Work' }, { l: 'Finance', s: 'Mutineer Work' }, { l: 'Self Care', s: 'Skills' }], customLabel: 'New list', customPh: 'Name the new list' },
+    ],
+  },
+};
+
+class Component extends DCLogic {
+  state = this.fresh();
+  rootRef = React.createRef();
+  fresh() { return { ans: {}, sel: {}, extra: {}, text: {}, customOpen: null, active: 0, phase: 'ask', shown: false, t0: Date.now(), elapsed: 0, decided: false, undone: false }; }
+
+  componentDidMount() {
+    this.enter();
+    this.onKey = e => this.key(e);
+    document.addEventListener('keydown', this.onKey);
+  }
+  componentDidUpdate(prev) { if (prev.run !== this.props.run) this.reset(); }
+  componentWillUnmount() { document.removeEventListener('keydown', this.onKey); clearTimeout(this.t1); clearTimeout(this.t2); clearTimeout(this.t3); }
+  enter() { clearTimeout(this.t1); this.t1 = setTimeout(() => this.setState({ shown: true }), 60); }
+  reset() { clearTimeout(this.t2); clearTimeout(this.t3); this.setState({ ...this.fresh() }); this.enter(); this.emit('ask'); }
+  emit(p, info) { this.props.onPhase && this.props.onPhase(p, info); }
+  set() { return SETS[this.props.set || 'task']; }
+  single() { return this.set().qs.length === 1; }
+
+  icon(size, kids, sw) {
+    const h = React.createElement;
+    return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: sw || 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, style: { flex: '0 0 auto' } },
+      kids.map((k, i) => h(k[0], Object.assign({ key: i }, k[1]))));
+  }
+  icons() {
+    if (this._ic) return this._ic;
+    const I = (s, k, w) => this.icon(s, k, w), h = React.createElement;
+    const enter = [['polyline', { points: '9 10 4 15 9 20' }], ['path', { d: 'M20 4v7a4 4 0 0 1-4 4H4' }]];
+    this._ic = {
+      icCheck: I(15, [['path', { d: 'M20 6 9 17l-5-5' }]], 2),
+      icCheckS: I(11, [['path', { d: 'M20 6 9 17l-5-5' }]], 3),
+      icPencil: I(14, [['path', { d: 'M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z' }]]),
+      icEnter: I(15, enter), icEnterS: I(11, enter, 2),
+      icList: I(14, [['path', { d: 'm3 17 2 2 4-4' }], ['path', { d: 'm3 7 2 2 4-4' }], ['path', { d: 'M13 6h8' }], ['path', { d: 'M13 12h8' }], ['path', { d: 'M13 18h8' }]]),
+      icUndo: I(14, [['path', { d: 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8' }], ['path', { d: 'M3 3v5h5' }]]),
+      waitDot: h('span', { style: { position: 'relative', width: 8, height: 8, flex: '0 0 auto' } },
+        h('span', { style: { position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--status-review)', boxShadow: '0 0 10px var(--status-review)', animation: 'ag-pulse 1.4s var(--ease-glass) infinite' } }),
+        h('span', { style: { position: 'absolute', inset: 0, borderRadius: '50%', boxShadow: '0 0 0 1px var(--status-review)', animation: 'ag-ripple 1.8s var(--ease-glass) infinite' } })),
+      liveDot: h('span', { style: { width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)', animation: 'ag-pulse 1.2s var(--ease-glass) infinite', flex: '0 0 auto' } }),
+    };
+    return this._ic;
+  }
+
+  isAnswered(q) {
+    const a = this.state.ans[q.id];
+    return a !== undefined && a !== null;
+  }
+  answerText(q, a) {
+    if (a === undefined || a === null) return '';
+    if (q.kind === 'scale') return a + ' / 9';
+    if (q.kind === 'many') { const n = a.length; return n === 0 ? 'Nothing' : n === 1 ? a[0] : n + ' subtasks'; }
+    if (a.text) return a.text;
+    const o = q.opts[a.i]; return o.s && q.id === 'due' ? o.l + ' · ' + o.s : o.l;
+  }
+  manyList(q, st) {
+    const s = st || this.state;
+    return (s.sel[q.id] || []).slice().sort().map(i => q.opts[i].l).concat(s.extra[q.id] || []);
+  }
+  next(from, ans) {
+    const qs = this.set().qs;
+    for (let k = 1; k <= qs.length; k++) { const i = (from + k) % qs.length; if (ans[qs[i].id] === undefined) return i; }
+    return -1;
+  }
+  commit(q, val) {
+    const ans = { ...this.state.ans, [q.id]: val };
+    const idx = this.set().qs.indexOf(q);
+    this.setState({ ans, customOpen: null });
+    clearTimeout(this.t2);
+    if (this.single()) { this.t2 = setTimeout(() => this.submit(ans), 260); return; }
+    this.t2 = setTimeout(() => this.setState({ active: this.next(idx, ans) }), 220);
+  }
+  pickOne(q, i) { this.commit(q, { i }); }
+  pickScale(q, n) { this.commit(q, n); }
+  toggle(q, i) {
+    this.setState(s => { const cur = s.sel[q.id] || []; const on = cur.includes(i); return { sel: { ...s.sel, [q.id]: on ? cur.filter(x => x !== i) : cur.concat(i) } }; });
+  }
+  confirmMany(q) { this.commit(q, this.manyList(q)); }
+  commitCustom(q) {
+    const t = (this.state.text[q.id] || '').trim();
+    if (!t) { this.setState({ customOpen: null }); return; }
+    if (q.kind === 'many') { this.setState(s => ({ extra: { ...s.extra, [q.id]: (s.extra[q.id] || []).concat(t) }, text: { ...s.text, [q.id]: '' }, customOpen: null })); return; }
+    this.commit(q, { text: t });
+  }
+  open(i) { this.setState(s => ({ active: s.active === i ? -1 : i, customOpen: null })); }
+
+  submit(ansIn, decided) {
+    const set = this.set(), ans = ansIn || this.state.ans;
+    if (!set.qs.every(q => !q.req || ans[q.id] !== undefined)) return;
+    const full = { ...ans };
+    set.qs.forEach(q => { if (full[q.id] === undefined && q.kind === 'many') full[q.id] = this.manyList(q); });
+    this.setState({ ans: full, phase: 'work', elapsed: Math.max(1, Math.round((Date.now() - this.state.t0) / 1000)), decided: !!decided, customOpen: null });
+    this.emit('work');
+    clearTimeout(this.t3);
+    this.t3 = setTimeout(() => { this.setState({ phase: 'done' }); this.emit('done', this.info(full)); }, 1400);
+  }
+  decide() {
+    const ans = { ...this.state.ans };
+    this.set().qs.forEach(q => {
+      if (ans[q.id] !== undefined) return;
+      ans[q.id] = q.kind === 'one' ? { i: q.suggest } : q.kind === 'scale' ? q.suggest : q.suggest.map(i => q.opts[i].l);
+    });
+    this.submit(ans, true);
+  }
+  info(ans) {
+    if (this.props.set === 'list') { const q = this.set().qs[0]; return { list: this.answerText(q, ans.list), due: 'Fri 26 Sep', est: '30 min', imp: 7, prep: [] }; }
+    const [qd, qe] = this.set().qs;
+    const d = ans.due; const due = d.text || ['Tue 23 Sep', 'Wed 24 Sep', 'Fri 26 Sep', 'Mon 29 Sep'][d.i];
+    return { list: 'Admin', due, est: this.answerText(qe, ans.est), imp: ans.imp, prep: ans.prep || [] };
+  }
+  key(e) {
+    if (this.state.phase !== 'ask') return;
+    const root = this.rootRef.current;
+    if (!root || !(this.hover || root.contains(document.activeElement))) return;
+    if (e.target && e.target.tagName === 'INPUT') return;
+    const qs = this.set().qs, q = qs[this.state.active];
+    if (/^[1-9]$/.test(e.key) && q) {
+      const d = +e.key; e.preventDefault();
+      if (q.kind === 'scale') return this.pickScale(q, d);
+      if (d <= q.opts.length) return q.kind === 'many' ? this.toggle(q, d - 1) : this.pickOne(q, d - 1);
+      if (d === q.opts.length + 1) return this.setState({ customOpen: q.id });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (q && q.kind === 'many') return this.confirmMany(q);
+      if (!this.single()) this.submit();
+    } else if (e.key === 'Escape') { e.preventDefault(); this.decide(); }
+  }
+
+  renderVals() {
+    const s = this.state, ic = this.icons(), set = this.set(), single = this.single(), compact = !!this.props.compact;
+    const on = { fill: 'var(--glass-fill-solid)', rim: 'var(--glass-rim-3), var(--glass-cast-1)', ink: 'var(--fg-1)' };
+    const off = { fill: 'var(--glass-fill-1)', rim: 'var(--glass-rim-1)', ink: 'var(--fg-2)' };
+    const px = compact ? 'var(--sp-5)' : 'var(--sp-7)';
+    const answeredN = set.qs.filter(q => s.ans[q.id] !== undefined).length;
+    const reqOk = set.qs.every(q => !q.req || s.ans[q.id] !== undefined);
+
+    const qs = set.qs.map((q, idx) => {
+      const isOpen = single || s.active === idx, a = s.ans[q.id], done = a !== undefined;
+      const openCustom = s.customOpen === q.id;
+      const base = {
+        q: q.q, num: done ? ic.icCheckS : '0' + (idx + 1), isOpen, showHead: !single, isSingle: single,
+        line: idx === 0 && single ? 'none' : '1px solid var(--line-faint)',
+        bg: isOpen && !single ? 'oklch(1 0 0 / 0.025)' : 'transparent',
+        numBg: done ? 'var(--fg-2)' : 'transparent', numSh: done ? 'none' : isOpen ? 'inset 0 0 0 1.5px var(--status-review)' : 'inset 0 0 0 1px var(--line-strong)',
+        numInk: done ? 'var(--void-0)' : isOpen ? 'var(--status-review)' : 'var(--fg-4)',
+        headInk: isOpen ? 'var(--fg-1)' : done ? 'var(--fg-2)' : 'var(--fg-3)',
+        answer: done ? this.answerText(q, a) : q.req ? 'Needed' : 'Optional',
+        ansInk: done ? 'var(--fg-1)' : 'var(--fg-4)', ansFont: done && (q.mono || q.kind === 'scale') ? 'var(--type-numeric)' : 'var(--type-body)',
+        ansOp: isOpen && !done ? 0 : 1, editOp: done && !isOpen ? 1 : 0,
+        rows: isOpen ? '1fr' : '0fr', bodyOp: isOpen ? 1 : 0,
+        bodyPad: single ? '0 ' + px + ' var(--sp-6)' : '0 ' + px + ' var(--sp-6) calc(' + px + ' + 22px + var(--sp-4))',
+        inOp: s.shown ? 1 : 0, inTf: s.shown ? 'translateY(0)' : 'translateY(6px)', delay: (idx * 40 + 100) + 'ms',
+        open: () => this.open(idx), why: q.why,
+        isChoice: q.kind !== 'scale', isScale: q.kind === 'scale', isMany: q.kind === 'many',
+        customOpen: openCustom, customClosed: !openCustom, customPh: q.customPh, customVal: s.text[q.id] || '',
+        onCustom: e => { const v = e.target.value; this.setState(st => ({ text: { ...st.text, [q.id]: v } })); },
+        onCustomKey: e => { if (e.key === 'Enter') { e.preventDefault(); this.commitCustom(q); } if (e.key === 'Escape') { e.stopPropagation(); this.setState({ customOpen: null }); } },
+        commitCustom: () => this.commitCustom(q), openCustom: () => this.setState({ customOpen: q.id }),
+        goFill: (s.text[q.id] || '').trim() ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+        goRim: (s.text[q.id] || '').trim() ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+        goInk: (s.text[q.id] || '').trim() ? 'oklch(0.95 0.07 162)' : 'var(--fg-4)',
+      };
+      if (q.kind === 'scale') {
+        return { ...base, lo: q.lo, hi: q.hi, scaleWord: SCALE_WORD(a) || 'Tap a number', scaleOp: a ? 1 : 0.5,
+          segs: Array.from({ length: 9 }, (_, i) => { const n = i + 1, sel = a === n, lit = a && n < a, sug = !a && n === q.suggest;
+            return { n, sel, pick: () => this.pickScale(q, n), r: i === 0 ? '999px 8px 8px 999px' : i === 8 ? '8px 999px 999px 8px' : '8px',
+              bg: lit ? 'oklch(1 0 0 / ' + (0.03 + n * 0.012).toFixed(3) + ')' : 'transparent',
+              fill: sel ? 'var(--glass-fill-solid)' : 'none', rim: sel ? 'var(--glass-rim-3), var(--glass-cast-1)' : sug ? 'inset 0 0 0 1.5px oklch(0.78 0.13 75 / 0.55)' : 'none',
+              ink: sel ? 'var(--fg-1)' : lit ? 'var(--fg-2)' : 'var(--fg-3)' }; }) };
+      }
+      const selSet = q.kind === 'many' ? (s.sel[q.id] || []) : null;
+      const opts = q.opts.map((o, i) => {
+        const sel = q.kind === 'many' ? selSet.includes(i) : a && a.i === i;
+        const st = sel ? on : off;
+        return { l: o.l, s: o.s || null, key: String(i + 1), showKey: !compact && q.kind !== 'many', isMany: q.kind === 'many', sel: !!sel,
+          sug: !done && (q.kind === 'many' ? q.suggest.includes(i) && !selSet.length : q.suggest === i),
+          padL: !compact && q.kind !== 'many' ? 'var(--sp-3)' : 'var(--sp-4)', font: q.mono ? 'var(--type-numeric)' : 'var(--type-body)',
+          fill: st.fill, rim: st.rim, ink: st.ink,
+          boxBg: sel ? 'var(--fg-1)' : 'transparent', boxSh: sel ? 'none' : 'inset 0 0 0 1px var(--line-strong)', boxGlyph: sel ? ic.icCheckS : null,
+          pick: () => (q.kind === 'many' ? this.toggle(q, i) : this.pickOne(q, i)) };
+      });
+      if (q.kind === 'many') (s.extra[q.id] || []).forEach((t, j) => opts.push({ l: t, s: null, showKey: false, isMany: true, sel: true, sug: false, padL: 'var(--sp-4)', font: 'var(--type-body)', ...on, fill: on.fill, boxBg: 'var(--fg-1)', boxSh: 'none', boxGlyph: ic.icCheckS,
+        pick: () => this.setState(st => ({ extra: { ...st.extra, [q.id]: st.extra[q.id].filter((_, k) => k !== j) } })) }));
+      if (q.kind === 'one' && a && a.text) opts.push({ l: a.text, s: null, showKey: false, isMany: false, sel: true, sug: false, padL: 'var(--sp-5)', font: 'var(--type-body)', fill: on.fill, rim: on.rim, ink: on.ink, pick: () => this.setState({ customOpen: q.id, text: { ...s.text, [q.id]: a.text } }) });
+      const n = this.manyList(q).length;
+      return { ...base, opts, customLabel: q.customLabel, confirm: () => this.confirmMany(q), confirmLabel: n ? 'Add ' + n : 'Nothing to prepare' };
+    });
+
+    const ph = s.phase, info = ph !== 'ask' ? this.info(s.ans) : null;
+    const rows = info ? [{ label: 'Call the CA', meta: info.due + ' · ' + info.est + ' · ' + info.imp + '/9', pad: 'var(--sp-2)', size: 'var(--text-sm)', ink: s.undone ? 'var(--fg-3)' : 'var(--fg-1)', strike: s.undone ? 'line-through' : 'none', line: 'none' }]
+      .concat(info.prep.map(p => ({ label: p, meta: 'subtask', pad: 'var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-7)', size: 'var(--text-xs)', ink: s.undone ? 'var(--fg-4)' : 'var(--fg-2)', strike: s.undone ? 'line-through' : 'none', line: '1px solid var(--line-faint)' }))) : [];
+    const summary = info ? (this.props.set === 'list' ? [info.list] : [info.due, info.est, info.imp + ' / 9'].concat(info.prep.length ? [info.prep.length + ' subtasks'] : [])) : [];
+    const secs = s.elapsed;
+
+    return {
+      ...ic, rootRef: this.rootRef,
+      onEnter: () => { this.hover = true; }, onLeave: () => { this.hover = false; },
+      asking: ph === 'ask', answered: ph !== 'ask', working: ph === 'work', done: ph === 'done',
+      cardOp: s.shown ? 1 : 0, cardTf: s.shown ? 'translateY(0)' : 'translateY(8px)',
+      padTop: (compact ? 'var(--sp-5)' : 'var(--sp-6)') + ' ' + px + ' ' + (single ? 'var(--sp-2)' : 'var(--sp-5)'),
+      padFoot: 'var(--sp-3) ' + (compact ? 'var(--sp-3)' : 'var(--sp-4)') + ' var(--sp-3) ' + px, padX: px,
+      titleSize: compact ? 'var(--text-md)' : 'var(--text-lg)',
+      title: single ? 'One thing I can’t tell from your message' : set.title,
+      progress: single ? '1 question' : answeredN + ' of ' + set.qs.length,
+      qs, showKeysHint: !compact, keyRange: single ? '1–3' : '1–9',
+      decide: () => this.decide(), decideLabel: single ? 'Use Admin' : 'Decide for me',
+      hasSubmit: !single && !!set.submit, submit: () => this.submit(), submitOff: !reqOk, submitLabel: set.submit,
+      submitFill: reqOk ? 'var(--glass-fill-solid)' : 'var(--glass-fill-1)', submitRim: reqOk ? 'var(--glass-rim-3), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+      submitInk: reqOk ? 'var(--fg-1)' : 'var(--fg-4)', submitCursor: reqOk ? 'pointer' : 'default',
+      receipt: s.decided ? 'Atlas decided' : 'Answered in 0:' + String(Math.min(secs, 59)).padStart(2, '0'),
+      summary, reopen: () => { clearTimeout(this.t3); this.setState({ phase: 'ask', active: 0, undone: false, t0: Date.now() }); this.emit('ask'); },
+      workLabel: set.work,
+      doneCount: s.undone ? 'reverted' : (1 + (info ? info.prep.length : 0)) + ' added', rows, doneOp: s.undone ? 0.6 : 1,
+      bodySize: compact ? 'var(--text-sm)' : 'var(--text-md)',
+      reply: !info ? '' : this.props.set === 'list' ? 'In ' + info.list + '. Friday, 30 min and 7 / 9 came from your message.' : 'In Admin · Mutineer Work, due ' + info.due + '.' + (info.prep.length ? ' The prep sits under it as subtasks.' : ''),
+      canUndo: !s.undone, undo: () => this.setState({ undone: true }),
+      undoIcon: s.undone ? ic.icUndo : ic.icCheck, undoIconInk: s.undone ? 'var(--fg-4)' : 'var(--accent)',
+      undoLine: s.undone ? 'Reverted. Nothing changed.' : 'Added. Undoable from the action log for 30 days.',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Trash</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+  .ag-code {
+    margin: 0; padding: var(--sp-5) var(--sp-6);
+    border-radius: var(--r-sm);
+    background-image: var(--glass-well);
+    box-shadow: var(--glass-well-shadow);
+    font: var(--type-numeric); font-size: var(--text-xs);
+    line-height: var(--leading-relaxed);
+    color: var(--fg-2); white-space: pre-wrap; word-break: break-word;
+  }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="Trash">
+<div id="root">
+  <div style="display:flex;height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:1000px;margin:0 auto;height:140px;border-radius:var(--r-card);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/forms/Input.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/MorphMenu.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, StatusPill, Toast, Input, MiniNav, MorphMenu } = AG;
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',     icon: 'layout-dashboard', href: 'home.html' },
+    { value: 'atlas',     label: 'Atlas',         icon: 'sparkles',         href: 'atlas.html' },
+    { value: 'skills',    label: 'Skills',        icon: 'wrench',           href: 'skills.html' },
+    { value: 'inbox',     label: 'Inbox triage',  icon: 'inbox',            href: 'inbox.html' },
+    { value: 'people',    label: 'Contacts',      icon: 'users',            href: 'contacts.html' },
+    { value: 'catalog',   label: 'The catalog',   icon: 'book-open',        href: 'catalog.html' },
+    { value: 'log',       label: 'Action log',    icon: 'scroll-text',      href: 'log.html' },
+    { value: 'trash',     label: 'Trash',         icon: 'trash-2' },
+  ];
+
+  /* ---------------------------------------------------------------
+     TRASH. Delete is real now, so it needs somewhere to be real IN.
+     Nothing leaves the laptop when it is deleted — it moves here and
+     sits for thirty days. Two facts have to be on every row:
+
+       what it took with it   (children, memories, queued work)
+       how long is left       (days, and the date it actually goes)
+
+     `by` matters as much: a thing Atlas deleted on its own reads
+     differently from a thing Shreekant deleted, and restoring the
+     first is the more common act.
+     --------------------------------------------------------------- */
+  const TODAY = new Date('2026-09-02T15:00:00+05:30');
+
+  const ITEMS = [
+    {
+      id: 't1', kind: 'task', icon: 'list-checks', name: 'Chase Rahul on invoice #114',
+      where: 'Shreekant Empire · ⚡ Action Steps', deleted: '2026-09-02', by: 'atlas',
+      why: 'Reverted with its turn — you undid the turn that created it.',
+      took: ['15 min allocated', 'Thursday 11:00 deadline'],
+      detail: 'task_9f31c2\ncreated  2 Sep 14:22 by atlas\ndeleted  2 Sep 14:31 by revert\nsnapshot kept — restore puts it back with its deadline',
+    },
+    {
+      id: 't2', kind: 'note', icon: 'file-text', name: 'how-to/reclip-notes.md',
+      where: 'The catalog', deleted: '2026-08-31', by: 'you',
+      why: 'Never opened in two months. You deleted it from the catalog.',
+      took: ['0 memories'],
+      detail: 'skills → no\ncatalog note, 210 bytes\nopened 0× since 2 Jul\nrestore returns the file exactly as it was',
+    },
+    {
+      id: 't3', kind: 'list', icon: 'folder', name: '📦 Someday',
+      where: 'Shreekant Empire', deleted: '2026-08-27', by: 'you',
+      why: 'You emptied it, then deleted the list.',
+      took: ['9 tasks', '3 with deadlines'],
+      detail: 'list_44b0\n9 child tasks came with it — all restorable together\nrestoring the list restores the 9 tasks, not their sessions',
+      heavy: true,
+    },
+    {
+      id: 't4', kind: 'contact', icon: 'user', name: 'Kabir Joshi',
+      where: 'Contacts', deleted: '2026-08-22', by: 'you',
+      why: 'No open work since July.',
+      took: ['a code, now dead', 'people/kabir-freelance.md stayed'],
+      detail: 'code 1190-6642-3308-71 revoked on delete\nhis note was NOT deleted — it is still in the catalog\nrestore reissues nothing; you would issue a new code',
+    },
+    {
+      id: 't5', kind: 'skill', icon: 'wrench', name: 'skills/summarise-pdf/',
+      where: 'Skills', deleted: '2026-08-14', by: 'you',
+      why: 'Never loaded. Its description never matched a question.',
+      took: ['1 file, 640 bytes'],
+      detail: 'folder with 1 file\nloaded 0× since it was written\nrestore puts the folder back, switched off',
+    },
+    {
+      id: 't6', kind: 'task', icon: 'list-checks', name: 'Call the packaging vendor',
+      where: 'Shreekant Empire · ⚡ Action Steps', deleted: '2026-08-08', by: 'atlas',
+      why: 'Atlas deleted it as a duplicate of an existing task.',
+      took: ['20 min allocated'],
+      detail: 'task_71ff40\ndeleted as duplicate of task_71ff12\nif that was wrong, this is the row to restore',
+      contested: true,
+    },
+    {
+      id: 't7', kind: 'note', icon: 'file-text', name: 'people/old-supplier.md',
+      where: 'The catalog', deleted: '2026-08-05', by: 'you',
+      why: 'Supplier replaced in June.',
+      took: ['4 memories'],
+      detail: 'catalog note, 890 bytes\n4 memories dropped from the active count\nrestore adds them back',
+    },
+  ];
+
+  const KINDS = [
+    { id: 'task',    label: 'Tasks' },
+    { id: 'note',    label: 'Notes' },
+    { id: 'list',    label: 'Lists' },
+    { id: 'contact', label: 'People' },
+    { id: 'skill',   label: 'Skills' },
+  ];
+
+  const SORTS = [
+    { value: 'soon', label: 'Going soonest' },
+    { value: 'new',  label: 'Newest' },
+  ];
+
+  function daysLeft(deleted) {
+    const gone = new Date(deleted + 'T00:00:00+05:30');
+    gone.setDate(gone.getDate() + 30);
+    return Math.max(0, Math.ceil((gone - TODAY) / 86400000));
+  }
+  function goesOn(deleted) {
+    const gone = new Date(deleted + 'T00:00:00+05:30');
+    gone.setDate(gone.getDate() + 30);
+    return gone.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+
+  const Kicker = ({ children, color = 'var(--fg-4)', style }) => (
+    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color, ...style }}>{children}</span>
+  );
+
+  function Metric({ value, unit, label, tone }) {
+    return (
+      <div style={{
+        display: 'grid', gap: 'var(--sp-2)', padding: 'var(--sp-6) var(--sp-7)',
+        borderRadius: 'var(--r-card)', minWidth: 0,
+        backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+      }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)' }}>
+          <span style={{
+            font: 'var(--type-metric)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-3xl)',
+            letterSpacing: 'var(--tracking-display)', color: tone || 'var(--fg-1)', fontVariantNumeric: 'tabular-nums',
+          }}>{value}</span>
+          {unit && <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>{unit}</span>}
+        </span>
+        <Kicker>{label}</Kicker>
+      </div>
+    );
+  }
+
+  /* The countdown. A ring would be decoration at this size — a number
+     and the actual date is what a person needs. Amber inside a week. */
+  function Countdown({ deleted }) {
+    const d = daysLeft(deleted);
+    const soon = d <= 7;
+    return (
+      <span style={{ display: 'grid', gap: 1, justifyItems: 'end', flex: '0 0 auto' }}>
+        <span style={{
+          font: 'var(--type-numeric)', fontSize: 'var(--text-md)',
+          color: soon ? 'var(--status-review)' : 'var(--fg-2)', fontVariantNumeric: 'tabular-nums',
+        }}>{d}d</span>
+        <Kicker color={soon ? 'var(--status-review)' : 'var(--fg-4)'}>goes {goesOn(deleted)}</Kicker>
+      </span>
+    );
+  }
+
+  function Item({ item, restored, onRestore, onPurge, last }) {
+    const [open, setOpen] = React.useState(false);
+    const [hover, setHover] = React.useState(false);
+    const soon = daysLeft(item.deleted) <= 7;
+
+    if (restored) {
+      return (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 60,
+          padding: '0 var(--sp-6)', borderTop: last ? 'none' : '1px solid var(--line-faint)',
+        }}>
+          <span style={{ display: 'flex', color: 'var(--accent)', flex: '0 0 auto' }}><Icon name="undo-2" size={16} /></span>
+          <span style={{ flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {item.name} is back in {item.where.split(' · ')[0]}
+          </span>
+          <Kicker style={{ flex: '0 0 auto' }}>restored</Kicker>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ borderTop: last ? 'none' : '1px solid var(--line-faint)' }}>
+        <div
+          onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap', minHeight: 68,
+            padding: 'var(--sp-4) var(--sp-6)',
+            background: hover ? 'oklch(1 0 0 / 0.035)' : 'transparent',
+            transition: 'background var(--dur-fast) var(--ease-glass)',
+          }}
+        >
+          <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flex: 1, minWidth: 220,
+            border: 0, background: 'transparent', padding: 0, cursor: 'pointer', textAlign: 'left',
+          }}>
+            <span style={{
+              display: 'grid', placeItems: 'center', width: 32, height: 32, flex: '0 0 auto',
+              borderRadius: '50%', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+              color: item.contested ? 'var(--status-review)' : 'var(--fg-4)',
+            }}><Icon name={item.icon} size={15} /></span>
+
+            <span style={{ display: 'grid', gap: 2, flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', minWidth: 0 }}>
+                <span style={{
+                  font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '0 1 auto',
+                }}>{item.name}</span>
+                {item.by === 'atlas' && (
+                  <span style={{ display: 'flex', color: 'var(--fg-4)', flex: '0 0 auto' }} title="Deleted by Atlas">
+                    <Icon name="sparkles" size={12} />
+                  </span>
+                )}
+              </span>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {item.where} · {item.took.join(' · ')}
+              </span>
+            </span>
+          </button>
+
+          <Countdown deleted={item.deleted} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto' }}>
+            <Button size="sm" variant={soon ? 'frost' : 'ghost'} iconLeft={<Icon name="undo-2" size={14} />} onClick={onRestore}>
+              Restore
+            </Button>
+            <MorphMenu
+              align="end" width={280}
+              header={{ title: item.name, meta: item.where }}
+              trigger={<IconButton label="Item actions" variant="ghost" size="sm"><Icon name="ellipsis" size={16} /></IconButton>}
+              items={[
+                { section: 'This item' },
+                { value: 'why', label: 'Why it was deleted', icon: <Icon name="info" size={16} />, onSelect: () => setOpen(true) },
+                { value: 'log', label: 'Find it in the action log', icon: <Icon name="scroll-text" size={16} />, onSelect: () => { location.href = 'log.html'; } },
+                { divider: true },
+                { section: 'Careful', tone: 'danger' },
+                {
+                  value: 'purge', label: 'Delete it now, for good', icon: <Icon name="trash-2" size={16} />, tone: 'danger',
+                  confirm: {
+                    label: 'Delete ' + item.name + ' for good?',
+                    hint: 'It skips the remaining ' + daysLeft(item.deleted) + ' days. Nothing brings it back after this.',
+                    action: 'Delete for good', onConfirm: onPurge,
+                  },
+                },
+              ]}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', transition: 'grid-template-rows var(--dur-morph) var(--ease-morph)' }}>
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ display: 'grid', gap: 'var(--sp-5)', padding: '0 var(--sp-6) var(--sp-6) calc(var(--sp-6) + 52px)' }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                <Kicker color="var(--fg-3)">Why it went</Kicker>
+                <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', maxWidth: '62ch', textWrap: 'pretty' }}>
+                  {item.why}
+                </span>
+              </div>
+              {item.contested && (
+                <div style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)',
+                  padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                  backgroundImage: 'var(--glass-tint-amber)', boxShadow: 'var(--glass-rim-1)',
+                }}>
+                  <span style={{ display: 'flex', color: 'var(--status-review)', flex: '0 0 auto', marginTop: 2 }}><Icon name="triangle-alert" size={15} /></span>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)', textWrap: 'pretty' }}>
+                    Atlas made this call on its own. If it judged wrong, restoring costs you nothing.
+                  </span>
+                </div>
+              )}
+              <pre className="ag-code">{item.detail}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ================================================================ */
+
+  function Trash() {
+    const [w, setW] = React.useState(window.innerWidth);
+    const [items, setItems] = React.useState(ITEMS);
+    const [restored, setRestored] = React.useState({});
+    const [query, setQuery] = React.useState('');
+    const [kinds, setKinds] = React.useState([]);
+    const [sort, setSort] = React.useState('soon');
+    const [toast, setToast] = React.useState(null);
+
+    const wide = w >= 900;
+
+    React.useEffect(() => {
+      const on = () => setW(window.innerWidth);
+      window.addEventListener('resize', on);
+      return () => window.removeEventListener('resize', on);
+    }, []);
+
+    React.useEffect(() => {
+      if (!toast) return;
+      const t = setTimeout(() => setToast(null), 3400);
+      return () => clearTimeout(t);
+    }, [toast]);
+
+    const q = query.trim().toLowerCase();
+    let visible = items.filter((it) =>
+      (kinds.length === 0 || kinds.includes(it.kind)) &&
+      (q === '' || (it.name + ' ' + it.where + ' ' + it.why).toLowerCase().includes(q))
+    );
+    visible = visible.slice().sort((a, b) => sort === 'soon'
+      ? daysLeft(a.deleted) - daysLeft(b.deleted)
+      : new Date(b.deleted) - new Date(a.deleted));
+
+    const live = items.filter((it) => !restored[it.id]);
+    const soon = live.filter((it) => daysLeft(it.deleted) <= 7).length;
+    const byAtlas = live.filter((it) => it.by === 'atlas').length;
+
+    function toggle(id) {
+      setKinds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.concat(id)));
+    }
+    function restore(it) {
+      setRestored((cur) => Object.assign({}, cur, { [it.id]: true }));
+      setToast({
+        icon: 'undo-2', title: 'Restored ' + it.name,
+        detail: 'Back in ' + it.where.split(' · ')[0] + ' with ' + it.took[0] + '.',
+      });
+    }
+    function purge(it) {
+      setItems((cur) => cur.filter((x) => x.id !== it.id));
+      setToast({ icon: 'trash-2', title: 'Gone for good', detail: it.name + ' cannot be brought back. It is in the action log.' });
+    }
+    function emptyAll() {
+      setItems([]);
+      setToast({ icon: 'trash-2', title: 'Trash emptied', detail: 'Everything in it is gone for good.' });
+    }
+
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+    function go(v) { const it = NAV.find((n) => n.value === v); if (it && it.href) location.href = it.href; }
+
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'stretch' }}>
+        <GlassFilters />
+
+        {wide && (
+          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="trash" onChange={go} />
+          </div>
+        )}
+
+        <div className="ag-scroll" style={{
+          flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-12)' : 'var(--sp-8) var(--gutter-page-sm) 116px',
+        }}>
+          <div style={{ width: '100%', maxWidth: 1000, margin: '0 auto', display: 'grid', gap: 'var(--sp-9)' }}>
+
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 260 }}>
+                <Kicker color="var(--fg-3)">Deleted, not gone</Kicker>
+                <h1 style={{ font: 'var(--type-display)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                  Trash
+                </h1>
+                <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', margin: 0, maxWidth: '62ch', textWrap: 'pretty' }}>
+                  Atlas can delete things now, so deleting has to be survivable. Everything sits here for
+                  thirty days, with what it took with it, and goes back exactly as it was.
+                </p>
+              </div>
+              <SegmentedControl size="sm" options={SORTS} value={sort} onChange={setSort} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: 'var(--sp-4)' }}>
+              <Metric value={live.length} label="in the trash" />
+              <Metric value={soon} label="going within a week" tone={soon ? 'var(--status-review)' : 'var(--fg-1)'} />
+              <Metric value={byAtlas} label="deleted by Atlas" />
+              <Metric value="30" unit="days" label="before anything goes" />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 240px', minWidth: 200, maxWidth: 320 }}>
+                <Input value={query} onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search the trash" aria-label="Search the trash" iconLeft={<Icon name="search" size={16} />} />
+              </div>
+              {KINDS.map((k) => {
+                const on = kinds.includes(k.id);
+                const n = items.filter((it) => it.kind === k.id).length;
+                if (n === 0) return null;
+                return (
+                  <button key={k.id} type="button" onClick={() => toggle(k.id)} aria-pressed={on} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 38, flex: '0 0 auto',
+                    padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
+                    backgroundImage: on ? 'var(--glass-fill-solid)' : 'var(--glass-fill-1)',
+                    boxShadow: on ? 'var(--glass-rim-3), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+                    color: on ? 'var(--fg-on-light)' : 'var(--fg-2)', font: 'var(--type-label)',
+                    transition: 'var(--t-hover)',
+                  }}>
+                    {k.label}
+                    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', opacity: on ? 0.6 : 1, color: on ? 'inherit' : 'var(--fg-4)' }}>{n}</span>
+                  </button>
+                );
+              })}
+              {(kinds.length > 0 || q) && (
+                <Button size="sm" variant="ghost" iconLeft={<Icon name="x" size={14} />} onClick={() => { setKinds([]); setQuery(''); }}>Clear</Button>
+              )}
+            </div>
+
+            <div style={{
+              borderRadius: 'var(--r-card)',
+              backgroundImage: 'var(--glass-fill-2)',
+              backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+              boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+              overflow: 'hidden',
+            }}>
+              {items.length === 0 ? (
+                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-12) var(--sp-7)', textAlign: 'center' }}>
+                  <span style={{ display: 'grid', placeItems: 'center', width: 48, height: 48, borderRadius: '50%', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', color: 'var(--fg-4)' }}>
+                    <Icon name="trash-2" size={22} />
+                  </span>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', maxWidth: '36ch', textWrap: 'pretty' }}>
+                    Nothing in the trash. Anything Atlas deletes lands here first.
+                  </span>
+                </div>
+              ) : visible.length === 0 ? (
+                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-11) var(--sp-7)', textAlign: 'center' }}>
+                  <span style={{ display: 'grid', placeItems: 'center', width: 44, height: 44, borderRadius: '50%', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', color: 'var(--fg-4)' }}>
+                    <Icon name="search-x" size={20} />
+                  </span>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', maxWidth: '32ch', textWrap: 'pretty' }}>
+                    Nothing in the trash matches that.
+                  </span>
+                </div>
+              ) : visible.map((it, i) => (
+                <Item key={it.id} item={it} restored={!!restored[it.id]} last={i === 0}
+                  onRestore={() => restore(it)} onPurge={() => purge(it)} />
+              ))}
+            </div>
+
+            {items.length > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
+                padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+              }}>
+                <span style={{ display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto' }}><Icon name="info" size={15} /></span>
+                <span style={{ flex: 1, minWidth: 220, font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                  Sent mail and published links were never deleted — they left, and the action log records
+                  them instead. Nothing in the trash ever left this laptop.
+                </span>
+                <MorphMenu
+                  align="end" width={288}
+                  header={{ title: 'Empty the trash', meta: items.length + ' items' }}
+                  trigger={<Button size="sm" variant="ghost" iconLeft={<Icon name="trash-2" size={14} />}>Empty the trash</Button>}
+                  items={[
+                    { section: 'Careful', tone: 'danger' },
+                    {
+                      value: 'empty', label: 'Empty it now', icon: <Icon name="trash-2" size={16} />, tone: 'danger',
+                      confirm: {
+                        label: 'Empty all ' + items.length + ' items?',
+                        hint: 'They skip their remaining days. Nothing brings any of it back.',
+                        action: 'Empty it', onConfirm: emptyAll,
+                      },
+                    },
+                  ]}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {toast && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-13)', display: 'grid', placeItems: 'center', zIndex: 80, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <Toast icon={<Icon name={toast.icon} size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+            </span>
+          </div>
+        )}
+
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <MiniNav items={navItems} value="trash" onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Trash />);
+});
+</script>
+</body>
+</html>

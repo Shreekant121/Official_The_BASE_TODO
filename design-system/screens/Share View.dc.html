@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>Nair &amp; Co — Website refresh · Shreekant Studio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="./image-slot.js"></script>
+<style>
+  html, body { margin: 0; min-height: 100%; }
+  a { color: var(--fg-1); text-decoration: none; }
+  a:hover { color: var(--accent-lift); }
+  input::placeholder, textarea::placeholder { color: var(--fg-4); opacity: 1; }
+</style>
+</helmet>
+<div class="ag-page ag-page--focal" data-screen-label="Share view" style="min-height:100vh;box-sizing:border-box;padding:{{ outerPad }};display:grid;justify-items:center;align-content:start">
+
+  <div style="position:sticky;top:12px;z-index:90;display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap;justify-content:center;padding:6px 6px 6px var(--sp-5);margin-bottom:var(--sp-6);border-radius:var(--r-pill);background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-shadow-thick)">
+    <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Review</span>
+    <div style="display:flex;gap:2px;padding:3px;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)">
+      <sc-for list="{{ viewTabs }}" as="v" hint-placeholder-count="4">
+        <button type="button" onClick="{{ v.go }}" style="height:32px;padding:0 var(--sp-4);border:0;white-space:nowrap;flex-shrink:0;background-color:transparent;border-radius:var(--r-pill);background-image:{{ v.fill }};box-shadow:{{ v.rim }};color:{{ v.ink }};font:var(--type-label);font-size:var(--text-xs);cursor:pointer;transition:var(--t-hover)">{{ v.label }}</button>
+      </sc-for>
+    </div>
+    <button type="button" onClick="{{ toggleFrame }}" style="display:inline-flex;align-items:center;gap:var(--sp-2);height:38px;padding:0 var(--sp-4);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-2);font:var(--type-label);font-size:var(--text-xs);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">{{ icPhone }}{{ frameLabel }}</button>
+  </div>
+
+  <div style="width:100%;max-width:{{ frameW }};height:{{ frameH }};overflow-y:auto;border-radius:{{ frameR }};box-shadow:{{ frameSh }};box-sizing:border-box;transition:max-width var(--dur-sheet) var(--ease-glass)">
+  <main style="max-width:760px;margin:0 auto;padding:{{ innerPad }};box-sizing:border-box;display:grid;gap:var(--sp-9)">
+
+    <sc-if value="{{ isExpired }}" hint-placeholder-val="{{ false }}">
+      <section data-screen-label="Expired link" style="min-height:70vh;display:grid;align-content:center;gap:var(--sp-7)">
+        <div style="display:grid;justify-items:center;gap:var(--sp-7);padding:var(--sp-10) var(--sp-7);border-radius:var(--r-card-lg);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane);text-align:center;opacity:{{ heroOp }};transform:{{ heroTf }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass)">
+          <span style="display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);color:var(--fg-3)">{{ icLinkOff }}</span>
+          <div style="display:grid;gap:var(--sp-3);justify-items:center">
+            <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Shreekant Studio</span>
+            <h1 style="margin:0;font:var(--type-display);font-size:clamp(28px, 7vw, var(--text-2xl));letter-spacing:var(--tracking-title);color:var(--fg-1)">This link has closed.</h1>
+            <p style="margin:0;max-width:36ch;font:var(--type-body);color:var(--fg-3);text-wrap:pretty">It stopped working on 20 Sep 2026. The project itself is untouched.</p>
+          </div>
+          <a href="mailto:hello@shreekant.studio?subject=New%20link%20for%20Website%20refresh" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:48px;padding:0 var(--sp-7);border-radius:var(--r-pill);background-image:var(--glass-fill-solid);box-shadow:var(--glass-rim-3), var(--glass-cast-1);color:var(--fg-1);font:var(--type-label);transition:var(--t-hover)" style-active="transform:scale(0.965)">{{ icMail }}Ask for a new link</a>
+          <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-4)">hello@shreekant.studio</span>
+        </div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ notExpired }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;gap:var(--sp-9)">
+
+        <header style="display:grid;gap:var(--sp-7);opacity:{{ heroOp }};transform:{{ heroTf }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass)">
+          <sc-if value="{{ isClient }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative;height:{{ coverH }};border-radius:var(--r-card-lg);overflow:hidden;box-shadow:var(--glass-rim-2), var(--glass-cast-1);background-image:var(--glass-well)">
+              <image-slot id="share-cover" shape="rect" placeholder="Project cover image"></image-slot>
+              <div style="position:absolute;left:0;right:0;top:0;height:6px;display:flex;pointer-events:none">
+                <span style="flex:2;background:oklch(0.70 0.15 290)"></span><span style="flex:4;background:oklch(0.70 0.15 210)"></span><span style="flex:2;background:oklch(0.70 0.15 75)"></span>
+              </div>
+            </div>
+          </sc-if>
+          <div style="display:flex;align-items:center;gap:var(--sp-4)">
+            <span style="display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background-image:var(--glass-fill-2);box-shadow:var(--glass-rim-2);font:var(--type-label);font-size:var(--text-xs);letter-spacing:0.04em;color:var(--fg-1)">SS</span>
+            <span style="flex:1;min-width:0;display:grid;gap:1px">
+              <span style="font:var(--type-label);color:var(--fg-1)">Shreekant Studio</span>
+              <span style="font:var(--type-caption);color:var(--fg-3)">{{ sharedWith }}</span>
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:var(--sp-2);font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)"></span>{{ updated }}</span>
+          </div>
+
+          <div style="display:grid;gap:var(--sp-3)">
+            <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-3)">{{ kicker }}</span>
+            <h1 style="margin:0;font:var(--type-display);font-size:clamp(30px, 7.5vw, var(--text-2xl));letter-spacing:var(--tracking-title);color:var(--fg-1);text-wrap:balance">{{ title }}</h1>
+            <p style="margin:0;max-width:52ch;font:var(--type-body);color:var(--fg-3);text-wrap:pretty">{{ lede }}</p>
+          </div>
+
+          <sc-if value="{{ hasSummary }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;gap:var(--sp-6);padding:var(--pad-card);border-radius:var(--r-card-lg);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:var(--sp-6) var(--sp-5)">
+                <sc-for list="{{ stats }}" as="st" hint-placeholder-count="4">
+                  <div style="display:grid;gap:var(--sp-2);align-content:start">
+                    <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">{{ st.k }}</span>
+                    <span style="font:var(--type-numeric);font-size:var(--text-md);color:var(--fg-1);font-variant-numeric:tabular-nums;opacity:{{ st.op }};transition:opacity var(--dur-fast) var(--ease-glass)">{{ st.v }}</span>
+                    <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">{{ st.sub }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--sp-5);flex-wrap:wrap">
+                <div style="flex:1 1 200px;height:6px;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);overflow:hidden"><div style="width:{{ barPct }};height:100%;border-radius:var(--r-pill);background:var(--accent);transition:width var(--dur-sheet) var(--ease-glass)"></div></div>
+                <div role="group" aria-label="Currency" style="display:flex;gap:2px;padding:3px;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)">
+                  <button type="button" onClick="{{ toInr }}" aria-pressed="{{ inrOn }}" style="min-width:56px;height:36px;padding:0 var(--sp-4);border:0;white-space:nowrap;flex-shrink:0;background-color:transparent;border-radius:var(--r-pill);background-image:{{ inrFill }};box-shadow:{{ inrRim }};color:{{ inrInk }};font:var(--type-numeric);font-size:var(--text-sm);cursor:pointer;transition:var(--t-hover)">₹ INR</button>
+                  <button type="button" onClick="{{ toUsd }}" aria-pressed="{{ usdOn }}" style="min-width:56px;height:36px;padding:0 var(--sp-4);border:0;white-space:nowrap;flex-shrink:0;background-color:transparent;border-radius:var(--r-pill);background-image:{{ usdFill }};box-shadow:{{ usdRim }};color:{{ usdInk }};font:var(--type-numeric);font-size:var(--text-sm);cursor:pointer;transition:var(--t-hover)">$ USD</button>
+                </div>
+              </div>
+              <sc-if value="{{ usdOn }}" hint-placeholder-val="{{ false }}"><span style="margin-top:calc(var(--sp-3) * -1);font:var(--type-caption);color:var(--fg-4)">Converted at ₹83.20 to $1 on 23 Sep. Invoices stay in rupees.</span></sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isClient }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;gap:var(--sp-3)">
+              <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-3)">Working now</span>
+              <sc-for list="{{ live }}" as="lv" hint-placeholder-count="2">
+                <div style="display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap;min-height:60px;padding:var(--sp-3) var(--sp-5) var(--sp-3) var(--sp-3);border-radius:var(--r-pill);background-image:linear-gradient(90deg, oklch(0.70 0.15 162 / 0.10), oklch(0.70 0.15 162 / 0.02)), var(--glass-fill-1);box-shadow:inset 0 0 0 1px oklch(0.70 0.15 162 / 0.25)">
+                  <span style="display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:{{ lv.bg }};color:var(--void-0);font:var(--type-label);font-size:var(--text-xs)">{{ lv.ini }}</span>
+                  <span style="flex:1 1 160px;min-width:0;display:grid;gap:1px"><span style="font:var(--type-label);color:var(--fg-1)">{{ lv.name }}</span><span style="font:var(--type-caption);color:var(--fg-3)">on {{ lv.task }}</span></span>
+                  <span style="display:inline-flex;align-items:center;gap:var(--sp-3);font:var(--type-numeric);font-size:var(--text-md);color:var(--accent-lift);font-variant-numeric:tabular-nums;white-space:nowrap">{{ pulse }}{{ lv.timer }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isOutsource }}" hint-placeholder-val="{{ false }}">
+            <ol style="margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));gap:var(--sp-3)">
+              <sc-for list="{{ steps }}" as="sp" hint-placeholder-count="3">
+                <li style="display:flex;align-items:flex-start;gap:var(--sp-4);padding:var(--sp-5);border-radius:var(--r-lg);box-shadow:inset 0 0 0 1px var(--line-faint)">
+                  <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-4);padding-top:2px">{{ sp.n }}</span>
+                  <span style="display:grid;gap:2px"><span style="font:var(--type-label);color:var(--fg-1)">{{ sp.t }}</span><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">{{ sp.d }}</span></span>
+                </li>
+              </sc-for>
+            </ol>
+          </sc-if>
+        </header>
+
+        <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+          <section data-screen-label="Empty" style="display:grid;gap:var(--sp-7);padding:var(--sp-9) var(--sp-7);border-radius:var(--r-card-lg);box-shadow:inset 0 0 0 1px var(--line-faint);background:oklch(0 0 0 / 0.18);opacity:{{ heroOp }};transition:opacity var(--dur-slow) var(--ease-glass) 120ms">
+            <div style="display:grid;gap:var(--sp-3)">
+              <div style="height:64px;border-radius:var(--r-md);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)"></div>
+              <div style="height:64px;border-radius:var(--r-md);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);opacity:0.6"></div>
+              <div style="height:64px;border-radius:var(--r-md);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);opacity:0.3"></div>
+            </div>
+            <div style="display:grid;gap:var(--sp-2);justify-items:center;text-align:center">
+              <span style="font:var(--type-title);letter-spacing:var(--tracking-title);color:var(--fg-1)">Nothing planned yet.</span>
+              <span style="max-width:40ch;font:var(--type-body);font-size:var(--text-sm);color:var(--fg-3);text-wrap:pretty">Tasks appear here as Shreekant plans them. Same link, no need to ask again.</span>
+            </div>
+          </section>
+        </sc-if>
+
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+          <section style="display:grid;gap:var(--sp-4)">
+            <div style="display:flex;align-items:baseline;gap:var(--sp-4);padding:0 var(--sp-2)">
+              <sc-if value="{{ g.dot }}" hint-placeholder-val="{{ false }}"><span style="align-self:center;width:10px;height:10px;border-radius:50%;background:{{ g.dot }};box-shadow:0 0 10px {{ g.dot }}"></span></sc-if>
+              <h2 style="margin:0;font:var(--type-label);color:var(--fg-1)">{{ g.name }}</h2>
+              <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-4)">{{ g.sub }}</span>
+            </div>
+            <div style="display:grid;gap:var(--sp-3)">
+              <sc-for list="{{ g.tasks }}" as="t" hint-placeholder-count="3">
+                <article style="display:grid;gap:var(--sp-4);padding:var(--sp-6);border-radius:var(--r-card);background-image:{{ t.fill }};backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:{{ t.shadow }};opacity:{{ t.op }};transform:{{ t.tf }};transition:opacity var(--dur-slow) var(--ease-glass) {{ t.delay }}, transform var(--dur-slow) var(--ease-glass) {{ t.delay }}, background-image var(--dur-base) var(--ease-glass)">
+                  <div style="display:flex;align-items:flex-start;gap:var(--sp-4)">
+                    <span style="flex:0 0 auto;margin-top:1px;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:{{ t.dotBg }};box-shadow:{{ t.dotSh }};color:var(--void-0)">{{ t.glyph }}</span>
+                    <span style="flex:1;min-width:0;font:var(--type-body);color:{{ t.nameInk }};text-wrap:pretty">{{ t.name }}</span>
+                    <span style="flex:0 0 auto;display:grid;justify-items:end;gap:1px">
+                      <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-1);font-variant-numeric:tabular-nums;opacity:{{ moneyOp }};transition:opacity var(--dur-fast) var(--ease-glass)">{{ t.money }}</span>
+                      <sc-if value="{{ t.payLabel }}" hint-placeholder-val="{{ false }}"><span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">payout</span></sc-if>
+                    </span>
+                  </div>
+
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2) var(--sp-5);padding-left:calc(22px + var(--sp-4))">
+                    <span style="display:inline-flex;align-items:center;gap:var(--sp-2);height:24px;padding:0 var(--sp-3);border-radius:var(--r-pill);box-shadow:inset 0 0 0 1px {{ t.pillLine }};font:var(--type-caption);color:{{ t.pillInk }};white-space:nowrap">{{ t.pill }}</span>
+                    <span style="display:inline-flex;align-items:center;gap:var(--sp-2);font:var(--type-numeric);font-size:var(--text-xs);color:{{ t.dueInk }};white-space:nowrap">{{ icCal }}{{ t.due }}</span>
+                    <span style="display:inline-flex;align-items:center;gap:var(--sp-2);font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap">{{ icClock }}{{ t.est }}</span>
+                    <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap">{{ t.subCount }}</span>
+                  </div>
+
+                  <sc-if value="{{ t.hasWho }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;gap:var(--sp-3) var(--sp-4);flex-wrap:wrap;padding-left:calc(22px + var(--sp-4))">
+                      <span style="display:inline-flex;align-items:center;gap:var(--sp-3)">
+                        <span style="display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:{{ t.whoBg }};color:var(--void-0);font:var(--type-label);font-size:10px;letter-spacing:0.02em">{{ t.whoIni }}</span>
+                        <span style="font:var(--type-caption);font-size:var(--text-sm);color:var(--fg-2);white-space:nowrap">{{ t.whoName }}</span>
+                      </span>
+                      <sc-if value="{{ t.isRunning }}" hint-placeholder-val="{{ false }}">
+                        <span style="display:inline-flex;align-items:center;gap:var(--sp-2);height:26px;padding:0 var(--sp-3);border-radius:var(--r-pill);background:oklch(0.70 0.15 162 / 0.12);box-shadow:inset 0 0 0 1px oklch(0.70 0.15 162 / 0.35);font:var(--type-numeric);font-size:var(--text-xs);color:var(--accent-lift);font-variant-numeric:tabular-nums;white-space:nowrap">{{ pulse }}{{ t.timer }} · running</span>
+                      </sc-if>
+                      <sc-if value="{{ t.spent }}" hint-placeholder-val="{{ false }}">
+                        <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap">{{ t.spent }}</span>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+
+                  <div style="display:grid;gap:var(--sp-3);padding-left:calc(22px + var(--sp-4))">
+                    <div style="height:4px;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);overflow:hidden"><div style="width:{{ t.pct }};height:100%;border-radius:var(--r-pill);background:{{ t.barBg }};transition:width var(--dur-sheet) var(--ease-glass)"></div></div>
+                    <sc-if value="{{ t.subHead }}" hint-placeholder-val="{{ false }}"><span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">{{ t.subHead }}</span></sc-if>
+                    <ul style="margin:0;padding:0;list-style:none;display:grid;gap:var(--sp-2)">
+                      <sc-for list="{{ t.subs }}" as="s" hint-placeholder-count="2">
+                        <li style="display:flex;align-items:flex-start;gap:var(--sp-3)">
+                          <span style="flex:0 0 auto;margin-top:3px;display:grid;place-items:center;width:14px;height:14px;border-radius:4px;background:{{ s.bg }};box-shadow:{{ s.sh }};color:var(--void-0)">{{ s.glyph }}</span>
+                          <span style="flex:1;min-width:0;font:var(--type-caption);font-size:var(--text-sm);color:{{ s.ink }};text-wrap:pretty">{{ s.text }}</span>
+                        </li>
+                      </sc-for>
+                    </ul>
+                  </div>
+
+                  <sc-if value="{{ t.isOut }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:grid;gap:var(--sp-4);padding-top:var(--sp-4);border-top:1px solid var(--line-faint)">
+
+                      <sc-if value="{{ t.showClaimBtn }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap">
+                          <span style="flex:1 1 180px;font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Held for you 48 h once claimed.</span>
+                          <button type="button" onClick="{{ t.openClaim }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-6);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-solid);box-shadow:var(--glass-rim-3), var(--glass-cast-1);color:var(--fg-1);font:var(--type-label);cursor:pointer;transition:var(--t-hover)" style-active="transform:scale(0.965)">Claim task</button>
+                        </div>
+                      </sc-if>
+
+                      <div style="display:grid;grid-template-rows:{{ t.claimRows }};opacity:{{ t.claimOp }};transition:grid-template-rows var(--dur-sheet) var(--ease-glass), opacity var(--dur-base) var(--ease-glass)">
+                        <div style="overflow:hidden;min-height:0">
+                          <div style="display:grid;gap:var(--sp-4);padding:2px">
+                            <span style="font:var(--type-label);color:var(--fg-1)">Claim without an account</span>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:var(--sp-3)">
+                              <input value="{{ fName }}" onChange="{{ onName }}" placeholder="Your name" aria-label="Your name" style="height:48px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);color:var(--fg-1);font:var(--type-body);font-size:16px;outline:none;box-sizing:border-box;min-width:0"></input>
+                              <input value="{{ fEmail }}" onChange="{{ onEmail }}" type="email" placeholder="Email for payment" aria-label="Email for payment" style="height:48px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);color:var(--fg-1);font:var(--type-body);font-size:16px;outline:none;box-sizing:border-box;min-width:0"></input>
+                            </div>
+                            <div style="display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-3);flex-wrap:wrap">
+                              <button type="button" onClick="{{ closeForm }}" style="height:44px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">Cancel</button>
+                              <button type="button" onClick="{{ t.claim }}" disabled="{{ claimDisabled }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-6);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-solid);box-shadow:var(--glass-rim-3), var(--glass-cast-1);color:var(--fg-1);font:var(--type-label);cursor:pointer;opacity:{{ claimBtnOp }};transition:var(--t-hover)" style-active="transform:scale(0.965)">Hold it for 48 h</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <sc-if value="{{ t.isMine }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap">
+                          <span style="display:inline-flex;align-items:center;gap:var(--sp-3);height:36px;padding:0 var(--sp-4);border-radius:var(--r-pill);background:oklch(0.70 0.15 162 / 0.12);box-shadow:inset 0 0 0 1px oklch(0.70 0.15 162 / 0.35);color:var(--accent-lift);font:var(--type-numeric);font-size:var(--text-sm);font-variant-numeric:tabular-nums">{{ icHourglass }}Yours · {{ t.left }}</span>
+                          <a href="#brief" style="display:inline-flex;align-items:center;gap:var(--sp-2);font:var(--type-label);font-size:var(--text-sm);color:var(--fg-2)">Brief &amp; files{{ icArrow }}</a>
+                          <span style="flex:1"></span>
+                          <sc-if value="{{ t.showSubmitBtn }}" hint-placeholder-val="{{ true }}">
+                            <div style="display:flex;gap:var(--sp-3)">
+                              <button type="button" onClick="{{ t.release }}" style="height:44px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">Release</button>
+                              <button type="button" onClick="{{ t.openSubmit }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-6);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-solid);box-shadow:var(--glass-rim-3), var(--glass-cast-1);color:var(--fg-1);font:var(--type-label);cursor:pointer" style-active="transform:scale(0.965)">Submit work</button>
+                            </div>
+                          </sc-if>
+                        </div>
+                      </sc-if>
+
+                      <div style="display:grid;grid-template-rows:{{ t.subRows }};opacity:{{ t.subOp }};transition:grid-template-rows var(--dur-sheet) var(--ease-glass), opacity var(--dur-base) var(--ease-glass)">
+                        <div style="overflow:hidden;min-height:0">
+                          <div style="display:grid;gap:var(--sp-3);padding:2px">
+                            <label style="display:flex;align-items:center;gap:var(--sp-3);height:48px;padding:0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);color:var(--fg-4)">{{ icLink }}<input value="{{ fLink }}" onChange="{{ onLink }}" placeholder="Link to the files" aria-label="Link to the files" style="flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--fg-1);font:var(--type-body);font-size:16px"></input></label>
+                            <textarea value="{{ fNote }}" onChange="{{ onNote }}" rows="3" placeholder="Anything Shreekant should know" aria-label="Note" style="padding:var(--sp-4) var(--sp-5);border:0;border-radius:var(--r-lg);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);color:var(--fg-1);font:var(--type-body);font-size:16px;outline:none;resize:vertical;box-sizing:border-box"></textarea>
+                            <div style="display:flex;justify-content:flex-end;gap:var(--sp-3)">
+                              <button type="button" onClick="{{ closeForm }}" style="height:44px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">Cancel</button>
+                              <button type="button" onClick="{{ t.submit }}" disabled="{{ submitDisabled }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-6);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-solid);box-shadow:var(--glass-rim-3), var(--glass-cast-1);color:var(--fg-1);font:var(--type-label);cursor:pointer;opacity:{{ submitBtnOp }}" style-active="transform:scale(0.965)">{{ icSend }}Submit</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <sc-if value="{{ t.isSent }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;align-items:center;gap:var(--sp-4)">
+                          <span style="display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--status-queued)">{{ icSend }}</span>
+                          <span style="display:grid;gap:1px"><span style="font:var(--type-label);color:var(--fg-1)">Submitted. Under review.</span><span style="font:var(--type-caption);color:var(--fg-3)">Reply to {{ t.email }} within 2 working days.</span></span>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ t.isTaken }}" hint-placeholder-val="{{ false }}">
+                        <span style="display:flex;align-items:center;gap:var(--sp-3);font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">{{ icLock }}Claimed by someone else. Reopens 25 Sep if not delivered.</span>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </article>
+              </sc-for>
+            </div>
+          </section>
+        </sc-for>
+
+        <footer style="display:grid;gap:var(--sp-3);justify-items:center;padding:var(--sp-7) 0 var(--sp-4);border-top:1px solid var(--line-faint);text-align:center">
+          <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">{{ footLine }}</span>
+          <span style="display:flex;gap:var(--sp-4);flex-wrap:wrap;justify-content:center;font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-4)"><a href="mailto:hello@shreekant.studio" style="color:var(--fg-2)">hello@shreekant.studio</a><span>Shared from BASE</span></span>
+        </footer>
+      </div>
+    </sc-if>
+  </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;readonly&quot;,&quot;client&quot;,&quot;outsource&quot;,&quot;empty&quot;,&quot;expired&quot;],&quot;default&quot;:&quot;readonly&quot;,&quot;tsType&quot;:&quot;'readonly' | 'outsource' | 'empty' | 'expired'&quot;},&quot;currency&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;inr&quot;,&quot;usd&quot;],&quot;default&quot;:&quot;inr&quot;,&quot;tsType&quot;:&quot;'inr' | 'usd'&quot;},&quot;frame&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;fluid&quot;,&quot;phone&quot;],&quot;default&quot;:&quot;fluid&quot;,&quot;tsType&quot;:&quot;'fluid' | 'phone'&quot;}}">
+const RATE = 83.2;
+const ST = {
+  done: { pill: 'Done', ink: 'var(--accent)', line: 'oklch(0.70 0.15 162 / 0.35)', bar: 'var(--accent)' },
+  progress: { pill: 'In progress', ink: 'var(--status-running)', line: 'var(--line-soft)', bar: 'var(--status-running)' },
+  next: { pill: 'Up next', ink: 'var(--fg-3)', line: 'var(--line-faint)', bar: 'var(--fg-3)' },
+  waiting: { pill: 'Waiting on you', ink: 'var(--status-review)', line: 'oklch(0.78 0.13 75 / 0.35)', bar: 'var(--status-review)' },
+};
+const PROJECT = [
+  { name: 'Discovery', tasks: [
+    { id: 'a1', name: 'Stakeholder interviews', st: 'done', due: 'Delivered 1 Sep', est: 6, amt: 18000, subs: [['Interview guide', 1], ['Four interviews with the team', 1], ['Synthesis note', 1]] },
+    { id: 'a2', name: 'Content audit of the current site', st: 'done', due: 'Delivered 5 Sep', est: 4, amt: 12000, subs: [['Crawl every page', 1], ['Mark each page keep, merge or cut', 1]] },
+  ]},
+  { name: 'Design', tasks: [
+    { id: 'b1', name: 'Homepage wireframes', st: 'done', due: 'Delivered 12 Sep', est: 5, amt: 15000, subs: [['Three layout options', 1], ['Chosen layout, annotated', 1], ['Mobile version', 1]] },
+    { id: 'b2', name: 'Visual direction', st: 'progress', due: 'Due 26 Sep · in 3 days', est: 8, amt: 24000, subs: [['Moodboard', 1], ['Type and colour', 1], ['Two homepage comps', 0], ['Review call with Anita', 0]] },
+    { id: 'b3', name: 'Final product copy from Nair & Co', st: 'waiting', due: 'Needed 20 Sep · 3 days late', late: true, est: null, amt: 0, subs: [['Twelve product descriptions', 0], ['Pricing table', 0]] },
+    { id: 'b4', name: 'Product page design', st: 'next', due: 'Due 3 Oct', est: 6, amt: 18000, subs: [['Desktop layout', 0], ['Mobile layout', 0], ['Image specs for the shoot', 0]] },
+  ]},
+  { name: 'Build', tasks: [
+    { id: 'c1', name: 'CMS setup and content entry', st: 'next', due: 'Due 10 Oct', est: 5, amt: 15000, subs: [['Page templates', 0], ['Move approved content across', 0]] },
+    { id: 'c2', name: 'Launch and handover', st: 'next', due: 'Due 24 Oct', est: 3, amt: 9000, subs: [['Domain switch', 0], ['Editing walkthrough, recorded', 0], ['30-day fix window', 0]] },
+  ]},
+];
+const WORK = [
+  { name: 'Open work', tasks: [
+    { id: 'o2', name: 'Clean up the 24-icon set', due: 'Due 27 Sep · in 4 days', est: 3, amt: 4500, subs: ['Align every icon to the 24 px grid', 'Stroke 1.5, round caps', 'Export SVG and PNG'] },
+    { id: 'o4', name: 'Write alt text for 40 product images', due: 'Due 29 Sep · in 6 days', est: 2, amt: 2000, subs: ['Under 125 characters each', 'Fill the provided spreadsheet'] },
+    { id: 'o1', name: 'Spot illustrations for a homepage', due: 'Due 30 Sep · in 7 days', est: 6, amt: 9000, subs: ['Six illustrations, SVG', 'Match the supplied palette', 'One round of changes included'] },
+    { id: 'o3', name: 'Retouch 12 product photos', due: 'Due 2 Oct', est: 4, amt: 6000, taken: true, subs: ['Background to #F4F1EC', 'Keep shadows natural'] },
+  ]},
+];
+const HOLD = 48 * 3600 * 1000;
+const PEOPLE = { sk: ['SK', 'Shreekant', 250], rm: ['RM', 'Riya Mehta', 330], kd: ['KD', 'Kabir Das', 75], an: ['AN', 'Anita Nair (you)', 210] };
+const PHASE_HUE = { Discovery: 290, Design: 210, Build: 75 };
+const EXTRA = {
+  a1: { who: 'sk', spent: 'Took 6h 10m' }, a2: { who: 'rm', spent: 'Took 3h 45m' }, b1: { who: 'rm', spent: 'Took 5h 20m' },
+  b2: { who: 'rm', run: 5047, spent: '4h 02m so far' }, b3: { who: 'an' },
+  b4: { who: 'sk', run: 2280, st: 'progress', spent: '38m so far' }, c1: { who: 'kd' }, c2: { who: 'sk' },
+};
+
+class Component extends DCLogic {
+  state = { view: null, frame: null, cur: null, fade: false, shown: false, phase: {}, at: {}, email: {}, open: null, f: { name: '', email: '', link: '', note: '' }, now: Date.now() };
+
+  componentDidMount() { this.replay(); this.born = Date.now(); this.tick = setInterval(() => { if (this.view() === 'client' || Object.values(this.state.phase).includes('mine')) this.setState({ now: Date.now() }); }, 1000); }
+  componentWillUnmount() { clearInterval(this.tick); clearTimeout(this.t1); clearTimeout(this.t2); }
+  replay() { this.setState({ shown: false }); clearTimeout(this.t1); this.t1 = setTimeout(() => this.setState({ shown: true }), 60); }
+
+  icon(size, kids, sw) {
+    const h = React.createElement;
+    return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: sw || 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, style: { flex: '0 0 auto' } },
+      kids.map((k, i) => h(k[0], Object.assign({ key: i }, k[1]))));
+  }
+  icons() {
+    if (this._ic) return this._ic;
+    const I = (s, k, w) => this.icon(s, k, w);
+    this._ic = {
+      icCheck: I(12, [['path', { d: 'M20 6 9 17l-5-5' }]], 3),
+      icCheckS: I(10, [['path', { d: 'M20 6 9 17l-5-5' }]], 3.5),
+      icCal: I(13, [['rect', { width: 18, height: 18, x: 3, y: 4, rx: 2 }], ['path', { d: 'M16 2v4' }], ['path', { d: 'M8 2v4' }], ['path', { d: 'M3 10h18' }]]),
+      icClock: I(13, [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'M12 6v6l4 2' }]]),
+      icHourglass: I(15, [['path', { d: 'M5 22h14' }], ['path', { d: 'M5 2h14' }], ['path', { d: 'M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22' }], ['path', { d: 'M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2' }]]),
+      icArrow: I(14, [['path', { d: 'M7 7h10v10' }], ['path', { d: 'M7 17 17 7' }]]),
+      icLink: I(16, [['path', { d: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71' }], ['path', { d: 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' }]]),
+      icLinkOff: I(24, [['path', { d: 'M9 17H7A5 5 0 0 1 7 7' }], ['path', { d: 'M15 7h2a5 5 0 0 1 4 8' }], ['path', { d: 'M8 12h4' }], ['path', { d: 'm2 2 20 20' }]]),
+      icMail: I(16, [['rect', { width: 20, height: 16, x: 2, y: 4, rx: 2 }], ['path', { d: 'm22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7' }]]),
+      icSend: I(15, [['path', { d: 'M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z' }], ['path', { d: 'm21.854 2.147-10.94 10.939' }]]),
+      icLock: I(14, [['rect', { width: 18, height: 11, x: 3, y: 11, rx: 2 }], ['path', { d: 'M7 11V7a5 5 0 0 1 10 0v4' }]]),
+      icPhone: I(14, [['rect', { width: 14, height: 20, x: 5, y: 2, rx: 2 }], ['path', { d: 'M12 18h.01' }]]),
+    };
+    return this._ic;
+  }
+
+  money(n, cur) {
+    if (!n) return 'No charge';
+    return cur === 'usd' ? '$' + Math.round(n / RATE).toLocaleString('en-US') : '₹' + n.toLocaleString('en-IN');
+  }
+  setCur(c) {
+    if (c === this.cur()) return;
+    this.setState({ fade: true }); clearTimeout(this.t2);
+    this.t2 = setTimeout(() => this.setState({ cur: c, fade: false }), 140);
+  }
+  cur() { return this.state.cur ?? (this.props.currency ?? 'inr'); }
+  view() { return this.state.view ?? (this.props.view ?? 'readonly'); }
+  setPhase(id, p, extra) { this.setState(s => ({ phase: { ...s.phase, [id]: p }, ...(extra ? extra(s) : {}) })); }
+
+  fmtLeft(id) {
+    const ms = Math.max(0, HOLD - (this.state.now - (this.state.at[id] || this.state.now)));
+    const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, sec = Math.floor(ms / 1000) % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + ' left';
+  }
+  fmtRun(off) {
+    const t = Math.max(0, Math.floor((this.state.now - (this.born || this.state.now)) / 1000) + off);
+    return Math.floor(t / 3600) + ':' + String(Math.floor(t / 60) % 60).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+  }
+
+  renderVals() {
+    const s = this.state, ic = this.icons(), view = this.view(), cur = this.cur();
+    const frame = s.frame ?? (this.props.frame ?? 'fluid'), phone = frame === 'phone';
+    const isClient = view === 'client', isOut = view === 'outsource', isEmpty = view === 'empty', isExpired = view === 'expired';
+    const on = { fill: 'var(--glass-fill-solid)', rim: 'var(--glass-rim-3), var(--glass-cast-1)', ink: 'var(--fg-1)' };
+    const off = { fill: 'none', rim: 'none', ink: 'var(--fg-3)' };
+    const seg = v => (v ? on : off);
+    let idx = 0;
+    const anim = () => { const d = (idx++ * 24 + 80) + 'ms'; return { op: s.shown ? 1 : 0, tf: s.shown ? 'translateY(0)' : 'translateY(6px)', delay: d }; };
+
+    const subRow = (text, done) => ({ text, glyph: done ? ic.icCheckS : null, bg: done ? 'var(--fg-3)' : 'transparent', sh: done ? 'none' : 'inset 0 0 0 1px var(--line-strong)', ink: done ? 'var(--fg-3)' : 'var(--fg-2)' });
+
+    let groups = [];
+    if (view === 'readonly' || isClient) {
+      groups = PROJECT.map(g => { 
+        const d = g.tasks.filter(t => t.st === 'done').length;
+        const hrs = g.tasks.reduce((a, t) => a + (t.est || 0), 0);
+        const hue = PHASE_HUE[g.name];
+        return { name: g.name, dot: isClient ? 'oklch(0.70 0.15 ' + hue + ')' : null, sub: d + ' of ' + g.tasks.length + ' done · ' + hrs + ' h', tasks: g.tasks.map(t0 => { let t = t0;
+          const X = isClient ? EXTRA[t.id] : null;
+          if (X && X.st) t = { ...t, st: X.st };
+          const c = ST[t.st], dn = t.subs.filter(x => x[1]).length, P = X ? PEOPLE[X.who] : null;
+          const tint = isClient ? 'linear-gradient(155deg, oklch(0.70 0.15 ' + hue + ' / ' + (t.st === 'progress' ? 0.12 : 0.06) + '), oklch(0.70 0.15 ' + hue + ' / 0.01) 60%), ' : '';
+          const who = P ? { hasWho: true, whoIni: P[0], whoName: P[1], whoBg: 'oklch(0.70 0.15 ' + P[2] + ')', isRunning: !!X.run, timer: X.run ? this.fmtRun(X.run) : '', spent: X.spent || null } : { hasWho: false };
+          return { ...anim(), ...who, name: t.name, money: this.money(t.amt, cur), payLabel: false, isOut: false,
+            fill: tint + (t.st === 'progress' ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)'),
+            shadow: t.st === 'progress' ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+            glyph: t.st === 'done' ? ic.icCheck : null,
+            dotBg: t.st === 'done' ? 'var(--accent)' : 'transparent',
+            dotSh: t.st === 'done' ? 'none' : t.st === 'progress' ? 'inset 0 0 0 2px var(--status-running)' : t.st === 'waiting' ? 'inset 0 0 0 2px var(--status-review)' : 'inset 0 0 0 1px var(--line-strong)',
+            nameInk: t.st === 'done' ? 'var(--fg-2)' : 'var(--fg-1)',
+            pill: c.pill, pillInk: c.ink, pillLine: c.line, due: t.due, dueInk: t.late ? 'var(--status-review)' : 'var(--fg-3)',
+            est: t.est ? t.est + ' h' : 'Your side', subCount: dn + ' / ' + t.subs.length, pct: Math.round(dn / t.subs.length * 100) + '%', barBg: c.bar,
+            subHead: null, subs: t.subs.map(x => subRow(x[0], x[1])) };
+        }) };
+      });
+    } else if (isOut) {
+      groups = WORK.map(g => ({ name: g.name, sub: g.tasks.filter(t => !t.taken).length + ' open · paid on approval', tasks: g.tasks.map(t => {
+        const ph = t.taken ? 'taken' : (s.phase[t.id] || 'open');
+        const formOpen = s.open === t.id;
+        const mine = ph === 'mine' || ph === 'sent';
+        return { ...anim(), name: t.name, money: this.money(t.amt, cur), payLabel: true, isOut: true,
+          fill: mine ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          shadow: mine ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+          glyph: ph === 'sent' ? ic.icCheck : null,
+          dotBg: ph === 'sent' ? 'var(--status-queued)' : 'transparent',
+          dotSh: ph === 'mine' ? 'inset 0 0 0 2px var(--accent)' : ph === 'taken' ? 'inset 0 0 0 1px var(--line-faint)' : 'inset 0 0 0 1px var(--line-strong)',
+          nameInk: ph === 'taken' ? 'var(--fg-3)' : 'var(--fg-1)',
+          pill: { open: 'Open', mine: 'Claimed by you', sent: 'In review', taken: 'Claimed' }[ph],
+          pillInk: { open: 'var(--fg-2)', mine: 'var(--accent)', sent: 'var(--status-queued)', taken: 'var(--fg-4)' }[ph],
+          pillLine: ph === 'mine' ? 'oklch(0.70 0.15 162 / 0.35)' : 'var(--line-soft)',
+          due: t.due, dueInk: 'var(--fg-3)', est: t.est + ' h', subCount: t.subs.length + ' deliverables',
+          pct: ph === 'sent' ? '100%' : ph === 'mine' ? '8%' : '0%', barBg: ph === 'sent' ? 'var(--status-queued)' : 'var(--accent)',
+          subHead: 'What to deliver', subs: t.subs.map(x => subRow(x, ph === 'sent')),
+          showClaimBtn: ph === 'open' && !formOpen, isMine: ph === 'mine', showSubmitBtn: ph === 'mine' && !formOpen, isSent: ph === 'sent', isTaken: ph === 'taken',
+          left: this.fmtLeft(t.id), email: s.email[t.id] || '',
+          claimRows: ph === 'open' && formOpen ? '1fr' : '0fr', claimOp: ph === 'open' && formOpen ? 1 : 0,
+          subRows: ph === 'mine' && formOpen ? '1fr' : '0fr', subOp: ph === 'mine' && formOpen ? 1 : 0,
+          openClaim: () => this.setState({ open: t.id }),
+          claim: () => this.setPhase(t.id, 'mine', st => ({ open: null, at: { ...st.at, [t.id]: Date.now() }, email: { ...st.email, [t.id]: st.f.email }, now: Date.now() })),
+          openSubmit: () => this.setState({ open: t.id }),
+          release: () => this.setPhase(t.id, 'open'),
+          submit: () => this.setPhase(t.id, 'sent', st => ({ open: null, f: { ...st.f, link: '', note: '' } })),
+        };
+      }) }));
+    }
+
+    const all = PROJECT.flatMap(g => g.tasks), done = all.filter(t => t.st === 'done');
+    const totH = all.reduce((a, t) => a + (t.est || 0), 0), doneH = done.reduce((a, t) => a + t.est, 0);
+    const tot = all.reduce((a, t) => a + t.amt, 0), doneAmt = done.reduce((a, t) => a + t.amt, 0);
+    const mo = s.fade ? 0 : 1;
+    const openW = WORK[0].tasks.filter(t => !t.taken && !s.phase[t.id]);
+    const stats = isOut ? [
+      { k: 'Open', v: openW.length + ' tasks', sub: 'First come, first held', op: 1 },
+      { k: 'Payouts', v: this.money(openW.reduce((a, t) => a + t.amt, 0), cur), sub: 'Paid within 7 days of approval', op: mo },
+      { k: 'Soonest', v: '27 Sep', sub: 'Clean up the 24-icon set', op: 1 },
+    ] : [
+      { k: 'Progress', v: done.length + ' / ' + all.length, sub: 'tasks delivered', op: 1 },
+      { k: 'Next deadline', v: '26 Sep', sub: 'Visual direction, in 3 days', op: 1 },
+      { k: 'Estimate', v: totH + ' h', sub: doneH + ' h delivered', op: 1 },
+      { k: 'Budget', v: this.money(tot, cur), sub: this.money(doneAmt, cur) + ' delivered', op: mo },
+    ];
+    const f = s.f, fset = k => e => { const v = e.target.value; this.setState(st => ({ f: { ...st.f, [k]: v } })); };
+    const canClaim = f.name.trim() && /.+@.+\..+/.test(f.email), canSubmit = /^\S+\.\S+/.test(f.link.trim());
+
+    return {
+      ...ic,
+      viewTabs: [['readonly', 'Read-only'], ['client', 'Client'], ['outsource', 'Outsourcing'], ['empty', 'Empty'], ['expired', 'Expired']].map(([k, l]) => ({ label: l, ...seg(view === k), go: () => { this.setState({ view: k, open: null }); this.replay(); } })),
+      toggleFrame: () => this.setState({ frame: phone ? 'fluid' : 'phone' }),
+      frameLabel: phone ? 'Wide' : 'Phone',
+      outerPad: phone ? '12px 12px 40px' : '12px 0 0',
+      frameW: phone ? '390px' : '100%', frameH: phone ? '780px' : 'auto',
+      frameR: phone ? '44px' : '0', frameSh: phone ? 'inset 0 0 0 1px var(--line-soft), 0 30px 60px -30px oklch(0 0 0 / 0.9)' : 'none',
+      innerPad: phone ? '28px 18px 32px' : 'var(--sp-9) var(--gutter-page) var(--sp-10)',
+      isExpired, notExpired: !isExpired, isClient, coverH: phone ? '168px' : 'clamp(180px, 32vw, 280px)',
+      pulse: this._pulse || (this._pulse = React.createElement('span', { style: { width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)', animation: 'ag-pulse 1.6s var(--ease-glass) infinite', flex: '0 0 auto' } })),
+      live: isClient ? Object.entries(EXTRA).filter(([, x]) => x.run).map(([id, x]) => { const P = PEOPLE[x.who]; return { ini: P[0], name: P[1], bg: 'oklch(0.70 0.15 ' + P[2] + ')', task: PROJECT.flatMap(g => g.tasks).find(t => t.id === id).name, timer: this.fmtRun(x.run) }; }) : [], isEmpty, isOutsource: isOut, hasSummary: !isEmpty,
+      heroOp: s.shown ? 1 : 0, heroTf: s.shown ? 'translateY(0)' : 'translateY(6px)',
+      sharedWith: isClient ? 'Client view · Nair & Co' : isOut ? 'Open to anyone with this link' : 'Shared with Anita Nair · Nair & Co',
+      updated: isEmpty ? 'Live' : 'Updated 12 min ago',
+      kicker: isOut ? 'Open work' : 'Project',
+      title: isOut ? 'Freelance tasks from Shreekant Studio' : 'Nair & Co — Website refresh',
+      lede: isClient ? 'Who is on each task, and how long it has been running.' : isOut ? 'Claim a task, do the work, send a link. No account needed.' : isEmpty ? 'Scoping is under way.' : 'Where the work stands today, what it costs, and what is next.',
+      stats, barPct: isOut ? '0%' : Math.round(doneH / totH * 100) + '%',
+      steps: [{ n: '01', t: 'Claim', d: 'Name and email. It is yours for 48 h.' }, { n: '02', t: 'Deliver', d: 'Send a link to the files.' }, { n: '03', t: 'Get paid', d: 'Within 7 days of approval.' }],
+      moneyOp: mo,
+      inrOn: cur === 'inr', usdOn: cur === 'usd',
+      inrFill: seg(cur === 'inr').fill, inrRim: seg(cur === 'inr').rim, inrInk: seg(cur === 'inr').ink,
+      usdFill: seg(cur === 'usd').fill, usdRim: seg(cur === 'usd').rim, usdInk: seg(cur === 'usd').ink,
+      toInr: () => this.setCur('inr'), toUsd: () => this.setCur('usd'),
+      groups,
+      fName: f.name, fEmail: f.email, fLink: f.link, fNote: f.note,
+      onName: fset('name'), onEmail: fset('email'), onLink: fset('link'), onNote: fset('note'),
+      closeForm: () => this.setState({ open: null }),
+      claimDisabled: !canClaim, claimBtnOp: canClaim ? 1 : 0.45,
+      submitDisabled: !canSubmit, submitBtnOp: canSubmit ? 1 : 0.45,
+      footLine: isOut ? 'Tasks from Shreekant Studio. Link open until 31 Oct 2026.' : 'View only. Link valid until 30 Oct 2026.',
+    };
+  }
+}
+</script>
+</body>
+</html>

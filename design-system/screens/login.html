@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Sign in</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+</style>
+</head>
+<body class="ag-page ag-page--focal" data-screen-label="Login">
+<div id="root">
+  <!-- Static first paint. React replaces this once the components load,
+       so the glass card is on screen immediately rather than after a
+       blank beat. Mirrors the sign-in layout to keep the swap invisible. -->
+  <div style="min-height:100vh;display:grid;place-items:center;padding:var(--gutter-page-sm)">
+    <div style="width:100%;max-width:424px;padding:var(--pad-sheet);border-radius:var(--r-sheet);background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-shadow-thick)">
+      <div style="display:grid;justify-items:center;gap:var(--sp-5)">
+        <span style="display:grid;place-items:center;width:56px;height:56px;border-radius:var(--r-tile);background-image:var(--glass-fill-2);box-shadow:var(--glass-rim-2),var(--glow-accent-sm)">
+          <img src="../assets/mark-white.png" alt="" width="30" height="30" style="opacity:.95;display:block">
+        </span>
+        <span style="font:var(--type-system);letter-spacing:var(--tracking-system);text-transform:uppercase;color:var(--accent)">BASE</span>
+      </div>
+      <div style="display:grid;justify-items:center;gap:var(--sp-3);margin-top:var(--sp-7)">
+        <h1 style="font:var(--type-title);font-size:var(--text-2xl);letter-spacing:var(--tracking-title);color:var(--fg-1)">Welcome back</h1>
+        <p style="font:var(--type-body);color:var(--fg-3);text-align:center">Strict focus. One task at a time.</p>
+      </div>
+      <div style="display:grid;gap:var(--sp-5);margin-top:var(--sp-9)">
+        <div style="height:54px;border-radius:var(--r-control);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow),0 0 0 1px var(--line-faint)"></div>
+        <div style="height:54px;border-radius:var(--r-control);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow),0 0 0 1px var(--line-faint)"></div>
+        <div style="height:54px;margin-top:var(--sp-7);border-radius:var(--r-control);background-image:var(--glass-frost);box-shadow:var(--shadow-2),inset 0 1px 0 oklch(1 0 0/.9);display:grid;place-items:center;font:var(--type-label);font-size:var(--text-md);color:var(--fg-on-light)">Sign in</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/forms/Input.jsx',
+  '../components/actions/Button.jsx',
+  '../components/forms/Checkbox.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Input, Button, Checkbox } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  /* The two modes are the same object at two sizes. The card measures
+     its own content and animates its height, and the fields condense in
+     on a stagger — so switching reads as one pane growing, never as a
+     new screen. */
+  const MODES = {
+    signin: {
+      kicker: 'BASE',
+      title: 'Welcome back',
+      sub: 'Strict focus. One task at a time.',
+      cta: 'Sign in',
+      footer: ['Don\u2019t have an account?', 'Register', 'register'],
+      fields: [
+        { id: 'email', type: 'email', placeholder: 'Email address', icon: 'at-sign', autoComplete: 'email' },
+        { id: 'password', type: 'password', placeholder: 'Password', icon: 'lock', autoComplete: 'current-password' },
+      ],
+    },
+    register: {
+      kicker: 'BASE',
+      title: 'Create your account',
+      sub: 'Register to start syncing your tasks.',
+      cta: 'Create account',
+      footer: ['Already have an account?', 'Sign in', 'signin'],
+      fields: [
+        { id: 'name', type: 'text', placeholder: 'Name (optional)', icon: 'user', autoComplete: 'name' },
+        { id: 'email', type: 'email', placeholder: 'Email address', icon: 'at-sign', autoComplete: 'email' },
+        { id: 'password', type: 'password', placeholder: 'Password', icon: 'lock', autoComplete: 'new-password' },
+        { id: 'confirm', type: 'password', placeholder: 'Confirm password', icon: 'lock', autoComplete: 'new-password' },
+      ],
+    },
+  };
+
+  function Login() {
+    const [mode, setMode] = React.useState('signin');
+    const [reveal, setReveal] = React.useState({});
+    const [values, setValues] = React.useState({});
+    const [busy, setBusy] = React.useState(false);
+    const [height, setHeight] = React.useState(null);
+    const bodyRef = React.useRef(null);
+
+    const M = MODES[mode];
+
+    /* Measure after every commit that changes the content, so the
+       height animates from the real old value to the real new one. */
+    React.useLayoutEffect(() => {
+      if (bodyRef.current) setHeight(bodyRef.current.scrollHeight);
+    }, [mode]);
+
+    const swap = (next) => {
+      setReveal({});
+      setBusy(false);
+      setMode(next);
+    };
+
+    const submit = (e) => {
+      e.preventDefault();
+      setBusy(true);
+      showProgress({ label: 'Opening workspace', doneLabel: 'Welcome', duration: 2600 });
+      window.setTimeout(() => setBusy(false), 1600);
+    };
+
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'grid',
+          placeItems: 'center',
+          padding: 'var(--gutter-page-sm)',
+        }}
+      >
+        <GlassFilters />
+
+        <main
+          style={{
+            width: '100%',
+            maxWidth: 424,
+            borderRadius: 'var(--r-sheet)',
+            backgroundImage: 'var(--glass-fill-3)',
+            backdropFilter: 'var(--glass-bd-lg-refract)',
+            WebkitBackdropFilter: 'var(--glass-bd-lg)',
+            boxShadow: 'var(--glass-shadow-thick)',
+            overflow: 'hidden',
+            animation: 'ag-condense var(--dur-slow) var(--ease-glass) both',
+          }}
+        >
+          <div
+            style={{
+              height: height == null ? 'auto' : height,
+              overflow: 'hidden',
+              transition: 'height var(--dur-morph) var(--ease-morph)',
+            }}
+          >
+            <div ref={bodyRef} style={{ padding: 'var(--pad-sheet)' }}>
+              {/* --- Identity -------------------------------------- */}
+              <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-5)' }}>
+                <span style={{ position: 'relative', display: 'grid', placeItems: 'center', width: 56, height: 56 }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute', inset: 0, borderRadius: '50%',
+                      border: '1px solid var(--accent-hairline)',
+                      animation: 'ag-ripple 3.2s var(--ease-in-out) infinite',
+                    }}
+                  />
+                  <span
+                    style={{
+                      display: 'grid', placeItems: 'center',
+                      width: 56, height: 56,
+                      borderRadius: 'var(--r-tile)',
+                      backgroundImage: 'var(--glass-fill-2)',
+                      boxShadow: 'var(--glass-rim-2), var(--glow-accent-sm)',
+                    }}
+                  >
+                    <img src="../assets/mark-white.png" alt="" width="30" height="30" style={{ opacity: 0.95, display: 'block' }} />
+                  </span>
+                </span>
+                <span
+                  className="ag-kicker"
+                  style={{ letterSpacing: 'var(--tracking-system)', font: 'var(--type-system)', textTransform: 'uppercase', color: 'var(--accent)' }}
+                >
+                  {M.kicker}
+                </span>
+              </div>
+
+              {/* --- Heading — crossfades between modes ------------- */}
+              <div key={'h' + mode} style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-3)', marginTop: 'var(--sp-7)', animation: 'ag-condense var(--dur-base) var(--ease-glass) both' }}>
+                <h1 style={{ font: 'var(--type-title)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                  {M.title}
+                </h1>
+                <p style={{ font: 'var(--type-body)', color: 'var(--fg-3)', textAlign: 'center' }}>{M.sub}</p>
+              </div>
+
+              {/* --- Fields — stagger in on mode change ------------- */}
+              <form onSubmit={submit} style={{ display: 'grid', gap: 'var(--sp-5)', marginTop: 'var(--sp-9)' }}>
+                {M.fields.map((f, i) => {
+                  const isPw = f.type === 'password';
+                  const shown = !!reveal[f.id];
+                  return (
+                    <div
+                      key={mode + f.id}
+                      style={{
+                        position: 'relative',
+                        animation: `ag-condense var(--dur-base) var(--ease-glass) ${i * 44}ms both`,
+                      }}
+                    >
+                      <Input
+                        type={isPw && !shown ? 'password' : f.type === 'password' ? 'text' : f.type}
+                        placeholder={f.placeholder}
+                        autoComplete={f.autoComplete}
+                        value={values[f.id] || ''}
+                        onChange={(e) => setValues((v) => Object.assign({}, v, { [f.id]: e.target.value }))}
+                        iconLeft={<Icon name={f.icon} size={17} />}
+                        size="lg"
+                        style={isPw ? { paddingRight: 'calc(var(--hit-min) + var(--sp-3))' } : undefined}
+                      />
+                      {isPw && (
+                        <button
+                          type="button"
+                          aria-label={shown ? 'Hide password' : 'Show password'}
+                          onClick={() => setReveal((r) => Object.assign({}, r, { [f.id]: !r[f.id] }))}
+                          style={{
+                            position: 'absolute', top: 0, right: 'var(--sp-2)', height: 54,
+                            display: 'grid', placeItems: 'center', width: 'var(--hit-min)',
+                            border: 0, background: 'transparent', cursor: 'pointer',
+                            borderRadius: 'var(--r-circle)',
+                            color: shown ? 'var(--accent)' : 'var(--fg-3)',
+                            transition: 'color var(--dur-fast) var(--ease-glass)',
+                          }}
+                        >
+                          <Icon name={shown ? 'eye-off' : 'eye'} size={17} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Row under the fields differs per mode */}
+                <div key={'r' + mode} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-4)', minHeight: 24, animation: `ag-condense var(--dur-base) var(--ease-glass) ${M.fields.length * 44}ms both` }}>
+                  {mode === 'signin' ? (
+                    <>
+                      <Checkbox label="Keep me signed in" size="sm" />
+                      <a href="#reset" style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>Forgot password?</a>
+                    </>
+                  ) : (
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                      8 characters minimum.
+                    </span>
+                  )}
+                </div>
+
+                <Button type="submit" variant="frost" size="lg" block loading={busy} style={{ marginTop: 'var(--sp-3)' }}>
+                  {busy ? 'Signing in' : M.cta}
+                </Button>
+              </form>
+
+              {/* --- Footer — the morph trigger --------------------- */}
+              <div style={{ marginTop: 'var(--sp-8)', paddingTop: 'var(--sp-7)', borderTop: '1px solid var(--line-soft)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--sp-3)' }}>
+                <span style={{ font: 'var(--type-body)', color: 'var(--fg-3)' }}>{M.footer[0]}</span>
+                <button
+                  type="button"
+                  onClick={() => swap(M.footer[2])}
+                  style={{
+                    border: 0, background: 'transparent', padding: 0, cursor: 'pointer',
+                    font: 'var(--type-label)', fontSize: 'var(--text-md)', color: 'var(--accent)',
+                    transition: 'color var(--dur-fast) var(--ease-glass)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-lift)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--accent)'; }}
+                >
+                  {M.footer[1]}
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Login />);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+.vercel
+.env*
+# ...but the template carries no secrets and is the setup documentation.
+!.env.example
+
+# Cloud Functions build output
+functions/lib
+
+# Local UI screenshots. Per-run output is scratch; approved baselines are
+# committed so future sessions have something to diff against.
+shots/*
+!shots/baseline/
+
+# `scripts/uiAudit.ts` output — a redesign reference, regenerated on demand and
+# nothing's baseline, so it stays out of the repo.
+ui-audit/
+
+# Scratch API response dumps (contain personal data)
+resp.txt

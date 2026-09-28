@@ -1,0 +1,70 @@
+<!-- @dsCard group="Components" viewport="700x360" name="Forms" subtitle="Etched wells, drawing ticks, and a handle that grows on grab" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forms</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page ag-page--calm">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../core/Icon.jsx',
+  '../forms/Input.jsx',
+  '../forms/Switch.jsx',
+  '../forms/Checkbox.jsx',
+  '../forms/Slider.jsx'
+]).then(function (AG) {
+  const { Icon, Input, Switch, Checkbox, Slider } = AG;
+
+  function Demo() {
+    const [mins, setMins] = React.useState(45);
+    return (
+      <div className="pad col" style={{ gap: 'var(--sp-7)', maxWidth: 560 }}>
+        <div className="col" style={{ gap: 'var(--sp-4)' }}>
+          <span className="lbl">Task name</span>
+          <Input placeholder="Draft the Q3 brief" iconLeft={<Icon name="circle" size={17} />} />
+          <div className="row" style={{ gap: 'var(--sp-4)' }}>
+            <Input defaultValue="45" suffix="min" size="sm" block={false} style={{ width: 130 }} />
+            <Input placeholder="Invalid" invalid size="sm" block={false} style={{ width: 160 }} />
+          </div>
+        </div>
+
+        <div className="col" style={{ gap: 'var(--sp-4)' }}>
+          <span className="lbl">Allocate — {mins} min</span>
+          <Slider min={5} max={180} step={5} value={mins} onChange={setMins} format={(m) => m + ' min'} />
+        </div>
+
+        <div className="row" style={{ gap: 'var(--sp-8)' }}>
+          <div className="col" style={{ gap: 'var(--sp-4)' }}>
+            <Checkbox label="Draft the Q3 brief" defaultChecked />
+            <Checkbox label="Review the deck" />
+          </div>
+          <div className="col" style={{ gap: 'var(--sp-4)' }}>
+            <Switch label="Strict mode" defaultChecked />
+            <Switch label="Sync Google Tasks" size="sm" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

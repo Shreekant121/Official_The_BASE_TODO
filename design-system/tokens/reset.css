@@ -1,0 +1,85 @@
+/* ---------------------------------------------------------------
+   RESET — minimal. Only what the material needs.
+   --------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100%;
+  font: var(--type-body);
+  letter-spacing: var(--tracking-ui);
+  color: var(--text-body);
+  background-color: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-wrap: pretty;
+  font-variant-numeric: tabular-nums;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-title);
+  line-height: var(--leading-snug);
+  text-wrap: balance;
+}
+h1 { font-size: var(--text-2xl); letter-spacing: var(--tracking-display); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+
+p { margin: 0; }
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+  text-underline-offset: 3px;
+  transition: color var(--dur-fast) var(--ease-glass);
+}
+a:hover { color: var(--accent-blue-lift); text-decoration: underline; }
+a:active { color: var(--accent-blue-sink); }
+
+button, input, select, textarea { font: inherit; letter-spacing: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* Focus follows the control's OWN shape. An outline respects
+   border-radius; a box-shadow ring on an inner <input> draws a hard
+   rectangle inside its rounded parent, which is why it is not used here.
+   Composed controls (Input, and anything else whose surface lights up
+   around the field) opt their inner element out via [data-ag-field]. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+input[data-ag-field]:focus-visible,
+textarea[data-ag-field]:focus-visible {
+  outline: none;
+}
+
+::selection { background: var(--accent-wash); color: var(--fg-1); }
+
+/* Numerals: tabular everywhere a number could change in place */
+.ag-tnum, table, [data-numeric] { font-variant-numeric: tabular-nums; }
+
+/* Kicker — small semibold label above metrics. Sentence case. */
+.ag-kicker {
+  font: var(--type-kicker);
+  letter-spacing: var(--tracking-kicker);
+  text-transform: none;
+  color: var(--text-muted);
+}
+
+/* Scrollbars — thin, glassy, never dark grey */
+* { scrollbar-width: thin; scrollbar-color: oklch(1 0 0 / 0.18) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 0.14);
+  border: 3px solid transparent;
+  border-radius: var(--r-pill);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: oklch(1 0 0 / 0.26); background-clip: content-box; }

@@ -1,0 +1,140 @@
+/* ---------------------------------------------------------------
+   GLASS — liquid, five properties, all on by default:
+     REFRACTION  a lens map bends the backdrop, strongest at the edges
+     DISPERSION  R, G and B bend by slightly different amounts, so edges
+                 fringe with colour like real glass
+     FROST       a light blur (4–32px) after the bend
+     DEPTH       light pools under the top edge, the floor shades
+     SPLAY       entering light fans out from the top-left corner
+   No border — the edge is two specular highlights. Refraction and
+   dispersion come from the #ag-lens filter _ds_loader.js injects; they
+   run on Chromium. Safari/Firefox keep frost, depth and splay.
+   --------------------------------------------------------------- */
+:root {
+  /* --- 1. Backdrop ------------------------------------------------ */
+  --glass-blur-xs: 4px;
+  --glass-blur-sm: 8px;
+  --glass-blur-md: 12px;   /* the product's existing value */
+  --glass-blur-lg: 18px;
+  --glass-blur-xl: 32px;
+  --glass-sat: 1.8;        /* colour pickup — glass carries the field's hue */
+  --glass-bright: 1.1;
+
+  --glass-bd-xs: blur(var(--glass-blur-xs)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-sm: blur(var(--glass-blur-sm)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-md: blur(var(--glass-blur-md)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-lg: blur(var(--glass-blur-lg)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-xl: blur(var(--glass-blur-xl)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+
+  --glass-bd-sm-refract: url(#ag-refract-sm) blur(var(--glass-blur-sm)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-md-refract: url(#ag-refract-md) blur(var(--glass-blur-md)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  --glass-bd-lg-refract: url(#ag-refract-lg) blur(var(--glass-blur-lg)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+
+  /* --- 2. Fill (155deg — light from upper-left) ------------------- */
+  /* SPLAY — light entering the top-left corner fans out along the edge. */
+  --glass-splay: radial-gradient(110% 60% at 0% 0%, oklch(1 0 0 / 0.16), transparent 42%), radial-gradient(80% 50% at 100% 100%, oklch(1 0 0 / 0.06), transparent 40%);
+  --glass-fill-1: var(--glass-splay), linear-gradient(135deg, oklch(1 0 0 / 0.07) 0%, oklch(1 0 0 / 0.015) 50%, oklch(1 0 0 / 0.04) 100%);
+  --glass-fill-2: var(--glass-splay), linear-gradient(135deg, oklch(1 0 0 / 0.10) 0%, oklch(1 0 0 / 0.02) 50%, oklch(1 0 0 / 0.06) 100%);
+  --glass-fill-3: var(--glass-splay), linear-gradient(135deg, oklch(1 0 0 / 0.14) 0%, oklch(1 0 0 / 0.035) 50%, oklch(1 0 0 / 0.08) 100%);
+  --glass-fill-solid: linear-gradient(155deg, oklch(1 0 0 / 0.30) 0%, oklch(1 0 0 / 0.14) 52%, oklch(1 0 0 / 0.20) 100%);
+
+  /* Recessed fill — troughs, input wells, progress tracks. Reads as
+     carved INTO the surface rather than sitting on it. */
+  --glass-well: linear-gradient(180deg, oklch(0 0 0 / 0.26) 0%, oklch(0 0 0 / 0.14) 100%);
+  --glass-well-shadow: inset 0 1px 3px oklch(0 0 0 / 0.35), inset 0 -1px 0 oklch(1 0 0 / 0.08), inset 0 0 0 1px oklch(1 0 0 / 0.03);
+
+  /* Tinted glass — a hue pulled THROUGH the pane. Emerald is brand;
+     the rest are status-only. */
+  --glass-tint-accent:  linear-gradient(155deg, oklch(0.74 0.165 162 / 0.34) 0%, oklch(0.74 0.165 162 / 0.10) 55%, oklch(0.74 0.165 162 / 0.20) 100%);
+  --glass-tint-brand:   linear-gradient(155deg, oklch(0.70 0.19 277 / 0.36) 0%, oklch(0.70 0.19 277 / 0.10) 55%, oklch(0.70 0.19 300 / 0.22) 100%);
+  --glass-tint-cyan:    linear-gradient(155deg, oklch(0.78 0.13 215 / 0.32) 0%, oklch(0.78 0.13 215 / 0.09) 55%, oklch(0.78 0.13 215 / 0.18) 100%);
+  --glass-tint-violet:  linear-gradient(155deg, oklch(0.72 0.19 305 / 0.34) 0%, oklch(0.72 0.19 305 / 0.10) 55%, oklch(0.72 0.19 305 / 0.20) 100%);
+  --glass-tint-magenta: linear-gradient(155deg, oklch(0.72 0.20 348 / 0.34) 0%, oklch(0.72 0.20 348 / 0.10) 55%, oklch(0.72 0.20 348 / 0.20) 100%);
+  --glass-tint-amber:   linear-gradient(155deg, oklch(0.83 0.16  82 / 0.30) 0%, oklch(0.83 0.16  82 / 0.09) 55%, oklch(0.83 0.16  82 / 0.18) 100%);
+  --glass-tint-lime:    linear-gradient(155deg, oklch(0.86 0.19 128 / 0.28) 0%, oklch(0.86 0.19 128 / 0.08) 55%, oklch(0.86 0.19 128 / 0.16) 100%);
+  --glass-tint-rose:    linear-gradient(155deg, oklch(0.70 0.19  18 / 0.34) 0%, oklch(0.70 0.19  18 / 0.10) 55%, oklch(0.70 0.19  18 / 0.20) 100%);
+  --glass-tint-sky:     linear-gradient(155deg, oklch(0.74 0.15 240 / 0.34) 0%, oklch(0.74 0.15 240 / 0.10) 55%, oklch(0.74 0.15 240 / 0.20) 100%);
+
+  /* --- 3. Rim light ---------------------------------------------- */
+  --glass-rim-1:
+    inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.45),
+    inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.18);
+  --glass-rim-2:
+    inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),
+    inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),
+    var(--glass-depth);
+  --glass-rim-3:
+    inset 2px 2px 1px -1px oklch(1 0 0 / 0.75),
+    inset -1.5px -1.5px 1px -1px oklch(1 0 0 / 0.32);
+
+  /* Hairline border, matching the product's rgba(255,255,255,0.06) */
+  --glass-hairline: 0 solid transparent;
+  --glass-hairline-hover: 0 solid transparent;
+
+  /* --- 4. Inner glow + floor shade ------------------------------- */
+  /* DEPTH — the pane has thickness: light pools under the top edge, the floor shades. */
+  --glass-depth: inset 0 10px 20px -12px oklch(1 0 0 / 0.14), inset 0 -12px 24px -14px oklch(0 0 0 / 0.45);
+  --glass-inner-1: var(--glass-depth), inset 0 0 24px oklch(1 0 0 / 0.04);
+  --glass-inner-2: inset 0 14px 26px -14px oklch(1 0 0 / 0.18), inset 0 -16px 30px -16px oklch(0 0 0 / 0.5), inset 0 0 36px oklch(1 0 0 / 0.06);
+
+  /* --- 5. Cast shadow ------------------------------------------- */
+  --glass-cast-1: 0 8px 22px -10px oklch(0 0 0 / 0.5);
+  --glass-cast-2: 0 26px 56px -20px oklch(0 0 0 / 0.6);
+  --glass-cast-3: 0 44px 90px -26px oklch(0 0 0 / 0.7);
+
+  /* --- Composed: drop straight into box-shadow ------------------- */
+  --glass-shadow-thin:  var(--glass-rim-1), var(--glass-inner-1), var(--glass-cast-1);
+  --glass-shadow-pane:  var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2);
+  --glass-shadow-thick: var(--glass-rim-3), var(--glass-inner-2), var(--glass-cast-3);
+
+  /* --- Frost: near-opaque white pane, carries dark text ---------- */
+  --glass-frost: linear-gradient(155deg, oklch(1 0 0 / 0.95) 0%, oklch(0.93 0.015 275 / 0.84) 100%);
+
+  /* --- GEL: saturated, lit-from-within colour objects -------------
+     For the ONE primary action, a hero card, or a live object. A gel
+     is a hue with a hot spot top-left, a deep floor, a bright rim and
+     a cast that bleeds its own colour. ONE per screen, emerald unless status demands otherwise. */
+  --gel-rim: inset 0 1px 1px oklch(1 0 0 / 0.55), inset 0 -8px 20px -6px oklch(0.15 0.06 165 / 0.45), inset 0 0 0 1px oklch(1 0 0 / 0.14);
+  --gel-brand:   var(--gel-emerald);
+  --gel-violet:  radial-gradient(120% 100% at 22% 0%, oklch(0.82 0.13 305), oklch(0.58 0.22 305) 55%, oklch(0.40 0.18 305));
+  --gel-magenta: radial-gradient(120% 100% at 22% 0%, oklch(0.85 0.12 348), oklch(0.63 0.22 350) 55%, oklch(0.44 0.18 352));
+  --gel-emerald: radial-gradient(120% 100% at 22% 0%, oklch(0.90 0.11 165), oklch(0.72 0.16 162) 55%, oklch(0.50 0.12 165));
+  --gel-amber:   radial-gradient(120% 100% at 22% 0%, oklch(0.95 0.10 92),  oklch(0.83 0.16 78) 55%,  oklch(0.66 0.16 60));
+  --gel-coral:   radial-gradient(120% 100% at 22% 0%, oklch(0.88 0.10 40),  oklch(0.70 0.18 32) 55%,  oklch(0.50 0.17 26));
+  --gel-sky:     radial-gradient(120% 100% at 22% 0%, oklch(0.90 0.08 225), oklch(0.72 0.15 238) 55%, oklch(0.50 0.16 250));
+  --gel-dusk:    var(--gel-emerald);
+  --gel-lagoon:  var(--gel-emerald);
+  /* Live glass — dark pane lit green from below. The quiet hero. */
+  --glass-live: radial-gradient(90% 70% at 50% 120%, oklch(0.74 0.165 162 / 0.30), transparent 70%), linear-gradient(155deg, oklch(1 0 0 / 0.10), oklch(1 0 0 / 0.03));
+
+  /* --- SOFT: dark neumorphism. The object is extruded from the same
+     material as the ground — for toggles, dials, keypads. --------- */
+  --soft-fill: linear-gradient(145deg, oklch(0.22 0.006 260), oklch(0.16 0.005 260));
+  --soft-raised: 8px 8px 20px oklch(0 0 0 / 0.6), -6px -6px 16px oklch(0.34 0.006 260 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.07);
+  --soft-pressed: inset 5px 5px 12px oklch(0 0 0 / 0.6), inset -4px -4px 10px oklch(0.34 0.006 260 / 0.25);
+}
+
+/* Utility classes for quick prototyping. Components use the tokens
+   inline; these exist for the pseudo-element states inline styles
+   cannot express. */
+.ag-glass {
+  position: relative;
+  background-image: var(--glass-fill-2);
+  backdrop-filter: var(--glass-bd-md);
+  -webkit-backdrop-filter: var(--glass-bd-md);
+  box-shadow: var(--glass-shadow-pane);
+  border-radius: var(--r-card);
+}
+.ag-glass--thin  { background-image: var(--glass-fill-1); backdrop-filter: var(--glass-bd-sm); -webkit-backdrop-filter: var(--glass-bd-sm); box-shadow: var(--glass-shadow-thin); }
+.ag-glass--thick { background-image: var(--glass-fill-3); backdrop-filter: var(--glass-bd-lg); -webkit-backdrop-filter: var(--glass-bd-lg); box-shadow: var(--glass-shadow-thick); }
+
+
+/* Gel utilities — the specular dot and cast need the pseudo-element */
+.ag-gel { position: relative; background: var(--gel-brand); box-shadow: var(--gel-rim), var(--cast-brand); color: var(--fg-on-brand); }
+.ag-gel::before { content: ""; position: absolute; left: 12%; top: 8%; width: 36%; height: 26%; border-radius: 50%; background: radial-gradient(closest-side, oklch(1 0 0 / 0.45), transparent); pointer-events: none; }
+.ag-gel--violet { background: var(--gel-violet); box-shadow: var(--gel-rim), var(--cast-violet); }
+.ag-gel--magenta { background: var(--gel-magenta); box-shadow: var(--gel-rim), var(--cast-magenta); }
+.ag-gel--emerald { background: var(--gel-emerald); box-shadow: var(--gel-rim), var(--cast-emerald); color: var(--fg-on-accent); }
+.ag-gel--amber { background: var(--gel-amber); box-shadow: var(--gel-rim), var(--cast-amber); color: var(--fg-on-light); }
+.ag-soft { background: var(--soft-fill); box-shadow: var(--soft-raised); }
+.ag-soft--pressed { box-shadow: var(--soft-pressed); }

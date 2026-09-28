@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>BASE — Archive</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; min-height: 100%; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-lift); }
+</style>
+</helmet>
+<div class="ag-page" data-screen-label="Archive" style="min-height:100vh;padding:var(--sp-13) var(--gutter-page) var(--sp-14);box-sizing:border-box">
+  <div style="max-width:1120px;margin:0 auto;display:grid;gap:calc(var(--gap-section) * 1.5)">
+
+    <header style="display:grid;gap:var(--sp-4)">
+      <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-3)">Archive · new</span>
+      <h1 style="margin:0;font:var(--type-display);font-size:var(--text-2xl);letter-spacing:var(--tracking-title);color:var(--fg-1)">A shelf, not a bin</h1>
+      <p style="margin:0;max-width:60ch;font:var(--type-body);color:var(--fg-3);text-wrap:pretty">Trash is for losing things slowly. Archive is for keeping things out of sight, for good.</p>
+    </header>
+
+    <!-- 01 HOW YOU ARCHIVE -->
+    <section data-screen-label="01 Archiving" style="display:grid;gap:var(--sp-7)">
+      <div style="display:grid;gap:var(--sp-2)">
+        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">01 Putting something away</span>
+        <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Archive sits in the same menu as Delete, above it, never red. Confirm grows in the row that offered it.</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 440px), 1fr));gap:var(--gap-card);align-items:start">
+
+        <!-- project -->
+        <div style="display:grid;gap:var(--sp-5)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-3)">On a project · card menu</span>
+          <div style="position:relative;min-height:470px">
+            <div style="display:grid;grid-template-rows:{{ pRows }};transition:grid-template-rows var(--dur-sheet) var(--ease-glass)">
+              <div style="overflow:hidden;min-height:0;padding:12px;margin:-12px">
+                <div style="display:grid;gap:var(--sp-5);padding:var(--pad-card);border-radius:var(--r-card-lg);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane);opacity:{{ pOp }};transform:{{ pTf }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass)">
+                  <div style="display:flex;align-items:flex-start;gap:var(--sp-4)">
+                    <div style="flex:1;min-width:0;display:grid;gap:var(--sp-2)">
+                      <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Project</span>
+                      <span style="font:var(--type-title);letter-spacing:var(--tracking-title);color:var(--fg-1)">Diwali gift boxes 2025</span>
+                      <span style="font:var(--type-caption);color:var(--fg-3)">18 tasks · all done · last worked 2 Nov 2025</span>
+                    </div>
+                    <button type="button" aria-label="Project actions" onClick="{{ togglePMenu }}" style="flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:var(--r-pill);background-image:{{ pBtnFill }};box-shadow:var(--glass-rim-1);color:var(--fg-1);cursor:pointer;transition:var(--t-hover)" style-hover="transform:scale(1.04)" style-active="transform:scale(0.93)">{{ icMore }}</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:var(--sp-5)">
+                    <div style="flex:1;height:6px;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);overflow:hidden"><div style="width:100%;height:100%;border-radius:var(--r-pill);background:var(--fg-3)"></div></div>
+                    <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3);font-variant-numeric:tabular-nums">6h 40m logged</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-rows:{{ pReceiptRows }};transition:grid-template-rows var(--dur-sheet) var(--ease-glass)">
+              <div style="overflow:hidden;min-height:0">
+                <div style="display:flex;align-items:center;gap:var(--sp-4);min-height:60px;padding:0 var(--sp-6);border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);opacity:{{ pReceiptOp }};transition:opacity var(--dur-slow) var(--ease-glass)">
+                  <span style="display:flex;color:var(--fg-3)">{{ icShelf }}</span>
+                  <span style="flex:1;min-width:0;font:var(--type-body);font-size:var(--text-sm);color:var(--fg-2)">Diwali gift boxes 2025 is on the shelf.</span>
+                  <button type="button" onClick="{{ resetP }}" style="height:40px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">Replay</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- menu -->
+            <div role="menu" style="position:absolute;top:84px;right:12px;width:320px;max-width:calc(100% - 24px);z-index:5;display:grid;padding:var(--sp-3);border-radius:var(--r-lg);background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-shadow-thick);opacity:{{ pMenuOp }};transform:{{ pMenuTf }};pointer-events:{{ pMenuPe }};transition:opacity var(--dur-base) var(--ease-glass), transform var(--dur-base) var(--ease-glass)">
+              <div style="display:grid;gap:2px;padding:var(--sp-4) var(--sp-4) var(--sp-4);border-bottom:1px solid var(--line-faint);margin-bottom:var(--sp-2)">
+                <span style="font:var(--type-label);color:var(--fg-1)">Diwali gift boxes 2025</span>
+                <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-4)">18 tasks · 6h 40m logged</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--sp-4);min-height:44px;padding:0 var(--sp-4);border-radius:var(--r-md);color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">{{ icPencil }}Rename</div>
+              <div style="display:flex;align-items:center;gap:var(--sp-4);min-height:44px;padding:0 var(--sp-4);border-radius:var(--r-md);color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">{{ icClock }}Edit time budget</div>
+              <div style="height:1px;background:var(--line-faint);margin:var(--sp-2) var(--sp-3)"></div>
+
+              <div style="display:grid;grid-template-rows:{{ pItemRows }};opacity:{{ pItemOp }};transition:grid-template-rows var(--dur-morph) var(--ease-glass), opacity var(--dur-fast) var(--ease-glass)">
+                <div style="overflow:hidden;min-height:0">
+                  <div role="menuitem" onClick="{{ askP }}" style="display:flex;align-items:center;gap:var(--sp-4);min-height:56px;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-md);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.06)">
+                    <span style="display:flex;color:var(--fg-1)">{{ icArchive }}</span>
+                    <span style="display:grid;gap:1px"><span style="font:var(--type-label);color:var(--fg-1)">Archive project</span><span style="font:var(--type-caption);color:var(--fg-4)">Kept for good, out of sight</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-rows:{{ pConfRows }};opacity:{{ pConfOp }};transition:grid-template-rows var(--dur-morph) var(--ease-glass), opacity var(--dur-base) var(--ease-glass) 60ms">
+                <div style="overflow:hidden;min-height:0">
+                  <div style="display:grid;gap:var(--sp-4);margin:var(--sp-1) 0;padding:var(--sp-5);border-radius:var(--r-md);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)">
+                    <span style="font:var(--type-label);color:var(--fg-1)">Archive Diwali gift boxes 2025?</span>
+                    <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">It leaves every board, count, queue, search and Atlas. Its 18 tasks go with it. Nothing ever purges it.</span>
+                    <div style="display:flex;justify-content:flex-end;gap:var(--sp-3)">
+                      <button type="button" onClick="{{ cancelP }}" style="height:40px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">Cancel</button>
+                      <button type="button" onClick="{{ confirmP }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:40px;padding:0 var(--sp-6);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-solid);box-shadow:var(--glass-rim-3), var(--glass-cast-1);color:var(--fg-1);font:var(--type-label);cursor:pointer;transition:var(--t-hover)" style-active="transform:scale(0.965)">{{ icArchive }}Archive</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div role="menuitem" style="display:flex;align-items:center;gap:var(--sp-4);min-height:56px;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-md);cursor:pointer" style-hover="background:oklch(0.70 0.15 20 / 0.08)">
+                <span style="display:flex;color:var(--status-overrun)">{{ icTrash }}</span>
+                <span style="display:grid;gap:1px"><span style="font:var(--type-label);color:var(--status-overrun)">Delete project</span><span style="font:var(--type-caption);color:var(--fg-4)">Trash for 30 days, then gone</span></span>
+              </div>
+            </div>
+          </div>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Same menu in the project header. On confirm the card settles down and out, the slot closes, and a receipt takes its place.</span></sc-if>
+        </div>
+
+        <!-- task -->
+        <div style="display:grid;gap:var(--sp-5)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-3)">On a task · row menu</span>
+          <div style="position:relative;display:grid;gap:var(--sp-3);min-height:470px;align-content:start">
+            <div style="display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-md);background-image:var(--glass-fill-1);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:var(--glass-rim-1)">
+              <span style="flex:0 0 auto;width:24px;height:24px;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), 0 0 0 1px var(--line-soft)"></span>
+              <div style="flex:1;min-width:0;display:grid;gap:2px"><span style="font:var(--type-body);color:var(--fg-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Confirm vendor quote</span><span style="font:var(--type-caption);color:var(--fg-3)">⚡ Action Steps</span></div>
+              <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3)">20 min</span>
+            </div>
+
+            <div style="display:grid;grid-template-rows:{{ tRows }};transition:grid-template-rows var(--dur-sheet) var(--ease-glass)">
+              <div style="overflow:hidden;min-height:0;padding:10px;margin:-10px">
+                <div style="display:grid;border-radius:var(--r-md);background-image:{{ tFill }};backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:var(--glass-rim-2), var(--glass-cast-2);opacity:{{ tOp }};transform:{{ tTf }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass), background-image var(--dur-base) var(--ease-glass)">
+                  <div style="grid-area:1/1;display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);opacity:{{ tRowOp }};pointer-events:{{ tRowPe }};transition:opacity var(--dur-fast) var(--ease-glass)">
+                    <span style="flex:0 0 auto;width:24px;height:24px;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), 0 0 0 1px var(--line-strong)"></span>
+                    <div style="flex:1;min-width:0;display:grid;gap:2px"><span style="font:var(--type-body);color:var(--fg-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Draft pricing page copy</span><span style="font:var(--type-caption);color:var(--fg-3)">⚡ Action Steps · 1 / 3 subtasks</span></div>
+                    <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3)">45 min</span>
+                    <button type="button" aria-label="Task actions" onClick="{{ toggleTMenu }}" style="flex:0 0 auto;width:36px;height:36px;display:grid;place-items:center;border:0;border-radius:var(--r-pill);background-image:{{ tBtnFill }};box-shadow:var(--glass-rim-1);color:var(--fg-1);cursor:pointer;transition:var(--t-hover)" style-active="transform:scale(0.93)">{{ icMore }}</button>
+                  </div>
+                  <div style="grid-area:1/1;display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap;min-height:64px;padding:var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-6);opacity:{{ tConfOp }};pointer-events:{{ tConfPe }};transition:opacity var(--dur-base) var(--ease-glass) 60ms">
+                    <span style="display:flex;color:var(--fg-2)">{{ icArchive }}</span>
+                    <div style="flex:1;min-width:160px;display:grid;gap:1px"><span style="font:var(--type-label);color:var(--fg-1)">Archive this task?</span><span style="font:var(--type-caption);color:var(--fg-3)">Out of every queue and Atlas. Kept for good.</span></div>
+                    <button type="button" onClick="{{ cancelT }}" style="height:40px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">Cancel</button>
+                    <button type="button" onClick="{{ confirmT }}" style="display:inline-flex;align-items:center;height:40px;padding:0 var(--sp-6);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-solid);box-shadow:var(--glass-rim-3), var(--glass-cast-1);color:var(--fg-1);font:var(--type-label);cursor:pointer" style-active="transform:scale(0.965)">Archive</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-rows:{{ tReceiptRows }};transition:grid-template-rows var(--dur-sheet) var(--ease-glass)">
+              <div style="overflow:hidden;min-height:0">
+                <div style="display:flex;align-items:center;gap:var(--sp-4);min-height:56px;padding:0 var(--sp-6);border-radius:var(--r-md);box-shadow:inset 0 0 0 1px var(--line-faint);opacity:{{ tReceiptOp }};transition:opacity var(--dur-slow) var(--ease-glass)">
+                  <span style="display:flex;color:var(--fg-4)">{{ icShelf }}</span>
+                  <span style="flex:1;min-width:0;font:var(--type-caption);color:var(--fg-3)">Draft pricing page copy · on the shelf</span>
+                  <button type="button" onClick="{{ resetT }}" style="height:40px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">Replay</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:var(--sp-5);min-height:64px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-md);background-image:var(--glass-fill-1);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:var(--glass-rim-1)">
+              <span style="flex:0 0 auto;width:24px;height:24px;border-radius:var(--r-xs);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow), 0 0 0 1px var(--line-soft)"></span>
+              <div style="flex:1;min-width:0;display:grid;gap:2px"><span style="font:var(--type-body);color:var(--fg-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Book launch photographer</span><span style="font:var(--type-caption);color:var(--fg-3)">⚡ Action Steps</span></div>
+              <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3)">30 min</span>
+            </div>
+
+            <div role="menu" style="position:absolute;top:150px;right:12px;width:290px;max-width:calc(100% - 24px);z-index:5;display:grid;padding:var(--sp-3);border-radius:var(--r-lg);background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-shadow-thick);opacity:{{ tMenuOp }};transform:{{ tMenuTf }};pointer-events:{{ tMenuPe }};transition:opacity var(--dur-base) var(--ease-glass), transform var(--dur-base) var(--ease-glass)">
+              <div style="display:flex;align-items:center;gap:var(--sp-4);min-height:44px;padding:0 var(--sp-4);border-radius:var(--r-md);color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">{{ icClock }}Change allocation</div>
+              <div style="display:flex;align-items:center;gap:var(--sp-4);min-height:44px;padding:0 var(--sp-4);border-radius:var(--r-md);color:var(--fg-2);font:var(--type-label);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.05)">{{ icMove }}Move to list</div>
+              <div style="height:1px;background:var(--line-faint);margin:var(--sp-2) var(--sp-3)"></div>
+              <div role="menuitem" onClick="{{ askT }}" style="display:flex;align-items:center;gap:var(--sp-4);min-height:56px;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-md);cursor:pointer" style-hover="background:oklch(1 0 0 / 0.06)">
+                <span style="display:flex;color:var(--fg-1)">{{ icArchive }}</span>
+                <span style="display:grid;gap:1px"><span style="font:var(--type-label);color:var(--fg-1)">Archive task</span><span style="font:var(--type-caption);color:var(--fg-4)">Kept for good, out of sight</span></span>
+              </div>
+              <div role="menuitem" style="display:flex;align-items:center;gap:var(--sp-4);min-height:56px;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-md);cursor:pointer" style-hover="background:oklch(0.70 0.15 20 / 0.08)">
+                <span style="display:flex;color:var(--status-overrun)">{{ icTrash }}</span>
+                <span style="display:grid;gap:1px"><span style="font:var(--type-label);color:var(--status-overrun)">Delete task</span><span style="font:var(--type-caption);color:var(--fg-4)">Trash for 30 days, then gone</span></span>
+              </div>
+            </div>
+          </div>
+          <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">A task confirms inside its own row. Same pair sits in the task sheet footer. Subtasks archive with their parent only.</span></sc-if>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 ARCHIVE SCREEN -->
+    <section id="archive" data-screen-label="02 Archive screen" style="display:grid;gap:var(--sp-7)">
+      <div style="display:grid;gap:var(--sp-2)">
+        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">02 The Archive · /archive</span>
+        <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Shelves by when it was put away. Projects stand as wide tiles, tasks as narrow ones. No countdown anywhere.</span>
+      </div>
+
+      <div style="display:grid;gap:var(--sp-9);padding:var(--sp-9) var(--sp-9) var(--sp-11);border-radius:var(--r-card-lg);box-shadow:inset 0 0 0 1px var(--line-faint);background:oklch(0 0 0 / 0.18)">
+
+        <div style="display:flex;align-items:flex-end;gap:var(--sp-6);flex-wrap:wrap">
+          <div style="display:grid;gap:var(--sp-3);flex:1;min-width:260px">
+            <span style="display:flex;align-items:center;gap:var(--sp-3);font:var(--type-caption);color:var(--fg-4)"><a href="#settings" style="color:var(--fg-3)">Settings</a>{{ icChevron }}<span style="color:var(--fg-2)">Archive</span></span>
+            <h2 style="margin:0;font:var(--type-display);font-size:var(--text-2xl);letter-spacing:var(--tracking-title);color:var(--fg-1)">Archive</h2>
+            <p style="margin:0;max-width:56ch;font:var(--type-body);font-size:var(--text-sm);color:var(--fg-3);text-wrap:pretty">Put away on purpose. Kept for good. Nothing here expires.</p>
+          </div>
+          <div role="tablist" style="display:flex;gap:var(--sp-1);padding:4px;border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)">
+            <button type="button" role="tab" onClick="{{ byWhen }}" style="height:36px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background-image:{{ whenFill }};box-shadow:{{ whenRim }};color:{{ whenInk }};font:var(--type-label);cursor:pointer;transition:var(--t-hover)">By when</button>
+            <button type="button" role="tab" onClick="{{ byProject }}" style="height:36px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background-image:{{ projFill }};box-shadow:{{ projRim }};color:{{ projInk }};font:var(--type-label);cursor:pointer;transition:var(--t-hover)">By project</button>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:var(--sp-5);flex-wrap:wrap">
+          <label style="flex:1 1 260px;max-width:340px;display:flex;align-items:center;gap:var(--sp-3);height:44px;padding:0 var(--sp-5);border-radius:var(--r-pill);background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);color:var(--fg-4)">{{ icSearch }}<input value="{{ q }}" onChange="{{ onQ }}" placeholder="Search the shelf" aria-label="Search the archive" style="flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--fg-1);font:var(--type-body);font-size:var(--text-sm)"></input></label>
+          <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3);font-variant-numeric:tabular-nums">{{ tally }}</span>
+          <span style="flex:1 1 280px;display:flex;align-items:center;gap:var(--sp-3);justify-content:flex-end;font:var(--type-caption);color:var(--fg-4);text-wrap:pretty">{{ icEyeOff }}Hidden from boards, counts, queues, search and Atlas.</span>
+        </div>
+
+        <sc-if value="{{ hasShelves }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;gap:var(--sp-11)">
+            <sc-for list="{{ shelves }}" as="s" hint-placeholder-count="3">
+              <div style="display:grid;gap:var(--sp-5)">
+                <div style="display:flex;align-items:baseline;gap:var(--sp-4)">
+                  <span style="font:var(--type-label);color:var(--fg-1)">{{ s.label }}</span>
+                  <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-4)">{{ s.sub }}</span>
+                </div>
+                <div style="display:grid;gap:0">
+                  <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(190px, 1fr));gap:var(--sp-4);align-items:end;padding:0 var(--sp-3)">
+                    <sc-for list="{{ s.items }}" as="it" hint-placeholder-count="3">
+                      <sc-if value="{{ it.isProject }}" hint-placeholder-val="{{ true }}">
+                        <div style="grid-column:span 2;display:grid;gap:var(--sp-4);align-content:start;min-height:228px;padding:var(--sp-6) var(--sp-6) var(--sp-5);border-radius:var(--r-card) var(--r-card) 6px 6px;background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-rim-2), var(--glass-inner-1), 0 10px 18px -12px oklch(0 0 0 / 0.8);box-sizing:border-box;opacity:{{ it.op }};transform:{{ it.tf }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass)">
+                          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3)">
+                            <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Project</span>
+                            <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap">{{ it.arch }} · {{ it.ago }}</span>
+                          </div>
+                          <div style="display:grid;gap:var(--sp-2)">
+                            <span style="font:var(--type-title);letter-spacing:var(--tracking-title);color:var(--fg-1);text-wrap:pretty">{{ it.name }}</span>
+                            <span style="font:var(--type-caption);color:var(--fg-3)">{{ it.held }} · active {{ it.span }}</span>
+                          </div>
+                          <div style="display:flex;flex-wrap:wrap;gap:4px;max-width:260px">
+                            <sc-for list="{{ it.dots }}" as="d" hint-placeholder-count="12"><span style="width:6px;height:6px;border-radius:50%;background:{{ d.bg }};box-shadow:{{ d.sh }}"></span></sc-for>
+                          </div>
+                          <sc-if value="{{ it.note }}" hint-placeholder-val="{{ false }}"><span style="font:var(--type-caption);color:var(--fg-2);text-wrap:pretty">“{{ it.note }}”</span></sc-if>
+                          <div style="display:flex;align-items:center;gap:var(--sp-4);margin-top:auto;padding-top:var(--sp-2)">
+                            <span style="flex:1;font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-3);font-variant-numeric:tabular-nums">{{ it.logged }} logged</span>
+                            <button type="button" onClick="{{ it.restore }}" style="display:inline-flex;align-items:center;gap:var(--sp-3);height:40px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--fg-1);font:var(--type-label);cursor:pointer;transition:var(--t-hover)" style-hover="background-image:var(--glass-fill-2)" style-active="transform:scale(0.965)">{{ icRestore }}Put back</button>
+                          </div>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ it.isTask }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:grid;gap:var(--sp-3);align-content:start;min-height:176px;padding:var(--sp-5) var(--sp-5) var(--sp-4);border-radius:var(--r-lg) var(--r-lg) 6px 6px;background-image:var(--glass-fill-1);backdrop-filter:var(--glass-bd-sm);-webkit-backdrop-filter:var(--glass-bd-sm);box-shadow:var(--glass-rim-1), 0 8px 14px -10px oklch(0 0 0 / 0.8);box-sizing:border-box;opacity:{{ it.op }};transform:{{ it.tf }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass)">
+                          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3)">
+                            <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Task</span>
+                            <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-3);white-space:nowrap">{{ it.arch }}</span>
+                          </div>
+                          <span style="font:var(--type-body);color:var(--fg-1);text-wrap:pretty">{{ it.name }}</span>
+                          <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">from {{ it.from }} · {{ it.list }}</span>
+                          <span style="font:var(--type-numeric);font-size:var(--text-xs);color:var(--fg-4)">{{ it.meta }}</span>
+                          <button type="button" onClick="{{ it.restore }}" style="justify-self:start;margin-top:auto;display:inline-flex;align-items:center;gap:var(--sp-3);height:40px;padding:0 var(--sp-4);border:0;border-radius:var(--r-pill);background:transparent;box-shadow:inset 0 0 0 1px var(--line-soft);color:var(--fg-2);font:var(--type-label);cursor:pointer;transition:var(--t-hover)" style-hover="background:oklch(1 0 0 / 0.05);color:var(--fg-1)" style-active="transform:scale(0.965)">{{ icRestore }}Put back</button>
+                        </div>
+                      </sc-if>
+                    </sc-for>
+                  </div>
+                  <div style="position:relative;height:14px;border-radius:3px 3px 12px 12px;background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-3)"></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ noMatch }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;justify-items:center;gap:var(--sp-3);padding:var(--sp-10) 0;text-align:center">
+            <span style="font:var(--type-label);color:var(--fg-2)">Nothing on the shelf matches that.</span>
+            <span style="font:var(--type-caption);color:var(--fg-4)">Try a project name or a month.</span>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;gap:var(--sp-8);padding-top:var(--sp-6)">
+            <div style="display:grid;gap:0;max-width:640px;width:100%;justify-self:center">
+              <div style="display:grid;grid-template-columns:2fr 1fr 1fr 2fr;gap:var(--sp-4);align-items:end;padding:0 var(--sp-3)">
+                <div style="height:150px;border-radius:var(--r-card) var(--r-card) 6px 6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)"></div>
+                <div style="height:110px;border-radius:var(--r-lg) var(--r-lg) 6px 6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)"></div>
+                <div style="height:124px;border-radius:var(--r-lg) var(--r-lg) 6px 6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)"></div>
+                <div style="height:96px;border-radius:var(--r-card) var(--r-card) 6px 6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow);opacity:0.6"></div>
+              </div>
+              <div style="height:14px;border-radius:3px 3px 12px 12px;background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-3)"></div>
+            </div>
+            <div style="display:grid;justify-items:center;gap:var(--sp-3);text-align:center">
+              <span style="font:var(--type-title);letter-spacing:var(--tracking-title);color:var(--fg-1)">The shelf is empty.</span>
+              <span style="font:var(--type-body);font-size:var(--text-sm);color:var(--fg-3);max-width:42ch;text-wrap:pretty">Archive a finished project to keep it without seeing it.</span>
+              <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap;justify-content:center;margin-top:var(--sp-3)">
+                <span style="display:inline-flex;align-items:center;gap:var(--sp-3);height:32px;padding:0 var(--sp-4);border-radius:var(--r-pill);box-shadow:inset 0 0 0 1px var(--line-soft);font:var(--type-caption);color:var(--fg-3)">Project menu · Archive project</span>
+                <span style="display:inline-flex;align-items:center;gap:var(--sp-3);height:32px;padding:0 var(--sp-4);border-radius:var(--r-pill);box-shadow:inset 0 0 0 1px var(--line-soft);font:var(--type-caption);color:var(--fg-3)">Task menu · Archive task</span>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+      <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Put back lifts the tile off the shelf. A project returns to Home with its tasks; nothing re-enters today’s queue. Put everything back to reach the empty state.</span></sc-if>
+    </section>
+
+    <!-- 03 EMPTY -->
+    <section data-screen-label="03 Empty state" style="display:grid;gap:var(--sp-7)">
+      <div style="display:grid;gap:var(--sp-2)">
+        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">03 Empty</span>
+        <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">The shelf still stands, with carved slots where tiles would go. Trash’s empty state is a bin icon and one line; this is furniture.</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 440px), 1fr));gap:var(--gap-card);align-items:stretch">
+        <div style="display:grid;gap:var(--sp-7);align-content:center;padding:var(--sp-10) var(--sp-8);border-radius:var(--r-card-lg);box-shadow:inset 0 0 0 1px var(--line-faint);background:oklch(0 0 0 / 0.18)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Archive · empty</span>
+          <div style="display:grid;gap:0">
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:var(--sp-3);align-items:end;padding:0 var(--sp-3)">
+              <div style="height:120px;border-radius:var(--r-card) var(--r-card) 6px 6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)"></div>
+              <div style="height:88px;border-radius:var(--r-lg) var(--r-lg) 6px 6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)"></div>
+              <div style="height:100px;border-radius:var(--r-lg) var(--r-lg) 6px 6px;background-image:var(--glass-well);box-shadow:var(--glass-well-shadow)"></div>
+            </div>
+            <div style="height:12px;border-radius:3px 3px 12px 12px;background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-3)"></div>
+          </div>
+          <div style="display:grid;gap:var(--sp-2)">
+            <span style="font:var(--type-label);color:var(--fg-1)">The shelf is empty.</span>
+            <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Archive a finished project to keep it without seeing it.</span>
+          </div>
+        </div>
+        <div style="display:grid;gap:var(--sp-7);align-content:center;padding:var(--sp-10) var(--sp-8);border-radius:var(--r-card-lg);box-shadow:inset 0 0 0 1px var(--line-faint)">
+          <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">Trash · empty, for contrast</span>
+          <div style="display:grid;justify-items:center;gap:var(--sp-4);padding:var(--sp-8) var(--sp-6);border-radius:var(--r-card);background-image:var(--glass-fill-2);box-shadow:var(--glass-shadow-pane);text-align:center">
+            <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--fg-4)">{{ icTrash }}</span>
+            <span style="font:var(--type-body);font-size:var(--text-sm);color:var(--fg-3)">Nothing in the trash. Anything Atlas deletes lands here first.</span>
+          </div>
+          <span style="font:var(--type-caption);color:var(--fg-4);text-wrap:pretty">Trash is one flat pane with a clock on every row. Archive has no clock and no pane — tiles on a ledge.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 SETTINGS -->
+    <section id="settings" data-screen-label="04 Settings entry" style="display:grid;gap:var(--sp-7)">
+      <div style="display:grid;gap:var(--sp-2)">
+        <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-2)">04 Reached from Settings</span>
+        <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Neighbours, never twins. Archive is described by what it keeps; Trash by when it forgets.</span>
+      </div>
+      <div style="display:grid;gap:var(--sp-5);max-width:760px;padding:var(--pad-sheet);border-radius:var(--r-sheet);background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-shadow-thick)">
+        <div style="display:flex;gap:var(--sp-6);border-bottom:1px solid var(--line-faint);padding-bottom:var(--sp-4);flex-wrap:wrap">
+          <span style="font:var(--type-label);color:var(--fg-3)">Connections</span>
+          <span style="font:var(--type-label);color:var(--fg-3)">Storage</span>
+          <span style="font:var(--type-label);color:var(--fg-1);box-shadow:0 calc(var(--sp-4) + 1px) 0 -0px var(--fg-1)">Kept &amp; deleted</span>
+        </div>
+
+        <a href="#archive" style="display:flex;align-items:center;gap:var(--sp-5);min-height:88px;padding:var(--sp-5) var(--sp-6);border-radius:var(--r-card);background-image:var(--glass-fill-2);box-shadow:var(--glass-shadow-pane);color:inherit;transition:var(--t-hover)" style-hover="background-image:var(--glass-fill-3);transform:translateX(2px)">
+          <span style="flex:0 0 auto;display:grid;gap:0;width:44px">
+            <span style="display:flex;align-items:flex-end;gap:3px;height:24px;padding:0 3px"><span style="flex:2;height:20px;border-radius:3px 3px 1px 1px;background:var(--fg-3)"></span><span style="flex:1;height:14px;border-radius:3px 3px 1px 1px;background:var(--fg-4)"></span><span style="flex:1;height:17px;border-radius:3px 3px 1px 1px;background:var(--fg-3)"></span></span>
+            <span style="height:4px;border-radius:1px 1px 3px 3px;background:var(--fg-2)"></span>
+          </span>
+          <span style="flex:1;min-width:0;display:grid;gap:2px">
+            <span style="font:var(--type-title);font-size:var(--text-md);color:var(--fg-1)">Archive</span>
+            <span style="font:var(--type-caption);color:var(--fg-3);text-wrap:pretty">Put away on purpose. Kept for good, hidden everywhere else.</span>
+          </span>
+          <span style="flex:0 0 auto;display:grid;justify-items:end;gap:2px">
+            <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--fg-2);font-variant-numeric:tabular-nums">{{ settingsTally }}</span>
+            <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--fg-4)">never expires</span>
+          </span>
+          <span style="display:flex;color:var(--fg-4)">{{ icChevron }}</span>
+        </a>
+
+        <a href="trash.html" style="display:flex;align-items:center;gap:var(--sp-5);min-height:72px;padding:var(--sp-4) var(--sp-6);border-radius:var(--r-card);box-shadow:inset 0 0 0 1px var(--line-faint);color:inherit;transition:var(--t-hover)" style-hover="background:oklch(1 0 0 / 0.03)">
+          <span style="flex:0 0 auto;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--fg-3)">{{ icTrash }}</span>
+          <span style="flex:1;min-width:0;display:grid;gap:2px">
+            <span style="font:var(--type-label);color:var(--fg-2)">Trash</span>
+            <span style="font:var(--type-caption);color:var(--fg-4);text-wrap:pretty">Deleted items wait 30 days, then go for good.</span>
+          </span>
+          <span style="flex:0 0 auto;display:grid;justify-items:end;gap:2px">
+            <span style="font:var(--type-numeric);font-size:var(--text-sm);color:var(--status-review);font-variant-numeric:tabular-nums">7 items</span>
+            <span style="font:var(--type-kicker);letter-spacing:var(--tracking-kicker);text-transform:uppercase;color:var(--status-review)">next goes in 3d</span>
+          </span>
+          <span style="display:flex;color:var(--fg-4)">{{ icChevron }}</span>
+        </a>
+      </div>
+      <sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}"><span style="font:var(--type-caption);color:var(--fg-3);max-width:760px;text-wrap:pretty">Archive is the raised pane with a shelf glyph and a neutral count. Trash is the flat outlined row with a bin and an amber clock. Archive also answers /archive directly.</span></sc-if>
+    </section>
+  </div>
+
+  <div style="position:fixed;left:0;right:0;bottom:var(--sp-9);display:grid;place-items:center;z-index:80;pointer-events:none">
+    <div role="status" style="display:flex;align-items:center;gap:var(--sp-4);min-height:56px;padding:var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-6);border-radius:var(--r-pill);background-image:var(--glass-fill-3);backdrop-filter:var(--glass-bd-lg);-webkit-backdrop-filter:var(--glass-bd-lg);box-shadow:var(--glass-shadow-thick);opacity:{{ toastOp }};transform:{{ toastTf }};pointer-events:{{ toastPe }};transition:opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass)">
+      <span style="display:flex;color:var(--fg-2)">{{ icShelf }}</span>
+      <span style="display:grid;gap:1px"><span style="font:var(--type-label);color:var(--fg-1)">{{ toastTitle }}</span><span style="font:var(--type-caption);color:var(--fg-3)">{{ toastDetail }}</span></span>
+      <button type="button" onClick="{{ undo }}" style="height:40px;padding:0 var(--sp-5);border:0;border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1);color:var(--fg-1);font:var(--type-label);cursor:pointer">Undo</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;groupBy&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;when&quot;,&quot;project&quot;],&quot;default&quot;:&quot;when&quot;,&quot;tsType&quot;:&quot;'when' | 'project'&quot;},&quot;archiveEmpty&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showNotes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const ITEMS = [
+  { id: 'p4', kind: 'project', q: 3, name: 'Nair & Co — Q2 retainer', held: '31 tasks · all done', span: 'Apr – Jun 2026', logged: '22h 30m', done: 31, open: 0, arch: '8 Jul', ago: '2 mo ago', note: 'Contract ended. Invoices closed.' },
+  { id: 'p3', kind: 'project', q: 3, name: 'Podcast pilot', held: '9 tasks · 4 done, 5 open', span: 'May – Jun 2026', logged: '2h 15m', done: 4, open: 5, arch: '2 Jul', ago: '3 mo ago', note: 'Paused until the studio has sound treatment.' },
+  { id: 't3', kind: 'task', q: 3, name: 'Draft pricing page copy', from: 'Mutineer launch', list: '⚡ Action Steps', meta: '45 min · 1 / 3 subtasks', arch: '12 Aug' },
+  { id: 't4', kind: 'task', q: 3, name: 'Weekly review template', from: 'Shreekant Empire', list: '📚 Reference Materials', meta: '20 min · no subtasks', arch: '30 Aug' },
+  { id: 't5', kind: 'task', q: 2, name: 'Quote for the second kiln', from: 'Pottery side-line', list: '🧊 Backburner', meta: '15 min · 2 / 2 subtasks', arch: '9 May' },
+  { id: 't2', kind: 'task', q: 2, name: 'Sketch booth layout for Expo', from: 'Shreekant Empire', list: '🧊 Backburner', meta: '60 min · 0 / 4 subtasks', arch: '11 Apr' },
+  { id: 'p2', kind: 'project', q: 1, name: 'Studio move — Andheri', held: '24 tasks · 21 done, 3 open', span: 'Oct 2025 – Feb 2026', logged: '11h 05m', done: 21, open: 3, arch: '3 Mar', ago: '6 mo ago', note: null },
+  { id: 'p1', kind: 'project', q: 1, name: 'Diwali gift boxes 2025', held: '18 tasks · all done', span: 'Sep – Nov 2025', logged: '6h 40m', done: 18, open: 0, arch: '14 Jan', ago: '8 mo ago', note: 'Season over. Supplier list is in the catalog.' },
+  { id: 't1', kind: 'task', q: 1, name: 'Renew trade licence', from: 'Shreekant Empire', list: '⚡ Action Steps', meta: '30 min · 2 / 3 subtasks', arch: '20 Jan' },
+];
+const QUARTERS = { 3: 'Jul – Sep 2026', 2: 'Apr – Jun 2026', 1: 'Jan – Mar 2026' };
+
+class Component extends DCLogic {
+  state = { q: '', mode: null, gone: {}, lifting: {}, toast: null, toastOn: false, pm: 'closed', pPhase: 0, tm: 'closed', tPhase: 0 };
+
+  componentWillUnmount() { (this.timers || []).forEach(clearTimeout); }
+  later(fn, ms) { (this.timers = this.timers || []).push(setTimeout(fn, ms)); }
+
+  icon(size, kids) {
+    const h = React.createElement;
+    return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, style: { flex: '0 0 auto' } },
+      kids.map((k, i) => h(k[0], Object.assign({ key: i }, k[1]))));
+  }
+  icons() {
+    if (this._ic) return this._ic;
+    const I = (s, k) => this.icon(s, k);
+    this._ic = {
+      icMore: I(16, [['circle', { cx: 12, cy: 12, r: 1 }], ['circle', { cx: 19, cy: 12, r: 1 }], ['circle', { cx: 5, cy: 12, r: 1 }]]),
+      icArchive: I(16, [['rect', { width: 20, height: 5, x: 2, y: 3, rx: 1 }], ['path', { d: 'M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8' }], ['path', { d: 'M10 12h4' }]]),
+      icRestore: I(15, [['rect', { width: 20, height: 5, x: 2, y: 3, rx: 1 }], ['path', { d: 'M4 8v11a2 2 0 0 0 2 2h2' }], ['path', { d: 'M20 8v11a2 2 0 0 1-2 2h-2' }], ['path', { d: 'm9 15 3-3 3 3' }], ['path', { d: 'M12 12v9' }]]),
+      icShelf: I(18, [['path', { d: 'm16 6 4 14' }], ['path', { d: 'M12 6v14' }], ['path', { d: 'M8 8v12' }], ['path', { d: 'M4 4v16' }]]),
+      icTrash: I(16, [['path', { d: 'M3 6h18' }], ['path', { d: 'M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6' }], ['path', { d: 'M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2' }], ['line', { x1: 10, x2: 10, y1: 11, y2: 17 }], ['line', { x1: 14, x2: 14, y1: 11, y2: 17 }]]),
+      icPencil: I(16, [['path', { d: 'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z' }]]),
+      icClock: I(16, [['circle', { cx: 12, cy: 12, r: 10 }], ['path', { d: 'M12 6v6l4 2' }]]),
+      icMove: I(16, [['path', { d: 'M5 12h14' }], ['path', { d: 'm12 5 7 7-7 7' }]]),
+      icSearch: I(16, [['circle', { cx: 11, cy: 11, r: 8 }], ['path', { d: 'm21 21-4.3-4.3' }]]),
+      icChevron: I(14, [['path', { d: 'm9 18 6-6-6-6' }]]),
+      icEyeOff: I(14, [['path', { d: 'M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49' }], ['path', { d: 'M14.084 14.158a3 3 0 0 1-4.242-4.242' }], ['path', { d: 'M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143' }], ['path', { d: 'm2 2 20 20' }]]),
+    };
+    return this._ic;
+  }
+
+  showToast(t) {
+    clearTimeout(this._tt);
+    this.setState({ toast: t, toastOn: true });
+    this._tt = setTimeout(() => this.setState({ toastOn: false }), 4200);
+  }
+
+  restore(it) {
+    this.setState(s => ({ lifting: { ...s.lifting, [it.id]: true } }));
+    this.later(() => {
+      this.setState(s => ({ gone: { ...s.gone, [it.id]: true } }));
+      this.showToast({
+        kind: 'restore', id: it.id,
+        title: it.name + ' is back',
+        detail: it.kind === 'project' ? 'On Home with its tasks. Nothing re-queued.' : 'In ' + it.from + ' · ' + it.list + '.',
+      });
+    }, 320);
+  }
+
+  archiveP() {
+    this.setState({ pm: 'closed', pPhase: 1 });
+    this.later(() => this.setState({ pPhase: 2 }), 300);
+    this.later(() => this.showToast({ kind: 'p', title: 'Archived Diwali gift boxes 2025', detail: 'On the shelf · Settings → Archive' }), 420);
+  }
+  archiveT() {
+    this.setState({ tm: 'closed', tPhase: 1 });
+    this.later(() => this.setState({ tPhase: 2 }), 300);
+    this.later(() => this.showToast({ kind: 't', title: 'Archived Draft pricing page copy', detail: 'Out of every queue · Settings → Archive' }), 420);
+  }
+
+  undo() {
+    const t = this.state.toast;
+    if (!t) return;
+    if (t.kind === 'p') this.setState({ pPhase: 0 });
+    if (t.kind === 't') this.setState({ tPhase: 0 });
+    if (t.kind === 'restore') this.setState(s => {
+      const gone = { ...s.gone }, lifting = { ...s.lifting };
+      delete gone[t.id]; delete lifting[t.id];
+      return { gone, lifting };
+    });
+    this.setState({ toastOn: false });
+  }
+
+  buildShelves() {
+    const forceEmpty = this.props.archiveEmpty ?? false;
+    const q = this.state.q.trim().toLowerCase();
+    const mode = this.state.mode ?? (this.props.groupBy ?? 'when');
+    const left = forceEmpty ? [] : ITEMS.filter(it => !this.state.gone[it.id]);
+    const vis = left.filter(it => !q || (it.name + ' ' + (it.from || '') + ' ' + it.arch + ' ' + (it.span || '')).toLowerCase().includes(q));
+    const decorate = it => {
+      const lift = !!this.state.lifting[it.id];
+      const dots = [];
+      if (it.kind === 'project') {
+        for (let i = 0; i < it.done; i++) dots.push({ bg: 'var(--fg-3)', sh: 'none' });
+        for (let i = 0; i < it.open; i++) dots.push({ bg: 'transparent', sh: 'inset 0 0 0 1px var(--line-strong)' });
+      }
+      return { ...it, isProject: it.kind === 'project', isTask: it.kind === 'task', dots,
+        op: lift ? 0 : 1, tf: lift ? 'translateY(-14px)' : 'translateY(0)', restore: () => this.restore(it) };
+    };
+    let shelves = [];
+    if (mode === 'when') {
+      [3, 2, 1].forEach(k => {
+        const its = vis.filter(it => it.q === k);
+        if (!its.length) return;
+        const p = its.filter(i => i.kind === 'project').length, t = its.length - p;
+        shelves.push({ label: QUARTERS[k], sub: [p && p + (p > 1 ? ' projects' : ' project'), t && t + (t > 1 ? ' tasks' : ' task')].filter(Boolean).join(' · '), items: its.map(decorate) });
+      });
+    } else {
+      const ps = vis.filter(i => i.kind === 'project');
+      if (ps.length) shelves.push({ label: 'Archived projects', sub: ps.length + ' · each with its own tasks', items: ps.map(decorate) });
+      ['Shreekant Empire', 'Mutineer launch', 'Pottery side-line'].forEach(name => {
+        const ts = vis.filter(i => i.kind === 'task' && i.from === name);
+        if (ts.length) shelves.push({ label: name, sub: ts.length + (ts.length > 1 ? ' tasks' : ' task') + ' · project still on Home', items: ts.map(decorate) });
+      });
+    }
+    const np = left.filter(i => i.kind === 'project').length, nt = left.length - np;
+    return { shelves, mode, left, noMatch: left.length > 0 && vis.length === 0, np, nt };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const b = this.buildShelves();
+    const on = 'var(--glass-fill-solid)', onRim = 'var(--glass-rim-3), var(--glass-cast-1)';
+    const pOpen = s.pm !== 'closed', pConf = s.pm === 'confirm';
+    const tOpen = s.tm === 'open', tConf = s.tm === 'confirm';
+    const t = s.toast || {};
+    return {
+      ...this.icons(),
+      notes: this.props.showNotes ?? true,
+      // project demo
+      togglePMenu: () => this.setState({ pm: pOpen ? 'closed' : 'open' }),
+      askP: () => this.setState({ pm: 'confirm' }),
+      cancelP: () => this.setState({ pm: 'open' }),
+      confirmP: () => this.archiveP(),
+      resetP: () => this.setState({ pPhase: 0, pm: 'closed' }),
+      pBtnFill: pOpen ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+      pMenuOp: pOpen ? 1 : 0, pMenuTf: pOpen ? 'translateY(0)' : 'translateY(-4px)', pMenuPe: pOpen ? 'auto' : 'none',
+      pItemRows: pConf ? '0fr' : '1fr', pItemOp: pConf ? 0 : 1,
+      pConfRows: pConf ? '1fr' : '0fr', pConfOp: pConf ? 1 : 0,
+      pOp: s.pPhase ? 0 : 1, pTf: s.pPhase ? 'translateY(10px)' : 'translateY(0)',
+      pRows: s.pPhase === 2 ? '0fr' : '1fr',
+      pReceiptRows: s.pPhase === 2 ? '1fr' : '0fr', pReceiptOp: s.pPhase === 2 ? 1 : 0,
+      // task demo
+      toggleTMenu: () => this.setState({ tm: tOpen ? 'closed' : 'open' }),
+      askT: () => this.setState({ tm: 'confirm' }),
+      cancelT: () => this.setState({ tm: 'closed' }),
+      confirmT: () => this.archiveT(),
+      resetT: () => this.setState({ tPhase: 0, tm: 'closed' }),
+      tBtnFill: tOpen ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+      tMenuOp: tOpen ? 1 : 0, tMenuTf: tOpen ? 'translateY(0)' : 'translateY(-4px)', tMenuPe: tOpen ? 'auto' : 'none',
+      tFill: tConf ? 'var(--glass-fill-3)' : 'var(--glass-fill-2)',
+      tRowOp: tConf ? 0 : 1, tRowPe: tConf ? 'none' : 'auto',
+      tConfOp: tConf ? 1 : 0, tConfPe: tConf ? 'auto' : 'none',
+      tOp: s.tPhase ? 0 : 1, tTf: s.tPhase ? 'translateY(10px)' : 'translateY(0)',
+      tRows: s.tPhase === 2 ? '0fr' : '1fr',
+      tReceiptRows: s.tPhase === 2 ? '1fr' : '0fr', tReceiptOp: s.tPhase === 2 ? 1 : 0,
+      // archive screen
+      q: s.q, onQ: e => this.setState({ q: e.target.value }),
+      byWhen: () => this.setState({ mode: 'when' }), byProject: () => this.setState({ mode: 'project' }),
+      whenFill: b.mode === 'when' ? on : 'none', whenRim: b.mode === 'when' ? onRim : 'none', whenInk: b.mode === 'when' ? 'var(--fg-1)' : 'var(--fg-3)',
+      projFill: b.mode === 'project' ? on : 'none', projRim: b.mode === 'project' ? onRim : 'none', projInk: b.mode === 'project' ? 'var(--fg-1)' : 'var(--fg-3)',
+      shelves: b.shelves,
+      hasShelves: b.shelves.length > 0,
+      noMatch: b.noMatch,
+      isEmpty: b.left.length === 0,
+      tally: b.np + ' projects · ' + b.nt + ' tasks · never purged',
+      settingsTally: b.np + ' projects · ' + b.nt + ' tasks',
+      // toast
+      toastOp: s.toastOn ? 1 : 0, toastTf: s.toastOn ? 'translateY(0)' : 'translateY(8px)', toastPe: s.toastOn ? 'auto' : 'none',
+      toastTitle: t.title || '', toastDetail: t.detail || '',
+      undo: () => this.undo(),
+    };
+  }
+}
+</script>
+</body>
+</html>

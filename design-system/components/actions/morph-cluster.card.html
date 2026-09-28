@@ -1,0 +1,102 @@
+<!-- @dsCard group="Components" viewport="760x420" name="Morph cluster" subtitle="The pill widens and brightens, then its controls drift apart out of it" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Morph cluster</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; display: block; }
+  #root { min-height: 100%; }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+  .note { font: var(--type-caption); color: var(--fg-3); text-wrap: pretty; max-width: 46ch; }
+</style>
+</head>
+<body class="ag-page">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../material/GlassFilters.jsx',
+  '../core/Icon.jsx',
+  '../actions/Button.jsx',
+  '../actions/IconButton.jsx',
+  '../actions/MorphCluster.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, MorphCluster } = AG;
+
+  function Bay({ label, note, children }) {
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+        <span className="lbl">{label}</span>
+        <div style={{
+          display: 'flex', alignItems: 'center', minHeight: 84,
+          padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+          backgroundImage: 'var(--glass-fill-1)',
+          backdropFilter: 'var(--glass-bd-sm)', WebkitBackdropFilter: 'var(--glass-bd-sm)',
+          boxShadow: 'var(--glass-rim-1)',
+        }}>
+          {children}
+        </div>
+        {note && <span className="note">{note}</span>}
+      </div>
+    );
+  }
+
+  function Demo() {
+    const [a, setA] = React.useState(false);
+    const [b, setB] = React.useState(false);
+
+    return (
+      <div style={{ padding: 'var(--sp-7) var(--sp-8)', display: 'grid', gap: 'var(--sp-7)' }}>
+        <GlassFilters />
+
+        <Bay
+          label="Select → cluster"
+          note="Press the pill. Its glass widens and brightens, then the controls drift apart out of it. Escape or a press outside gathers them back."
+        >
+          <MorphCluster
+            open={a}
+            onOpenChange={setA}
+            label="Task controls"
+            trigger={<Button variant="glass">Select</Button>}
+          >
+            <IconButton label="Search" variant="glass"><Icon name="search" size={18} /></IconButton>
+            <IconButton label="Filter by list" variant="glass"><Icon name="filter" size={18} /></IconButton>
+            <IconButton label="Add task" variant="glass"><Icon name="plus" size={18} /></IconButton>
+            <Button variant="frost" onClick={() => setA(false)}>Done</Button>
+          </MorphCluster>
+        </Bay>
+
+        <Bay
+          label="Right-anchored, live"
+          note={'align="end" grows leftward, for a control sitting at a bar’s right edge. tone="accent" gives the brief highlight an emerald cast, for clusters that start something.'}
+        >
+          <span style={{ flex: 1 }} />
+          <MorphCluster
+            open={b}
+            onOpenChange={setB}
+            align="end"
+            tone="accent"
+            label="Start controls"
+            trigger={<Button variant="frost" iconRight={<Icon name="arrow-right" size={16} />}>Start protocol</Button>}
+          >
+            <IconButton label="Adjust allocation" variant="glass"><Icon name="sliders-horizontal" size={18} /></IconButton>
+            <Button variant="glass" onClick={() => setB(false)}>Not yet</Button>
+            <Button variant="solid" iconRight={<Icon name="play" size={16} />}>Commit</Button>
+          </MorphCluster>
+        </Bay>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

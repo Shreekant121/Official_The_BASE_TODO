@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+body{margin:0;background:oklch(0.085 0.004 260);-webkit-font-smoothing:antialiased}
+a{color:oklch(0.82 0.15 165)}a:hover{color:oklch(0.9 0.1 165)}
+@keyframes at-float{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4%,-3%) scale(1.06)}}
+@keyframes at-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes at-bar{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+@keyframes at-dot{0%,100%{opacity:.25}50%{opacity:1}}
+input::placeholder{color:oklch(0.62 0.01 200)}
+</style>
+</helmet>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="at-lens" x="0" y="0" width="1" height="1" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB"><feImage ref="{{ mapRef }}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="m"></feImage><feDisplacementMap in="SourceGraphic" in2="m" scale="0.075" xChannelSelector="R" yChannelSelector="G" result="dr"></feDisplacementMap><feColorMatrix in="dr" type="matrix" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="r"></feColorMatrix><feDisplacementMap in="SourceGraphic" in2="m" scale="0.065" xChannelSelector="R" yChannelSelector="G" result="dg"></feDisplacementMap><feColorMatrix in="dg" type="matrix" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="g"></feColorMatrix><feDisplacementMap in="SourceGraphic" in2="m" scale="0.055" xChannelSelector="R" yChannelSelector="G" result="db"></feDisplacementMap><feColorMatrix in="db" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="b"></feColorMatrix><feBlend in="r" in2="g" mode="screen" result="rg"></feBlend><feBlend in="rg" in2="b" mode="screen"></feBlend></filter>
+</svg>
+<div style="min-height:100vh;padding:64px 56px 96px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Inter,system-ui,sans-serif;font-feature-settings:'cv11','ss03';color:oklch(0.86 0.006 260)">
+<div style="display:grid;gap:10px;margin-bottom:48px;max-width:720px">
+  <div style="font-size:13px;font-weight:600;color:oklch(0.82 0.15 165)">Aurora Glass</div>
+  <h1 style="margin:0;font-size:48px;letter-spacing:-0.035em;font-weight:700;color:#fff;line-height:1.05">Atlas, on laptop and phone</h1>
+  <p style="margin:0;font-size:17px;line-height:1.45;color:oklch(0.66 0.008 260);text-wrap:pretty">Type or hold the mic. Atlas thinks, answers, and asks before it moves anything.</p>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<div style="display:grid;gap:14px">
+<div style="font-size:13px;font-weight:500;color:oklch(0.6 0.008 260)">Laptop · 1280 × 800</div>
+<div data-screen-label="Atlas laptop" style="width:1280px;height:800px;border-radius:28px;padding:10px;background:linear-gradient(160deg,oklch(0.30 0.004 260),oklch(0.14 0.004 260));box-shadow:0 0 0 1px oklch(1 0 0 / 0.08),0 60px 120px -30px oklch(0 0 0 / 0.9)">
+<div style="position:relative;width:100%;height:100%;border-radius:20px;overflow:hidden;background:oklch(0.10 0.01 200);display:grid;grid-template-columns:96px 300px 1fr;isolation:isolate">
+  <div style="position:absolute;inset:0;z-index:-1;overflow:hidden">
+    <div style="position:absolute;width:900px;height:900px;left:120px;top:-480px;border-radius:50%;background:oklch(0.42 0.12 170);filter:blur(130px);opacity:.5;animation:at-float 26s ease-in-out infinite"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(oklch(1 0 0 / 0.045) 1px,transparent 1px),linear-gradient(90deg,oklch(1 0 0 / 0.045) 1px,transparent 1px);background-size:64px 64px"></div>
+  </div>
+
+  <nav style="position:relative;margin:18px 0 18px 18px;border-radius:40px;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:8px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.09),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.05));-webkit-backdrop-filter:blur(10px) saturate(1.8);backdrop-filter:url(#at-lens) blur(10px) saturate(1.8) brightness(1.1);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.28),0 20px 50px -14px oklch(0 0 0 / 0.6)">
+    <img src="assets/mark-white.png" alt="" style="width:26px;height:26px;object-fit:contain;margin:6px 0 12px"></img>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="6">
+      <button aria-label="{{ r.label }}" style="position:relative;width:52px;height:52px;border:0;padding:0;border-radius:50%;display:grid;place-items:center;background:transparent;color:#fff;cursor:pointer">
+        <span style="{{ r.glow }}"></span><span style="{{ r.plate }}"></span>
+        <i class="ph-fill {{ r.icon }}" style="{{ r.glyph }}"></i>
+      </button>
+    </sc-for>
+    <div style="flex:1"></div>
+    <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(145deg,oklch(0.8 0.1 170),oklch(0.5 0.12 175));display:grid;place-items:center;color:#fff;font-weight:600;font-size:15px;box-shadow:inset 1px 1px 1px oklch(1 0 0 / 0.5)">S</div>
+  </nav>
+
+  <aside style="margin:18px 0 18px 14px;border-radius:32px;padding:18px 12px;display:grid;grid-template-rows:auto auto 1fr;gap:12px;min-height:0;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.08),oklch(1 0 0 / 0.015) 50%,oklch(1 0 0 / 0.04));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#at-lens) blur(12px) saturate(1.8) brightness(1.08);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.55),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.22),inset 0 8px 16px -10px oklch(1 0 0 / 0.12),inset 0 -10px 20px -12px oklch(0 0 0 / 0.4),0 24px 50px -18px oklch(0 0 0 / 0.6)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0 6px"><span style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#fff">Chats</span>
+      <button aria-label="New chat" style="width:38px;height:38px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:oklch(0.18 0.05 165);background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),0 8px 20px -8px oklch(0.7 0.16 162 / 0.6)"><i class="ph-bold ph-plus" style="font-size:16px"></i></button></div>
+    <label style="display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:20px;background:oklch(0 0 0 / 0.22);box-shadow:inset 0 1px 3px oklch(0 0 0 / 0.35),inset 0 -1px 0 oklch(1 0 0 / 0.08)"><i class="ph-bold ph-magnifying-glass" style="font-size:15px;color:oklch(0.7 0.01 200)"></i><input placeholder="Search chats" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:#fff;font:inherit;font-size:14px"></input></label>
+    <div style="display:grid;gap:2px;align-content:start;overflow:hidden">
+      <sc-for list="{{ chats }}" as="c" hint-placeholder-count="6">
+        <button onClick="{{ c.go }}" style="{{ c.style }}">
+          <span style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</span><span style="font-size:12px;color:oklch(0.6 0.01 200);flex:0 0 auto">{{ c.when }}</span></span>
+          <span style="font-size:13px;color:oklch(0.66 0.01 200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.preview }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </aside>
+
+  <main style="position:relative;display:grid;grid-template-rows:auto 1fr auto;min-width:0;min-height:0;padding:18px 26px 22px">
+    <header style="display:flex;align-items:center;gap:12px;height:56px">
+      <div style="position:relative;width:48px;height:48px"><canvas ref="{{ aiHead }}" style="width:48px;height:48px"></canvas></div>
+      <div style="display:grid"><span style="font-size:17px;font-weight:600;color:#fff">Atlas</span><span style="display:flex;align-items:center;gap:6px;font-size:13px;color:oklch(0.72 0.01 200)"><span style="{{ stateDot }}"></span>{{ stateLabel }}</span></div>
+      <div style="flex:1"></div>
+      <div style="display:flex;padding:4px;border-radius:22px;background:oklch(0 0 0 / 0.22);box-shadow:inset 0 1px 3px oklch(0 0 0 / 0.35),inset 0 -1px 0 oklch(1 0 0 / 0.08)">
+        <sc-for list="{{ modes }}" as="m" hint-placeholder-count="2"><button onClick="{{ m.go }}" style="{{ m.style }}">{{ m.label }}</button></sc-for>
+      </div>
+    </header>
+
+    <div style="display:grid;align-content:end;gap:18px;overflow:hidden;padding:12px 60px 18px;min-height:0">
+      <sc-for list="{{ thread }}" as="t" hint-placeholder-count="3">
+        <div style="{{ t.row }}">
+          <sc-if value="{{ t.isUser }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:520px;padding:12px 18px;border-radius:24px 24px 8px 24px;font-size:15px;line-height:1.45;color:oklch(0.16 0.04 165);background:linear-gradient(180deg,oklch(0.9 0.12 165),oklch(0.78 0.15 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),0 10px 24px -12px oklch(0.7 0.16 162 / 0.6)">{{ t.text }}</div>
+          </sc-if>
+          <sc-if value="{{ t.isAtlas }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;gap:12px;max-width:640px">
+              <div style="font-size:15px;line-height:1.55;color:oklch(0.92 0.006 260);text-wrap:pretty">{{ t.text }}</div>
+              <sc-if value="{{ t.hasTasks }}" hint-placeholder-val="{{ false }}">
+                <div style="border-radius:26px;padding:8px;display:grid;gap:2px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02) 50%,oklch(1 0 0 / 0.06));-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:url(#at-lens) blur(12px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 24px 50px -20px oklch(0 0 0 / 0.6)">
+                  <sc-for list="{{ t.tasks }}" as="k" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:18px">
+                      <span style="{{ k.icon }}"><i class="ph-fill {{ k.glyph }}" style="font-size:16px;color:#fff"></i></span>
+                      <span style="flex:1;min-width:0;display:grid"><span style="font-size:14px;font-weight:600;color:#fff">{{ k.title }}</span><span style="font-size:12px;color:oklch(0.66 0.01 200)">{{ k.meta }}</span></span>
+                      <span style="font-size:13px;color:oklch(0.62 0.01 200);text-decoration:line-through">{{ k.from }}</span>
+                      <i class="ph-bold ph-arrow-right" style="font-size:13px;color:oklch(0.6 0.01 200)"></i>
+                      <span style="height:26px;padding:0 11px;border-radius:13px;display:flex;align-items:center;font-size:12px;font-weight:600;color:oklch(0.92 0.1 165);background:oklch(0.74 0.16 162 / 0.2)">{{ k.to }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ t.hasAsk }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 10px 10px 18px;border-radius:26px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.12),oklch(1 0 0 / 0.03));-webkit-backdrop-filter:blur(12px);backdrop-filter:url(#at-lens) blur(12px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.6),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45)">
+                  <i class="ph-fill ph-shield-check" style="font-size:20px;color:oklch(0.84 0.15 165)"></i>
+                  <span style="flex:1;font-size:14px;font-weight:500;color:#fff">{{ t.ask }}</span>
+                  <button onClick="{{ decline }}" style="height:40px;padding:0 16px;border:0;border-radius:20px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;color:#fff;background:oklch(1 0 0 / 0.10);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.5)">Not now</button>
+                  <button onClick="{{ confirm }}" style="height:40px;padding:0 18px;border:0;border-radius:20px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;color:oklch(0.18 0.05 165);background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),0 8px 20px -8px oklch(0.7 0.16 162 / 0.6)">{{ t.yes }}</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ t.isThinking }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 16px;border-radius:20px;background:oklch(1 0 0 / 0.06);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.35);font-size:14px;color:oklch(0.8 0.01 200)">Checking your deadlines<span style="display:flex;gap:4px"><span style="width:5px;height:5px;border-radius:50%;background:#fff;animation:at-dot 1s infinite"></span><span style="width:5px;height:5px;border-radius:50%;background:#fff;animation:at-dot 1s .15s infinite"></span><span style="width:5px;height:5px;border-radius:50%;background:#fff;animation:at-dot 1s .3s infinite"></span></span></div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:grid;gap:12px;padding:0 60px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <sc-for list="{{ chips }}" as="ch" hint-placeholder-count="3">
+          <button onClick="{{ ch.go }}" style="display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;border:0;border-radius:18px;cursor:pointer;font:inherit;font-size:13px;font-weight:500;color:#fff;background:oklch(1 0 0 / 0.07);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.4),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.15)"><i class="ph-fill {{ ch.icon }}" style="font-size:15px;color:oklch(0.84 0.15 165)"></i>{{ ch.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:64px;padding:0 8px 0 10px;border-radius:32px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.12),oklch(1 0 0 / 0.03) 50%,oklch(1 0 0 / 0.07));-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:url(#at-lens) blur(14px) saturate(1.8) brightness(1.1);box-shadow:inset 2px 2px 1px -1px oklch(1 0 0 / 0.7),inset -1.5px -1.5px 1px -1px oklch(1 0 0 / 0.3),inset 0 12px 22px -12px oklch(1 0 0 / 0.16),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 30px 60px -20px oklch(0 0 0 / 0.7)">
+        <button aria-label="Attach" style="width:46px;height:46px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;background:oklch(1 0 0 / 0.08);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.45)"><i class="ph-bold ph-plus" style="font-size:18px"></i></button>
+        <sc-if value="{{ recOff }}" hint-placeholder-val="{{ true }}">
+          <input value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onKey }}" placeholder="Ask Atlas to plan, move or explain…" style="flex:1;min-width:0;height:100%;border:0;outline:0;background:transparent;color:#fff;font:inherit;font-size:16px;padding:0 6px"></input>
+        </sc-if>
+        <sc-if value="{{ recOn }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;display:flex;align-items:center;gap:12px;padding:0 6px"><span style="width:9px;height:9px;border-radius:50%;background:oklch(0.66 0.21 25);box-shadow:0 0 12px oklch(0.66 0.21 25)"></span><span style="font-size:16px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums">{{ recTime }}</span>
+            <div style="flex:1;display:flex;align-items:center;gap:3px;height:28px"><sc-for list="{{ wave }}" as="w"><span style="{{ w }}"></span></sc-for></div></div>
+        </sc-if>
+        <button onClick="{{ toggleRec }}" aria-label="Voice" style="{{ micStyle }}"><i class="{{ micIcon }}" style="font-size:19px"></i></button>
+        <button onClick="{{ send }}" aria-label="Send" style="width:46px;height:46px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:oklch(0.18 0.05 165);background:linear-gradient(180deg,oklch(0.88 0.14 165),oklch(0.72 0.16 162));box-shadow:inset 0 1.5px 1px oklch(1 0 0 / 0.7),inset 0 -2px 6px oklch(0.45 0.12 165 / 0.5),0 10px 24px -8px oklch(0.7 0.16 162 / 0.6)"><i class="ph-bold ph-arrow-up" style="font-size:18px"></i></button>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+</div>
+
+<div style="display:grid;gap:14px">
+<div style="font-size:13px;font-weight:500;color:oklch(0.6 0.008 260)">Phone · 390 × 844</div>
+<div data-screen-label="Atlas phone" style="width:390px;height:844px;border-radius:58px;padding:10px;background:linear-gradient(160deg,oklch(0.30 0.004 260),oklch(0.14 0.004 260));box-shadow:0 0 0 1px oklch(1 0 0 / 0.1),0 60px 120px -30px oklch(0 0 0 / 0.9)">
+<div style="position:relative;width:100%;height:100%;border-radius:48px;overflow:hidden;background:oklch(0.10 0.01 200);isolation:isolate;display:grid;grid-template-rows:54px auto 1fr auto">
+  <div style="position:absolute;inset:0;z-index:-1;overflow:hidden">
+    <div style="position:absolute;width:560px;height:560px;left:-90px;top:-260px;border-radius:50%;background:oklch(0.42 0.12 170);filter:blur(100px);opacity:.55;animation:at-float 26s ease-in-out infinite"></div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(oklch(1 0 0 / 0.045) 1px,transparent 1px),linear-gradient(90deg,oklch(1 0 0 / 0.045) 1px,transparent 1px);background-size:48px 48px"></div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:0 32px 0 38px;font-size:16px;font-weight:600;color:#fff"><span>19:22</span><span style="width:122px;height:36px;border-radius:20px;background:#000"></span><span style="display:flex;gap:6px"><i class="ph-fill ph-cell-signal-full" style="font-size:16px"></i><i class="ph-fill ph-battery-full" style="font-size:20px"></i></span></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 20px 0">
+    <button aria-label="Chats" style="width:46px;height:46px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.1),oklch(1 0 0 / 0.02));-webkit-backdrop-filter:blur(10px);backdrop-filter:url(#at-lens) blur(10px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.55),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.22),inset 0 8px 16px -10px oklch(1 0 0 / 0.12),inset 0 -10px 20px -12px oklch(0 0 0 / 0.4)"><i class="ph-bold ph-list" style="font-size:19px"></i></button>
+    <span style="display:flex;align-items:center;gap:6px;font-size:15px;font-weight:600;color:#fff"><span style="{{ stateDot }}"></span>Atlas · {{ stateLabel }}</span>
+    <button aria-label="New chat" style="width:46px;height:46px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.1),oklch(1 0 0 / 0.02));-webkit-backdrop-filter:blur(10px);backdrop-filter:url(#at-lens) blur(10px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.55),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.22),inset 0 8px 16px -10px oklch(1 0 0 / 0.12),inset 0 -10px 20px -12px oklch(0 0 0 / 0.4)"><i class="ph-fill ph-note-pencil" style="font-size:19px"></i></button>
+  </div>
+  <div style="display:grid;align-content:start;justify-items:center;gap:12px;padding:18px 22px 0;overflow:hidden">
+    <canvas ref="{{ aiBig }}" style="width:170px;height:170px"></canvas>
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.03em;color:#fff;text-align:center;line-height:1.15">{{ phoneTitle }}</div>
+    <div style="font-size:15px;line-height:1.45;color:oklch(0.74 0.01 200);text-align:center;text-wrap:pretty;max-width:300px">{{ phoneBody }}</div>
+    <div style="display:grid;gap:8px;width:100%;margin-top:6px">
+      <sc-for list="{{ chips }}" as="ch" hint-placeholder-count="3">
+        <button onClick="{{ ch.go }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 16px;border:0;border-radius:26px;text-align:left;font:inherit;font-size:15px;font-weight:500;color:#fff;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.10),oklch(1 0 0 / 0.02));-webkit-backdrop-filter:blur(10px);backdrop-filter:url(#at-lens) blur(10px) saturate(1.8);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.5),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.2)"><i class="ph-fill {{ ch.icon }}" style="font-size:19px;color:oklch(0.84 0.15 165)"></i><span style="flex:1">{{ ch.label }}</span><i class="ph-bold ph-arrow-up-right" style="font-size:14px;color:oklch(0.65 0.01 200)"></i></button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="padding:0 14px 34px">
+    <div style="display:flex;align-items:center;gap:6px;height:62px;padding:0 7px 0 8px;border-radius:31px;background:radial-gradient(110% 60% at 0% 0%,oklch(1 0 0 / 0.16),transparent 42%),radial-gradient(80% 50% at 100% 100%,oklch(1 0 0 / 0.06),transparent 40%),linear-gradient(135deg,oklch(1 0 0 / 0.12),oklch(1 0 0 / 0.03) 50%,oklch(1 0 0 / 0.07));-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:url(#at-lens) blur(14px) saturate(1.8) brightness(1.1);box-shadow:inset 2px 2px 1px -1px oklch(1 0 0 / 0.7),inset -1.5px -1.5px 1px -1px oklch(1 0 0 / 0.3),inset 0 12px 22px -12px oklch(1 0 0 / 0.16),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45),0 24px 50px -18px oklch(0 0 0 / 0.7)">
+      <button aria-label="Attach" style="width:46px;height:46px;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background:oklch(1 0 0 / 0.08);box-shadow:inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.45)"><i class="ph-bold ph-plus" style="font-size:18px"></i></button>
+      <sc-if value="{{ recOff }}" hint-placeholder-val="{{ true }}"><span style="flex:1;font-size:16px;color:oklch(0.62 0.01 200);padding:0 4px">Ask Atlas…</span></sc-if>
+      <sc-if value="{{ recOn }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:flex;align-items:center;gap:8px;padding:0 4px"><span style="font-size:15px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums">{{ recTime }}</span><div style="flex:1;display:flex;align-items:center;gap:2px;height:24px;overflow:hidden"><sc-for list="{{ waveSm }}" as="w"><span style="{{ w }}"></span></sc-for></div></div></sc-if>
+      <button onClick="{{ toggleRec }}" aria-label="Voice" style="{{ micStyle }}"><i class="{{ micIcon }}" style="font-size:19px"></i></button>
+    </div>
+  </div>
+  <div style="position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:oklch(1 0 0 / 0.7)"></div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { chat: 0, mode: 0, draft: '', rec: false, recS: 0, ai: 'idle', confirmed: false,
+    thread: [
+      { who: 'user', text: 'I’m behind on Q4 Launch. What can slip without breaking Friday?' },
+      { who: 'atlas', text: 'Three tasks have slack before Friday’s review. Moving them to Thursday frees 1h 25m tonight for the onboarding email, which is blocking the launch.', tasks: true, ask: 'Move these 3 tasks to Thursday?', yes: 'Move 3 tasks' },
+    ] };
+  mapRef = React.createRef(); aiHead = React.createRef(); aiBig = React.createRef();
+  componentDidMount() {
+    this.buildMap(); this.startAI();
+    this.t = setInterval(() => { if (this.state.rec) this.setState(s => ({ recS: s.recS + 1 })); }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.t); clearTimeout(this.to); cancelAnimationFrame(this.raf); }
+  buildMap() {
+    const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const ctx = cv.getContext('2d'), img = ctx.createImageData(N, N);
+    const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const nx = x / (N - 1) * 2 - 1, ny = y / (N - 1) * 2 - 1, i = (y * N + x) * 4;
+      img.data[i] = 128 - Math.sign(nx) * (ss(0.45, 1, Math.abs(nx)) * 0.85 + Math.abs(nx) * 0.15) * 127;
+      img.data[i + 1] = 128 - Math.sign(ny) * (ss(0.45, 1, Math.abs(ny)) * 0.85 + Math.abs(ny) * 0.15) * 127;
+      img.data[i + 2] = 128; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const el = this.mapRef.current, url = cv.toDataURL();
+    if (el) { el.setAttribute('href', url); el.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url); }
+  }
+  async startAI() {
+    let src; try { src = await (await fetch('components/data/AiPresence.jsx')).text(); } catch (e) { return; }
+    const VERT = (src.match(/const VERT = '([^']*)'/) || [])[1], FRAG = (src.match(/const FRAG = `([\s\S]*?)`;/) || [])[1];
+    if (!VERT || !FRAG) return;
+    const TARGET = { idle: [0.4, 9], thinking: [0.8, 11], speaking: [0.9, 13] };
+    const make = (cv) => {
+      const gl = cv && cv.getContext('webgl', { premultipliedAlpha: false, antialias: true, alpha: true }); if (!gl) return null;
+      const sh = (ty, s) => { const o = gl.createShader(ty); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+      const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
+      gl.useProgram(pr); gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const l = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
+      const u = n => gl.getUniformLocation(pr, n);
+      return { gl, cv, R: u('R'), T: u('T'), A: u('A'), F: u('F'), S: u('S'), V: u('V') };
+    };
+    const ctxs = [make(this.aiHead.current), make(this.aiBig.current)].filter(Boolean);
+    let last = performance.now(), clock = 0, amp = 0.4, freq = 9, sp = 0, vl = 0;
+    const frame = (now) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const st = this.state.rec ? 'speaking' : this.state.ai, tg = TARGET[st], speaking = st === 'speaking';
+      const k = 1 - Math.exp(-dt * 2.5);
+      amp += (tg[0] - amp) * k; freq += (tg[1] - freq) * k; sp += ((speaking ? 1 : 0) - sp) * k;
+      const tv = speaking ? 0.5 + 0.5 * Math.sin(now / 140) * Math.sin(now / 370) : 0;
+      vl += (tv - vl) * (1 - Math.exp(-dt * 14));
+      clock += dt * (st === 'thinking' ? 1.35 : speaking ? 1.6 : 0.8);
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      for (const c of ctxs) {
+        const px = Math.round(c.cv.clientWidth * dpr);
+        if (c.cv.width !== px) { c.cv.width = c.cv.height = px; c.gl.viewport(0, 0, px, px); }
+        const g = c.gl;
+        g.uniform2f(c.R, c.cv.width, c.cv.height); g.uniform1f(c.T, clock); g.uniform1f(c.A, amp); g.uniform1f(c.F, freq); g.uniform1f(c.S, sp); g.uniform1f(c.V, vl);
+        g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT); g.drawArrays(g.TRIANGLES, 0, 3);
+      }
+      this.raf = requestAnimationFrame(frame);
+    };
+    this.raf = requestAnimationFrame(frame);
+  }
+  ask(text) {
+    const q = (text || '').trim(); if (!q) return;
+    this.setState(s => ({ draft: '', ai: 'thinking', thread: [...s.thread.slice(-2), { who: 'user', text: q }, { who: 'thinking' }] }));
+    clearTimeout(this.to);
+    this.to = setTimeout(() => {
+      this.setState(s => ({ ai: 'speaking', thread: [...s.thread.filter(t => t.who !== 'thinking'), { who: 'atlas', text: 'Tonight you have 2h 40m. I’d keep the onboarding email first, then review the pricing page. Northwind’s invoice can go tomorrow at 9:00 — it takes 15 minutes and isn’t due until noon.', ask: 'Schedule the invoice for 9:00 tomorrow?', yes: 'Schedule' }] }));
+      this.to = setTimeout(() => this.setState({ ai: 'idle' }), 2600);
+    }, 1600);
+  }
+  renderVals() {
+    const s = this.state;
+    const rail = [['ph-squares-four', 'Home'], ['ph-list-checks', 'Queue'], ['ph-calendar-dots', 'Deadlines'], ['ph-target', 'Focus'], ['ph-sparkle', 'Atlas'], ['ph-gear-six', 'Settings']].map(([icon, label], i) => {
+      const on = i === 4;
+      return { icon, label,
+        glow: `position:absolute;inset:6px;border-radius:50%;background:oklch(0.74 0.16 162);filter:blur(14px);opacity:${on ? 0.7 : 0}`,
+        plate: `position:absolute;inset:0;border-radius:50%;opacity:${on ? 1 : 0};background:oklch(1 0 0 / 0.14);box-shadow:inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.7),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.25),inset 0 10px 20px -12px oklch(1 0 0 / 0.14),inset 0 -12px 24px -14px oklch(0 0 0 / 0.45)`,
+        glyph: `position:relative;font-size:22px;opacity:${on ? 1 : 0.55};filter:drop-shadow(0 2px 5px oklch(0 0 0 / 0.45))` };
+    });
+    const chats = [['Q4 Launch — what can slip', 'now', 'Three tasks have slack before Friday…'], ['Weekly review', 'Mon', 'You finished 18 of 22 planned tasks.'], ['Northwind follow-ups', 'Sun', 'Drafted two replies, both waiting.'], ['Plan sprint 14', 'Fri', 'Capacity is 31h after meetings.'], ['Inbox triage', 'Thu', '4 flagged, 1 quarantined.'], ['Reading list', '12 Sep', 'Saved 6 links to Reference.']].map(([title, when, preview], i) => ({
+      title, when, preview, go: () => this.setState({ chat: i }),
+      style: `display:grid;gap:3px;padding:12px 14px;border:0;border-radius:20px;text-align:left;cursor:pointer;font:inherit;transition:background 240ms ease;background:${s.chat === i ? 'oklch(1 0 0 / 0.10)' : 'transparent'};box-shadow:${s.chat === i ? 'inset 1.5px 1.5px 1px -0.5px oklch(1 0 0 / 0.5),inset -1px -1px 1px -0.5px oklch(1 0 0 / 0.2)' : 'none'}`,
+    }));
+    const modes = ['Plan', 'Chat'].map((label, i) => ({ label, go: () => this.setState({ mode: i }),
+      style: `height:34px;padding:0 16px;border:0;border-radius:17px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;transition:all 360ms cubic-bezier(0.34,1.32,0.64,1);color:${s.mode === i ? '#fff' : 'oklch(0.66 0.01 200)'};background:${s.mode === i ? 'oklch(1 0 0 / 0.14)' : 'transparent'};box-shadow:${s.mode === i ? 'inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.6)' : 'none'}` }));
+    const TK = [['Draft FAQ section', 'Q4 Launch · 30 min', 'Tonight', 'Thu 10:00', 'ph-file-text', 215], ['Social copy batch', 'Q4 Launch · 40 min', 'Tonight', 'Thu 14:00', 'ph-chat-circle', 300], ['Press list cleanup', 'Q4 Launch · 15 min', 'Wed', 'Thu 16:30', 'ph-users', 40]];
+    const tasks = TK.map(([title, meta, from, to, glyph, h]) => ({ title, meta, from, to: s.confirmed ? to : to, glyph,
+      icon: `flex:0 0 auto;width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(145deg,oklch(0.78 0.12 ${h}),oklch(0.55 0.14 ${h}));box-shadow:inset 1px 1px 1px oklch(1 0 0 / 0.5)` }));
+    const thread = s.thread.map((t, i) => ({
+      isUser: t.who === 'user', isAtlas: t.who === 'atlas', isThinking: t.who === 'thinking', text: t.text,
+      hasTasks: !!t.tasks, tasks, hasAsk: !!t.ask && !t.done, ask: t.ask, yes: t.yes,
+      row: `display:flex;justify-content:${t.who === 'user' ? 'flex-end' : 'flex-start'};animation:at-in 420ms cubic-bezier(0.34,1.32,0.64,1) both`,
+    }));
+    const resolve = (msg) => this.setState(st => ({ thread: [...st.thread.map(t => t.ask ? { ...t, done: true } : t), { who: 'atlas', text: msg }].slice(-3), confirmed: true }));
+    const chips = [['ph-lightning', 'Plan my evening'], ['ph-calendar-dots', 'What’s due this week?'], ['ph-arrow-counter-clockwise', 'Undo last change']].map(([icon, label]) => ({ icon, label, go: () => this.ask(label) }));
+    const mm = String(Math.floor(s.recS / 60)), ss2 = String(s.recS % 60).padStart(2, '0');
+    const mkWave = (n, h) => Array.from({ length: n }, (_, i) => `flex:0 0 3px;height:${h}px;border-radius:2px;background:#fff;opacity:${0.5 + 0.5 * Math.abs(Math.sin(i * 1.7))};transform-origin:center;animation:at-bar ${0.6 + (i % 5) * 0.12}s ${(i % 7) * 0.07}s ease-in-out infinite`);
+    const label = s.rec ? 'Listening' : { idle: 'Ready', thinking: 'Thinking', speaking: 'Answering' }[s.ai];
+    return {
+      mapRef: this.mapRef, aiHead: this.aiHead, aiBig: this.aiBig,
+      rail, chats, modes, thread, chips,
+      stateLabel: label,
+      stateDot: `width:7px;height:7px;border-radius:50%;background:${s.rec ? 'oklch(0.66 0.21 25)' : 'oklch(0.82 0.16 162)'};box-shadow:0 0 10px ${s.rec ? 'oklch(0.66 0.21 25)' : 'oklch(0.82 0.16 162)'}`,
+      draft: s.draft, onDraft: (e) => this.setState({ draft: e.target.value }),
+      onKey: (e) => { if (e.key === 'Enter') this.ask(s.draft); },
+      send: () => { if (s.rec) { this.setState({ rec: false, recS: 0 }); this.ask('Plan my evening'); } else this.ask(s.draft || 'Plan my evening'); },
+      confirm: () => resolve('Done. You can undo this from the log for 30 days.'),
+      decline: () => resolve('Left as is. I’ll ask again tomorrow morning if it’s still at risk.'),
+      recOn: s.rec, recOff: !s.rec, recTime: mm + ':' + ss2, wave: mkWave(46, 26), waveSm: mkWave(30, 20),
+      toggleRec: () => this.setState(p => ({ rec: !p.rec, recS: 0 })),
+      micIcon: s.rec ? 'ph-fill ph-stop' : 'ph-fill ph-microphone',
+      micStyle: `width:46px;height:46px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;transition:all 360ms cubic-bezier(0.34,1.32,0.64,1);background:${s.rec ? 'linear-gradient(180deg,oklch(0.72 0.2 25),oklch(0.58 0.21 25))' : 'oklch(1 0 0 / 0.08)'};box-shadow:${s.rec ? 'inset 0 1.5px 1px oklch(1 0 0 / 0.5),0 8px 22px -6px oklch(0.6 0.21 25 / 0.7)' : 'inset 1px 1px 1px -0.5px oklch(1 0 0 / 0.45)'}`,
+      phoneTitle: s.rec ? 'Listening…' : s.ai === 'thinking' ? 'Thinking…' : 'What should we move tonight?',
+      phoneBody: s.rec ? 'Speak naturally. Tap stop when you’re done.' : 'Atlas reads your queue and deadlines, and always asks before it changes anything.',
+    };
+  }
+}
+</script>
+</body>
+</html>

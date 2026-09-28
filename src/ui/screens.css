@@ -1,0 +1,945 @@
+/* ---------------------------------------------------------------
+   AURORA GLASS — SCREEN HELPERS
+
+   Every screen mockup in `design-system/screens/` opens with a small
+   <style> block for the handful of things inline styles cannot express:
+   pseudo-elements, pseudo-classes, and media queries. Those rules are
+   collected here rather than repeated per screen.
+
+   Nothing here is a token or a component. If a rule can be an inline
+   style on a component, it belongs there instead.
+   --------------------------------------------------------------- */
+
+/*
+ * THE SCREEN STEPS CLEAR OF THE SYSTEM BARS; THE BACKDROP DOES NOT (APP-2).
+ *
+ * Installed on the tablet, BASE has no browser chrome above it and no
+ * address bar below it — the page runs under Android's status bar and its
+ * gesture bar. This is the one rule that keeps every screen's *content*
+ * out from under them, and it can be one rule because the shape is the
+ * same on all twenty: exactly one `.ag-page` per screen, always the
+ * element the route renders, never nested inside another.
+ *
+ * `#root` is what scopes it. `<body>` also wears `.ag-page` (index.html)
+ * and must NOT take this padding — it is the canvas the backdrop
+ * propagates to, and padding it would inset every fixed overlay's frame
+ * of reference instead of the content. `#root` is the app's mount point,
+ * so `#root .ag-page` reads as "a screen", which is exactly the set meant.
+ *
+ * **The backdrop is untouched and that is deliberate.** The grid, the pool
+ * and the grain are background *layers* on `.ag-page` itself (UI-37), and
+ * a background paints the border box — padding does not inset it. So the
+ * near-black and its grid still run edge to edge, under the status bar and
+ * under the gesture bar, and the app reads as one surface the way a native
+ * app does. Only what you can read moves.
+ *
+ * Every screen root is `h-screen` or `height: 100dvh` with
+ * `box-sizing: border-box` from Tailwind's preflight, so this takes the
+ * padding out of the content box rather than adding to the height —
+ * nothing overflows and no screen grows a scrollbar it did not have.
+ *
+ * **The desktop rails stay clear too, and that was measured rather than
+ * assumed.** Most of these roots are also the scroll container, and the
+ * rails inside them are `position: sticky; top: 0` — so the question was
+ * whether a scrolled rail sticks to the padding edge (under the status
+ * bar) or the content edge. Driven in a real browser with `--safe-t`
+ * forced to 28px: the rail's box sits at y=28 at rest **and at y=28
+ * scrolled 355px**. Sticky resolves against the content box, so this rule
+ * holds them off the bar as well.
+ *
+ * The one screen root that carried its own inline `padding` — ProjectView's
+ * "project not found" — had it moved onto the block inside it, because an
+ * inline style outranks this and would have silently switched it off.
+ *
+ * `position: fixed` chrome is NOT covered here and cannot be: a fixed
+ * element is positioned against the viewport, not against this padding
+ * box. The app's floating bars each add `--safe-b` (or `--safe-t`) to
+ * their own offset, at the call site, where the number they are adding to
+ * is visible.
+ *
+ * All four values are 0 in a desktop browser, so this moved no baseline.
+ */
+#root .ag-page {
+  padding-top: var(--safe-t);
+  padding-right: var(--safe-r);
+  padding-bottom: var(--safe-b);
+  padding-left: var(--safe-l);
+}
+
+/* Two-line clamp for card descriptions. Tailwind ships `line-clamp-2`,
+   but the mockups set this on elements otherwise styled entirely with
+   tokens, and keeping the name they use makes a mockup paste in clean. */
+.ag-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* One line, ellipsised — the mockups' `.clamp1`. Not `white-space: nowrap`
+   plus `text-overflow`: this clamps a run that contains its own inline
+   spans, where the ellipsis has to land inside a child. */
+.ag-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/*
+ * Card actions: hidden at rest on pointer devices so a grid of cards
+ * stays calm, but ALWAYS visible on touch (no hover exists there) and
+ * whenever focus is inside, so keyboard focus never lands on an
+ * invisible control.
+ *
+ * This cannot be React hover state — `:focus-within` and the coarse
+ * pointer query have no JS equivalent that is worth the machinery, and
+ * getting the touch case wrong makes the ⋯ menu unreachable on the
+ * tablet, which is half of what this app runs on.
+ *
+ * `[data-open="true"]` keeps the trigger visible while its own menu is
+ * open, since the pointer is then over the panel and not the card.
+ */
+.ag-card-actions {
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-glass);
+}
+.ag-card:hover .ag-card-actions,
+.ag-card-actions:focus-within,
+.ag-card-actions[data-open='true'] {
+  opacity: 1;
+}
+@media (hover: none), (pointer: coarse) {
+  .ag-card-actions { opacity: 1; }
+}
+
+/*
+ * A drag grip, on exactly the same terms as `.ag-card-actions`: hidden at
+ * rest so a stack of forty rows stays calm, revealed on hover, on focus, and
+ * unconditionally on a touch screen where no hover exists.
+ *
+ * `screens/project.html`'s `.grip` — the rule it pairs with `.racts` in the
+ * same `@media` block, which is `.ag-card-actions` above. Kept separate from
+ * that class because the two are revealed by hovering different things: a
+ * grip by the header that owns it (`.ag-colhead`), card actions by the card
+ * they act on. Merging them would make hovering a list column reveal the ⋯
+ * on all forty of its rows, since `.ag-card-actions` is matched as a
+ * DESCENDANT.
+ */
+.ag-card-grip {
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-glass);
+}
+.ag-colhead:hover .ag-card-grip,
+.ag-card-grip:focus-visible,
+.ag-card-grip:focus-within {
+  opacity: 1;
+}
+@media (hover: none), (pointer: coarse) {
+  .ag-card-grip { opacity: 1; }
+}
+
+/*
+ * A row that is finished. `screens/project.html`'s `.trow[data-done]`: the
+ * whole card dims rather than only its title, and comes back most of the way
+ * on hover so a completed row can still be read and reopened.
+ *
+ * This is a class and not an inline style because the hover half of it has no
+ * inline expression, and splitting the pair across the two would leave the
+ * resting opacity somewhere the hover rule cannot be read beside it.
+ *
+ * **The board card does not read this rule and restates the numbers** — see
+ * the `motion.div` note on `[data-locked]` below, which applies to both. It
+ * is the same reason, and this rule was the one it went unnoticed on: the
+ * board's `project/TaskRow.tsx` set `data-done` and dimmed not at all from
+ * its port until the numbers were folded into its `animate`. `ListTable.tsx`
+ * is now the only row that gets its done dim from here.
+ */
+.ag-row[data-done='true'] {
+  opacity: 0.48;
+  transition: opacity var(--dur-fast) var(--ease-glass);
+}
+.ag-row[data-done='true']:hover {
+  opacity: 0.74;
+}
+
+/*
+ * A row that is LOCKED — waiting on unfinished work (item 19, `isTaskLocked`).
+ *
+ * The same dim as a finished row, at a different depth and with a different
+ * hover, because the two states want opposite things from you. A done row is
+ * over: 0.48, back to 0.74, enough to read it if you go looking. A locked row
+ * is the one thing on the board you may actually have to act on — opening it
+ * is how you fix the dependency that locked it — so it rests **lighter**
+ * (0.62) and comes back **all the way** under the pointer. Dimming a row and
+ * then making it hard to reach into would be the design arguing with itself.
+ *
+ * Rendered as a class for the same reason `data-done` is: the hover half has
+ * no inline expression, and splitting the pair would leave the resting opacity
+ * where the hover rule cannot be read next to it.
+ *
+ * **A `motion.div` cannot use this rule and has to restate the numbers.**
+ * Framer's `animate` writes `style.opacity` INLINE, which beats any class, so
+ * the board card and New Session's row carry `opacity: 0.62` in their own
+ * `animate`/`whileHover` and point back here. `ListTable`'s row is a plain
+ * `div` and is the one that actually reads it. Worth knowing before wondering
+ * why a row with `data-locked="true"` on it is not dimming: check whether the
+ * thing you are looking at is animated.
+ *
+ * **This applies to `[data-done]` above just as much, and the board card now
+ * restates those numbers too** (0.48 / 0.74, in the same `animate` block).
+ * That one is the cautionary case: nobody wrote the note when the card was
+ * ported, the attribute was on the wrapper looking correct, and a finished
+ * task sat at full opacity on the board while reading 0.48 in the list view
+ * next to it. An attribute present is not a rule applied.
+ *
+ * **The two attributes are never both `true`**, and that is enforced upstream
+ * rather than here: `isTaskLocked` returns false for a completed task, so a
+ * done row cannot also be a locked one. Worth saying because the two rules
+ * carry equal specificity and this one is written second — if the store rule
+ * ever went, a finished row would start reading as merely locked.
+ */
+.ag-row[data-locked='true'] {
+  opacity: 0.62;
+  transition: opacity var(--dur-fast) var(--ease-glass);
+}
+.ag-row[data-locked='true']:hover {
+  opacity: 1;
+}
+
+/*
+ * The "add something here" affordance — a dashed outline that fills in on
+ * hover. `.addrow` in `screens/project.html`, and the same treatment
+ * `home.html`, `deadlines.html`, `session.html`, `scoring.html` and
+ * `TaskSheet.jsx` all give theirs.
+ *
+ * UI-13 asserted that "Aurora Glass has no dashed anything" and UI-16 and
+ * UI-17 both built on it. It was an inference made with no mockup in the
+ * repo, and the bundle contradicts it in seven places: dashed is precisely
+ * how this system draws a slot that has nothing in it yet, which is what
+ * separates it from a disabled control (those are solid and dimmed).
+ */
+.ag-addrow {
+  border: 1px dashed var(--line-soft);
+  color: var(--fg-3);
+  background: transparent;
+  transition: var(--t-hover);
+}
+.ag-addrow:hover {
+  border-color: var(--accent-hairline);
+  color: var(--fg-1);
+  background-image: var(--glass-fill-1);
+}
+
+/*
+ * A pane that scrolls sideways rather than crushing its columns — the
+ * mockups' `.table-scroll`, with the thin `--line-strong` thumb they give it.
+ *
+ * Anything inside one that opens a panel must portal out of it: an in-flow
+ * popover cannot escape a scrollport. `screens/project.html` says the same
+ * thing the other way round, and is why its BOARD has no scroller at all.
+ */
+.ag-scroll-x {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.ag-scroll-x::-webkit-scrollbar { height: 8px; }
+.ag-scroll-x::-webkit-scrollbar-track { background: transparent; }
+.ag-scroll-x::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: var(--r-pill);
+}
+
+/*
+ * The project board's column grid — `screens/project.html`'s own:
+ * `repeat(auto-fit, minmax(408px, 1fr))`, which is two columns on a 1440
+ * window and three on anything wider, rather than the fixed `md:grid-cols-2`
+ * UI-16 built it with. `align-items: start` so a short list does not stretch
+ * to the height of the tallest one beside it.
+ *
+ * A class rather than an inline style because `SortableBoard` takes a
+ * `className` and not a `style`.
+ */
+.ag-board-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-card);
+  align-items: start;
+}
+@media (min-width: 960px) {
+  .ag-board-grid { grid-template-columns: repeat(auto-fit, minmax(408px, 1fr)); }
+}
+
+/*
+ * Cover placeholder: fine diagonal hairlines behind the glass, never a
+ * gradient and never a stock illustration. The user's own cover image
+ * replaces the background here, desaturated, at the same size.
+ */
+.ag-cover {
+  background-color: var(--void-1);
+  background-image: repeating-linear-gradient(135deg, oklch(1 0 0 / 0.045) 0 1px, transparent 1px 9px);
+}
+
+/* Placeholders are --fg-4 everywhere. Pseudo-elements need a sheet. */
+.ag-field::placeholder {
+  color: var(--fg-4);
+  opacity: 1;
+}
+
+/*
+ * `type="search"` is worth having — it is what puts a "search" key on a
+ * tablet's keyboard rather than a return key — but Chromium draws its own
+ * clear cross inside the field, and a native control sitting in a pane of
+ * glass reads as browser chrome resting on the surface, the same objection
+ * `.ag-scroll` answers for scrollbars. It is also the one glyph on the screen
+ * not drawn at the house 1.5 stroke. The field is cleared by closing it.
+ */
+.ag-field::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+/*
+ * A status you have NOT chosen is not live.
+ *
+ * `StatusPills` builds its three options out of `StatusPill` itself, so the
+ * options keep the system's own hues and the system's own signalling — but
+ * that means the "In Progress" option arrives carrying `running`'s ripple,
+ * and `ag-ripple` is `infinite`. An unchosen option therefore pulsed forever,
+ * which is wrong twice over: the ripple is this design system's one signal
+ * that a state is genuinely LIVE, and a perpetual animation on a greyed-out
+ * form control is noise on a screen whose whole job is deciding one thing.
+ *
+ * It was also unphotographable. A never-ending CSS animation is not on the
+ * screenshot harness's fake clock — `clock.install` drives timers and
+ * `requestAnimationFrame`, not the compositor — so every capture of the Score
+ * screen landed on a different frame of the pulse and `scoring-recurrence`
+ * failed its diff on every run, by a different amount each time.
+ *
+ * `!important` because the ripple's `animation` is an inline style written by
+ * `StatusPill`, and no selector outranks one.
+ */
+.ag-status-choice[aria-pressed='false'] * {
+  animation: none !important;
+}
+
+/*
+ * A sheet's own scroller. The dialog mockups (`.np-scroll` in
+ * design-system/screens/home.html) inset their content inside a Dialog
+ * that was handed `padding: 0`, and hide the scrollbar while doing it:
+ * a visible track inside 40px of glass reads as a piece of browser
+ * chrome sitting on the surface rather than part of the sheet. The
+ * content still scrolls — only the track is gone, which is why this is
+ * used on sheets and never on a page.
+ */
+.ag-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ag-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Slider — the painted half of `src/ui/forms/Slider.tsx`.
+ *
+ * The control is a real `<input type="range">` with `opacity: 0` over four
+ * painted layers, which is the real `Slider.jsx`'s own structure. The input
+ * still owns the keyboard, the `slider` role and the pointer; the layers are
+ * `pointer-events: none` so nothing intercepts a press.
+ *
+ * None of this can be an inline style: the layers answer to the input's
+ * `:hover`, `:active` and `:focus-visible` through a sibling combinator, and
+ * the fill's width is arithmetic on a custom property. The component passes
+ * the geometry down (`--ag-slider-pct` as a unitless fraction, the track and
+ * bead sizes, the grab ratio and the four tone colours) and this sheet spends
+ * it.
+ *
+ * The input's OWN thumb is still sized here even though it is invisible: a
+ * range input maps the pointer through its thumb's inset, so the fill and the
+ * bead can only agree with the value if they are offset by the same width.
+ * See note 3 in Slider.tsx. The `-moz-` rule is a duplicate rather than a
+ * shared selector list on purpose — a selector list containing ONE
+ * pseudo-element the engine does not recognise invalidates the whole rule.
+ */
+.ag-slider {
+  display: grid;
+  gap: var(--sp-3);
+  width: 100%;
+}
+
+.ag-slider__rail {
+  position: relative;
+  /* The finger target is this box; the visible track is a seventh of it.
+     Never shrink it to the track height — `--hit-min` is the floor for
+     anything touched, and half of this product runs on a tablet. */
+  height: var(--hit-min);
+}
+
+.ag-slider__input {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+.ag-slider__input:disabled { cursor: not-allowed; }
+.ag-slider__input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--ag-slider-thumb);
+  height: var(--ag-slider-thumb);
+}
+.ag-slider__input::-moz-range-thumb {
+  width: var(--ag-slider-thumb);
+  height: var(--ag-slider-thumb);
+  border: 0;
+}
+
+.ag-slider__track,
+.ag-slider__fill,
+.ag-slider__bead {
+  position: absolute;
+  pointer-events: none;
+}
+
+.ag-slider__track {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--ag-slider-track);
+  margin-top: calc(var(--ag-slider-track) / -2);
+  border-radius: var(--r-pill);
+  background-image: var(--glass-well);
+  box-shadow: var(--glass-well-shadow);
+}
+
+/* Ends under the CENTRE of the bead, which is inset by half its own width at
+   each end — not at the raw percentage. */
+.ag-slider__fill {
+  left: 0;
+  top: 50%;
+  height: var(--ag-slider-track);
+  margin-top: calc(var(--ag-slider-track) / -2);
+  width: calc(var(--ag-slider-thumb) / 2 + var(--ag-slider-pct) * (100% - var(--ag-slider-thumb)));
+  border-radius: var(--r-pill);
+  background-image: linear-gradient(90deg, var(--ag-slider-from), var(--ag-slider-to));
+  box-shadow: 0 0 14px -2px var(--ag-slider-glow);
+  transition: width var(--dur-base) var(--ease-glass);
+}
+
+/* A frost bead, not a glass pane: flat `--fg-1` over a drop shadow and the
+   tone's own emission. It grows on grab — 18 to 22px — which the prompt calls
+   the whole point of the control. `--ease-spring` is the system's curve for
+   handles. */
+.ag-slider__bead {
+  top: 50%;
+  left: calc(var(--ag-slider-thumb) / 2 + var(--ag-slider-pct) * (100% - var(--ag-slider-thumb)));
+  width: var(--ag-slider-thumb);
+  height: var(--ag-slider-thumb);
+  border-radius: var(--r-circle);
+  background: var(--fg-1);
+  box-shadow: 0 3px 10px oklch(0 0 0 / 0.55), var(--ag-slider-bead-glow);
+  transform: translate(-50%, -50%);
+  transition:
+    left var(--dur-base) var(--ease-glass),
+    scale var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-glass);
+}
+
+/* Grab: the bead swells about its own centre, so the pointer mapping does not
+   move with it, and the fill stops easing — it has to track the finger. */
+.ag-slider__input:active:not(:disabled) ~ .ag-slider__bead { scale: var(--ag-slider-grab); }
+.ag-slider__input:active:not(:disabled) ~ .ag-slider__bead,
+.ag-slider__input:active:not(:disabled) ~ .ag-slider__fill { transition: none; }
+
+/* The focus ring lands on the bead, not around the 44px box the outline in
+   base.css would otherwise draw. `data-ag-field` on the input turns that off. */
+.ag-slider__input:focus-visible ~ .ag-slider__bead {
+  box-shadow:
+    0 3px 10px oklch(0 0 0 / 0.55),
+    0 0 0 var(--focus-ring-width) var(--focus-ring-color),
+    var(--ag-slider-bead-glow);
+}
+
+.ag-slider__scale {
+  display: flex;
+  justify-content: space-between;
+  font: var(--type-kicker);
+  letter-spacing: var(--tracking-kicker);
+  color: var(--fg-4);
+}
+.ag-slider__scale-now { color: var(--ag-slider-to); }
+
+.ag-slider:has(.ag-slider__input:disabled) { opacity: 0.42; }
+
+/*
+ * Checkbox — the CSS half of `src/ui/forms/Checkbox.tsx` (UI-32).
+ *
+ * The real control is a hidden `<input>`; the box beside it is the drawing.
+ * So the focus ring has to be forwarded across, which is the same sibling
+ * combinator the slider bead needs and for the same reason. The input keeps
+ * its size at zero rather than `display: none`, because a display-none input
+ * cannot be focused at all.
+ */
+.ag-check__input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.ag-check__input:focus-visible ~ .ag-check__box {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/*
+ * A FIELD'S CONTENTS MAY NEVER SET THE FIELD'S WIDTH.
+ *
+ * `task-fields/Labelled.tsx` is the wrapper every field in the task sheet and
+ * on Needs Attention is drawn inside, and this is the one rule that keeps a
+ * field inside its column. Without it a long task title pushed the "Depends
+ * on" row — its chips, its search field and its `+` — clean out of the sheet:
+ * 357px past the panel edge at 1440, and 236px into the neighbouring column
+ * at 1180x820, where the sheet has folded to two.
+ *
+ * WHY THE FIELDS' OWN TRUNCATION DID NOT SAVE THEM. It was all present and all
+ * working. `PickerButton`'s label is `overflow: hidden / text-overflow:
+ * ellipsis / white-space: nowrap` on a `min-width: 0` span; `FieldChip`'s is
+ * the same; `LinksEditor`'s two inputs are `flex: 1, min-width: 0`. Every one
+ * of them shrinks correctly ONCE IT IS TOLD ITS WIDTH. The failure is upstream
+ * of that, in how the width is decided: `overflow: hidden` clips what is
+ * painted but does not reduce an element's MIN-CONTENT SIZE, and
+ * `white-space: nowrap` makes that min-content the full run of the text —
+ * a 92-character title measured 724px. Every grid and flex ITEM in between
+ * defaults to `min-width: auto`, whose automatic minimum size is exactly that
+ * min-content, and a grid's `auto` track can never size below the largest such
+ * minimum. So the 724px floor climbed the chain — chip → wrap row →
+ * `DependencyPicker`'s grid → `Labelled`'s grid — and the first ancestor with
+ * an explicit `min-width: 0` did not stop it: that property caps what the
+ * ancestor ITSELF may shrink to, and does nothing about the track inside it.
+ * `TaskSheet`'s columns are `minmax(0, 1fr)` and were never the problem.
+ *
+ * WHY THIS IS A SUBTREE RESET AND NOT ONE `minmax(0, 1fr)`. The floor is set
+ * by the INNERMOST box, so no wrapper can fix it from above — `Labelled` alone
+ * fixed only `Labelled`, and `DependencyPicker`'s own grid one level down
+ * still floored at 724. Neutralising `min-width: auto` everywhere inside a
+ * field is what covers the fields nobody has hit yet, which is the point:
+ * every editor in `task-fields/` writes its own root grid, and the next one
+ * would arrive with the same bug. Inline `min-width`s still win, which is how
+ * `ScoreFactorBar`'s 3px bar segments and `SubtaskTree`'s 160px column keep
+ * theirs.
+ */
+.ag-labelled,
+.ag-labelled * {
+  min-width: 0;
+}
+
+/*
+ * Task sheet — the container-query half of `src/ui/layout/TaskSheet.tsx`.
+ *
+ * The sheet lays a task's fields across THREE columns, and the number of
+ * columns has to follow the width of the SHEET, not the width of the window.
+ * A `@media` query cannot say that: the panel is `min(width, 100vw − padding)`,
+ * so the viewport width at which three columns start to fit moves whenever the
+ * `width` prop does, and every screen that opens a sheet would have to know
+ * that number. `@container` asks the element itself, which is the question.
+ *
+ * WHERE THE TWO FOLDS COME FROM (UI-26). The real `TaskSheet.jsx` reads
+ * `window.innerWidth` at 1260 and 880, and `TaskSheet.prompt.md` states both:
+ * *"Falls to two columns under 1260px and one under 880px."* It can ask the
+ * window because its sheet is the only thing on its page. We ask the panel, so
+ * those two window widths are converted here into the panel widths they
+ * produce. The panel is `min(1240px, 100vw − 2 × --sp-7)` and `--sp-7` is
+ * 24px, so a 1260px window gives a 1212px sheet and an 880px window gives an
+ * 832px one. Those are the thresholds below, and the folds therefore land
+ * exactly where the source's do.
+ *
+ * The container is declared on the PANEL (`TaskSheet.tsx`'s `PANEL` style),
+ * not on the scroller, so the header and footer insets can fold with the
+ * columns — they are the scroller's siblings, not its children. It also has to
+ * be the panel for a duller reason: the body's own padding folds too, and a
+ * container that changes its own inline size in answer to a query about that
+ * size is a cycle.
+ *
+ * `container-type: inline-size` computes to `contain: layout style inline-size`,
+ * and `contain: layout` makes this element the containing block for any
+ * `position: fixed` descendant. That costs nothing here: the Dialog panel it
+ * sits on carries a `transform` and a `filter`, which already do exactly the
+ * same thing, so everything inside a sheet that needs to escape
+ * (`RecurrencePicker`'s and `EstimateField`'s popovers) already portals to
+ * `<body>` and says so.
+ */
+.ag-task-sheet-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-card);
+  align-items: start;
+}
+
+/* The insets tighten below the two-column fold — the source's `mid` branch. */
+.ag-task-sheet-head { padding: var(--sp-6) var(--sp-6) var(--sp-5); }
+.ag-task-sheet-body { padding: var(--sp-6); }
+.ag-task-sheet-foot { padding: var(--sp-5) var(--sp-6); }
+
+@container ag-task-sheet (min-width: 832px) {
+  .ag-task-sheet-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ag-task-sheet-head { padding: var(--sp-8) var(--pad-sheet) var(--sp-7); }
+  .ag-task-sheet-body { padding: var(--sp-7) var(--pad-sheet); }
+  .ag-task-sheet-foot { padding: var(--sp-6) var(--pad-sheet); }
+}
+
+/* Not three equal tracks. The score column carries the widest control in the
+   sheet — the 2×2 Eisenhower grid — and the context column the narrowest rows,
+   so the source weights them 1.05 / 1 / 0.95 rather than letting the quadrant
+   grid set the width for all three. */
+@container ag-task-sheet (min-width: 1212px) {
+  .ag-task-sheet-cols {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.95fr);
+  }
+}
+
+/*
+ * A control that steps back until it is wanted — item 12's "edit and resend"
+ * on the last message you sent.
+ *
+ * `atlas.html` mounts that button on hover (`opacity: hover ? 1 : 0`), and
+ * copying that literally would break it on the one device Shreekant actually
+ * holds: a tablet has no hover, so the control would be permanently invisible
+ * and permanently pressable. **So it is always there and always reachable**,
+ * at a third opacity, and comes up to full on hover or when focused — which
+ * covers the mouse, the keyboard and the finger with one rule.
+ *
+ * `:focus-within` rather than `:focus`, because the thing being focused is the
+ * button inside the span, not the span. `@media (hover: none)` lifts the
+ * resting state on touch, where there is no hover to promise the rest.
+ */
+.ag-reveal {
+  opacity: 0.35;
+  transition: opacity var(--dur-base) var(--ease-glass);
+}
+.ag-reveal:hover,
+.ag-reveal:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  .ag-reveal { opacity: 0.7; }
+}
+
+/* ---------------------------------------------------------------
+   MARKDOWN (item 13B)
+
+   Atlas writes Markdown, so this is the type spec for a reply. It is
+   `design-system/screens/atlas.html`'s own `.md-*` block, carried
+   across with its class names intact so the mockup and the app can be
+   diffed by eye — which is what the header of this file asks for.
+
+   The mockup's governing rule, in its own words: *"Nothing here is a
+   card: prose sits directly on the page, and only code gets a well."*
+   Sans carries prose, mono carries code, and no mark takes a colour —
+   emphasis is weight and brightness, never accent. The emerald ration
+   in `design-system/readme.md` is why: an assistant that highlighted
+   its own bold text would spend the accent on nothing.
+
+   Three rules below have no counterpart in the mockup and each says
+   why where it stands: `.md-a`, `.md-quote`, and the reduced-motion
+   half of the link transition.
+   --------------------------------------------------------------- */
+.md {
+  font: var(--type-body);
+  color: var(--fg-2);
+  letter-spacing: var(--tracking-ui);
+  overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
+}
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+
+.md-p {
+  margin: 0 0 var(--sp-5);
+  max-width: 64ch;
+  line-height: var(--leading-relaxed);
+  text-wrap: pretty;
+}
+
+.md-h1 {
+  margin: var(--sp-8) 0 var(--sp-4);
+  font: var(--type-title);
+  font-size: var(--text-lg);
+  letter-spacing: var(--tracking-title);
+  color: var(--fg-1);
+}
+
+/* A KICKER, NOT A HEADING — the mockup is explicit, and it is why this
+   is uppercase at `--text-2xs` rather than a smaller `.md-h1`. */
+.md-h2 {
+  margin: var(--sp-7) 0 var(--sp-3);
+  font: var(--type-kicker);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.md strong { color: var(--fg-1); font-weight: var(--weight-semi); }
+.md em { color: var(--fg-2); font-style: italic; }
+
+.md-ul,
+.md-ol {
+  margin: 0 0 var(--sp-5);
+  padding: 0;
+  list-style: none;
+  max-width: 64ch;
+  counter-reset: md;
+}
+.md-ul > li,
+.md-ol > li {
+  position: relative;
+  padding-left: var(--sp-8);
+  margin-bottom: var(--sp-3);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+.md-ul > li::before {
+  content: "";
+  position: absolute;
+  left: var(--sp-4);
+  top: 0.62em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--fg-4);
+}
+.md-ol > li { counter-increment: md; }
+.md-ol > li::before {
+  content: counter(md);
+  position: absolute;
+  left: 0;
+  top: 0.06em;
+  font: var(--type-kicker);
+  font-size: var(--text-2xs);
+  color: var(--fg-4);
+  width: var(--sp-6);
+  text-align: right;
+}
+
+/* Inline code — a hairline well, never a coloured chip. */
+.md-code {
+  font: var(--type-numeric);
+  font-size: 0.86em;
+  color: var(--fg-1);
+  padding: 0.12em 0.42em;
+  border-radius: var(--r-2xs);
+  background-image: var(--glass-well);
+  box-shadow: var(--glass-well-shadow);
+  overflow-wrap: anywhere;
+}
+
+/* Fenced code — a well cut into the glass, with its own scroll so a
+   long unbroken line scrolls INSIDE the block and never widens the
+   page. That is the whole reason this is not just a `<pre>`: the
+   transcript is a flex column, and a child that grows past it pushes
+   the composer and the chat list sideways with it. */
+.md-codeblock {
+  margin: 0 0 var(--sp-5);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background-image: var(--glass-well);
+  box-shadow: var(--glass-well-shadow);
+  max-width: 100%;
+  min-width: 0;
+}
+.md-codebar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--line-faint);
+  font: var(--type-kicker);
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+.md-pre {
+  margin: 0;
+  padding: var(--sp-5) var(--sp-6);
+  font: var(--type-numeric);
+  font-size: var(--text-sm);
+  line-height: 1.62;
+  color: var(--fg-2);
+  white-space: pre;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  min-width: 0;
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.md-pre::-webkit-scrollbar { height: 6px; }
+.md-pre::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: var(--r-pill);
+}
+
+/*
+ * A LINK. Not in the mockup's `.md-*` block, because the reply it draws
+ * has none — but Atlas's `<outside_text>` tells it to "name the source
+ * and give the link" after anything it read on the web, so a real reply
+ * has them and they were arriving as text nobody could tap.
+ *
+ * The treatment is the one the rest of the block already uses: the mark
+ * is `--fg-1` and a hairline, exactly as `strong` is `--fg-1` and
+ * weight. **No blue and no accent** — `design-system/readme.md` rations
+ * emerald to the one action a screen wants next, and a citation is not
+ * it. The underline is `--line-strong`, the same hairline that draws
+ * every divider in the app, and comes up to `--fg-1` on hover so the
+ * thing under the pointer is unambiguous without a colour change.
+ *
+ * `text-underline-offset` rather than a border: an underline that
+ * follows the text is the one that survives a link wrapping onto a
+ * second line, which a URL in prose does constantly.
+ */
+.md-a {
+  color: var(--fg-1);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  transition: text-decoration-color var(--dur-base) var(--ease-glass);
+}
+.md-a:hover,
+.md-a:focus-visible { text-decoration-color: var(--fg-1); }
+
+/*
+ * A BLOCKQUOTE, also not in the mockup, and here for a specific reason
+ * rather than for completeness: `<outside_text>` asks Atlas to quote a
+ * stranger's text back — including the line of an attempted injection,
+ * which is the one case where it matters that the reader can see where
+ * Atlas's own voice stops.
+ *
+ * The treatment is not invented either. It is the hairline-and-inset
+ * `ChatPage`'s thought aside already uses, which is this app's existing
+ * answer to "set apart, quieter, still prose".
+ */
+.md-quote {
+  margin: 0 0 var(--sp-5);
+  padding-left: var(--sp-5);
+  border-left: 1px solid var(--line-soft);
+  color: var(--fg-3);
+  max-width: 64ch;
+  line-height: var(--leading-relaxed);
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------
+   THE CHAT SCREEN, REDRAWN (item 13G)
+
+   `design-system/screens/atlas.html`, rewritten whole in the
+   2026-09-08 export. Everything below is carried across from it with
+   its class names intact, for the same reason the `.md-*` block above
+   keeps its: the mockup and the app are meant to be diffable by eye.
+
+   The two masks are the part the previous draft of this screen was
+   missing entirely — `ChatPage.tsx` had no `maskImage` anywhere — and
+   they are most of why Shreekant read the old screen as *"out of
+   several view"*. A turn that dissolves under the composer reads as a
+   column that continues; a turn sliced flat by the composer's edge
+   reads as one that has been cut off.
+   --------------------------------------------------------------- */
+
+/* The transcript dissolves into the page at both ends instead of
+   being sliced by them. `--sp-7` at the top (under the header) and
+   `--sp-8` at the bottom (under the composer), which is the mockup's
+   own asymmetry: there is more to hide at the bottom because that is
+   where the glass pill sits. */
+.ag-transcript {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--sp-7), #000 calc(100% - var(--sp-8)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--sp-7), #000 calc(100% - var(--sp-8)), transparent 100%);
+}
+
+/* The composer's field, masked at `--sp-5`/`--sp-4` so a draft longer
+   than the field fades at the edges rather than being cut mid-letter.
+   The wrapper is masked and not the textarea itself: a mask on a
+   focused form control takes the caret with it at the fade. */
+.ag-composer-field {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--sp-5), #000 calc(100% - var(--sp-4)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--sp-5), #000 calc(100% - var(--sp-4)), transparent 100%);
+}
+
+/* The mockup's `.ag-scroll` is not repeated here — this file already
+   carries it, above. */
+
+/* ---------------------------------------------------------------
+   TOOL RESULT ROW — a line of type on a hairline, not a card. Four
+   facts only: title, status, deadline, project. No ids, ever.
+   Motion 3 of 4 lives here: the shadow lift, box-shadow on
+   `--dur-base`, and nothing else moves.
+   --------------------------------------------------------------- */
+.tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-5);
+  min-height: 46px;
+  padding: var(--sp-3) var(--sp-5);
+  border-radius: var(--r-sm);
+  box-shadow: none;
+  background-image: none;
+  transition: box-shadow var(--dur-base) var(--ease-glass),
+              background-image var(--dur-fast) var(--ease-glass);
+}
+.tr:hover,
+.tr:focus-visible {
+  background-image: var(--glass-fill-1);
+  box-shadow: var(--glass-rim-1), var(--glass-cast-1);
+}
+.tr-title {
+  min-width: 0;
+  font: var(--type-body);
+  font-size: var(--text-sm);
+  color: var(--fg-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tr-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  justify-content: flex-end;
+  font: var(--type-caption);
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.tr-due {
+  font: var(--type-numeric);
+  font-size: var(--text-xs);
+  color: var(--fg-2);
+}
+.tr-proj {
+  color: var(--fg-3);
+  max-width: 15ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The mockup folds the row onto two lines below 900, which is where
+   the meta column stops fitting beside a real title. */
+@media (max-width: 900px) {
+  .tr { grid-template-columns: minmax(0, 1fr); }
+  .tr-meta { justify-content: flex-start; gap: var(--sp-4); }
+  .tr-proj { max-width: 22ch; }
+}

@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Atlas</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* The transcript dissolves into the page under the composer instead of
+     being sliced by its edge. */
+  .ag-transcript {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--sp-7), #000 calc(100% - var(--sp-8)), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 var(--sp-7), #000 calc(100% - var(--sp-8)), transparent 100%);
+  }
+
+  /* ---------------------------------------------------------------
+     MARKDOWN — Atlas writes in Markdown, so this is the type spec for
+     a reply. Sans carries prose; mono carries code. Nothing here is a
+     card: prose sits directly on the page, and only code gets a well.
+     --------------------------------------------------------------- */
+  .md { font: var(--type-body); color: var(--fg-2); letter-spacing: var(--tracking-ui); overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
+  .md > :first-child { margin-top: 0; }
+  .md > :last-child { margin-bottom: 0; }
+  .md-p { margin: 0 0 var(--sp-5); max-width: 64ch; line-height: var(--leading-relaxed); text-wrap: pretty; }
+  .md-h1 {
+    margin: var(--sp-8) 0 var(--sp-4);
+    font: var(--type-title); font-size: var(--text-lg); letter-spacing: var(--tracking-title);
+    color: var(--fg-1);
+  }
+  .md-h2 {
+    margin: var(--sp-7) 0 var(--sp-3);
+    font: var(--type-kicker); font-size: var(--text-2xs);
+    letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-3);
+  }
+  .md strong { color: var(--fg-1); font-weight: var(--weight-semi); }
+  .md em { color: var(--fg-2); font-style: italic; }
+  .md-ul, .md-ol { margin: 0 0 var(--sp-5); padding: 0; list-style: none; max-width: 64ch; counter-reset: md; }
+  .md-ul > li, .md-ol > li {
+    position: relative; padding-left: var(--sp-8);
+    margin-bottom: var(--sp-3); line-height: var(--leading-normal); text-wrap: pretty;
+  }
+  .md-ul > li::before {
+    content: ""; position: absolute; left: var(--sp-4); top: 0.62em;
+    width: 4px; height: 4px; border-radius: 50%; background: var(--fg-4);
+  }
+  .md-ol > li { counter-increment: md; }
+  .md-ol > li::before {
+    content: counter(md); position: absolute; left: 0; top: 0.06em;
+    font: var(--type-kicker); font-size: var(--text-2xs); color: var(--fg-4);
+    width: var(--sp-6); text-align: right;
+  }
+  /* Inline code — a hairline well, never a coloured chip. */
+  .md-code {
+    font: var(--type-numeric); font-size: 0.86em; color: var(--fg-1);
+    padding: 0.12em 0.42em; border-radius: var(--r-2xs);
+    background-image: var(--glass-well); box-shadow: var(--glass-well-shadow);
+    overflow-wrap: anywhere;
+  }
+  /* Fenced code — a well cut into the glass, with its own scroll so a
+     long unbroken line scrolls INSIDE the block and never widens the page. */
+  .md-codeblock {
+    margin: 0 0 var(--sp-5); border-radius: var(--r-sm); overflow: hidden;
+    background-image: var(--glass-well); box-shadow: var(--glass-well-shadow);
+    max-width: 100%; min-width: 0;
+  }
+  .md-codebar {
+    display: flex; align-items: center; gap: var(--sp-4);
+    padding: var(--sp-3) var(--sp-5);
+    border-bottom: 1px solid var(--line-faint);
+    font: var(--type-kicker); letter-spacing: var(--tracking-kicker);
+    text-transform: uppercase; color: var(--fg-4);
+  }
+  .md-pre {
+    margin: 0; padding: var(--sp-5) var(--sp-6);
+    font: var(--type-numeric); font-size: var(--text-sm); line-height: 1.62; color: var(--fg-2);
+    white-space: pre; overflow-x: auto; overscroll-behavior: contain; min-width: 0; max-width: 100%;
+    scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
+  }
+  .md-pre::-webkit-scrollbar { height: 6px; }
+  .md-pre::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: var(--r-pill); }
+
+  /* ---------------------------------------------------------------
+     TOOL RESULT ROW — a line of type on a hairline, not a card. Four
+     facts only: title, status, deadline, project. No ids, ever.
+     Motion 3 of 4: the shadow lift, box-shadow on --dur-base.
+     --------------------------------------------------------------- */
+  .tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center; gap: var(--sp-3) var(--sp-5);
+    min-height: 46px; padding: var(--sp-3) var(--sp-5);
+    border-radius: var(--r-sm); box-shadow: none; background-image: none;
+    transition: box-shadow var(--dur-base) var(--ease-glass),
+                background-image var(--dur-fast) var(--ease-glass);
+  }
+  .tr:hover, .tr:focus-visible {
+    background-image: var(--glass-fill-1);
+    box-shadow: var(--glass-rim-1), var(--glass-cast-1);
+  }
+  .tr-title {
+    min-width: 0; font: var(--type-body); font-size: var(--text-sm); color: var(--fg-1);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tr-meta {
+    display: flex; align-items: center; gap: var(--sp-5); justify-content: flex-end;
+    font: var(--type-caption); color: var(--fg-3); white-space: nowrap;
+  }
+  .tr-due { font: var(--type-numeric); font-size: var(--text-xs); color: var(--fg-2); }
+  .tr-proj { color: var(--fg-3); max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 900px) {
+    .tr { grid-template-columns: minmax(0, 1fr); }
+    .tr-meta { justify-content: flex-start; gap: var(--sp-4); }
+    .tr-proj { max-width: 22ch; }
+  }
+</style>
+</head>
+<body class="ag-page" data-screen-label="Atlas">
+<div id="root">
+  <div style="display:flex;height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:800px;margin:0 auto var(--sp-9);width:100%;height:128px;border-radius:var(--r-xl);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/forms/Input.jsx',
+  '../components/navigation/MiniNav.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, Input, MiniNav } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  /* The nav carries six things and nothing else. Everything that used to
+     crowd it is Atlas working surface — it expands off the Atlas button,
+     which only happens while you are on this page. */
+  const NAV = [
+    { value: 'home',     label: 'Home',          icon: 'house',       href: 'home.html' },
+    { value: 'atlas',    label: 'Atlas',         icon: 'sparkles' },
+    { value: 'session',  label: 'New Session',   icon: 'zap',         href: 'session.html' },
+    { value: 'score',    label: 'Score',         icon: 'award', badge: 6, href: 'scoring.html' },
+    { value: 'alerts',   label: 'Notifications', icon: 'bell',        href: 'notifications.html' },
+    { value: 'settings', label: 'Settings',      icon: 'settings',    href: 'settings.html' },
+  ];
+
+  /* Atlas's own surfaces. Trash and the dashboard moved to Settings. */
+  const ATLAS_SUB = [
+    { label: 'Dock mode',    icon: 'mic',         href: 'voice.html',      note: 'Talk to it across the room' },
+    { label: 'Skills',       icon: 'wrench',      href: 'skills.html',     note: 'What Atlas can do' },
+    { label: 'Inbox triage', icon: 'inbox',       href: 'inbox.html',      note: '4 waiting' },
+    { label: 'Contacts',     icon: 'users',       href: 'contacts.html',   note: 'People it can reach' },
+    { label: 'The catalog',  icon: 'book-open',   href: 'catalog.html',    note: 'Everything it knows' },
+    { label: 'Action log',   icon: 'scroll-text', href: 'log.html',        note: 'Every write, undoable' },
+    { label: 'Atlas host',   icon: 'server',      href: 'atlas-host.html', note: 'Where it runs' },
+  ];
+
+  const MODES = [
+    { value: 'auto', label: 'Auto', desc: 'Atlas decides what needs your tap' },
+    { value: 'ask',  label: 'Ask',  desc: 'Always ask before writing anything' },
+    { value: 'plan', label: 'Plan', desc: 'Write a plan before touching tasks' },
+  ];
+  const EFFORT = [
+    { value: 'off',  label: 'Off' },
+    { value: 'some', label: 'Some' },
+    { value: 'hard', label: 'Max' },
+  ];
+
+  const STATUS = {
+    running:    { label: 'Running',    color: 'var(--status-running)' },
+    late:       { label: 'Late',       color: 'var(--status-overrun)' },
+    today:      { label: 'Today',      color: 'var(--status-queued)' },
+    queued:     { label: 'Queued',     color: 'var(--status-queued)' },
+    backburner: { label: 'Backburner', color: 'var(--status-backburner)' },
+  };
+
+  /* ---------------------------------------------------------------
+     THE BACKLOG. Real projects, real lists, real tasks — 48 open, so a
+     "show me everything" answer is honestly sized.
+     --------------------------------------------------------------- */
+  const P = { W: 'Mutineer Work', L: 'Level Ai', S: 'Skills' };
+  const OPEN = [
+    ['Send 30 emails',                'Level Ai Marketing', P.L, 'Today',  'running'],
+    ['Get waitlist',                  'Level Ai Marketing', P.L, 'Today',  'today'],
+    ['Write the marketing plan',      'Level Ai Marketing', P.L, 'Thu',    'queued'],
+    ['Oil Hair',                      'Self Care',          P.S, 'Sat',    'queued'],
+    ['Remove Body hair',              'Self Care',          P.S, 'Sat',    'queued'],
+    ['Record ten test videos',        'Content',            P.W, '12 Sep', 'queued'],
+    ['After Effects practice',        'Skills',             P.S, '—',      'backburner'],
+    ['Write the launch email',        'Marketing',          P.W, '3d ago', 'late'],
+    ['Pick the waitlist copy',        'Level Ai Marketing', P.L, 'Today',  'today'],
+    ['Set up the landing page form',  'Level Ai Marketing', P.L, 'Fri',    'queued'],
+    ['Reply to the two demo asks',    'Marketing',          P.W, '1d ago', 'late'],
+    ['Cut the reel from Tuesday',     'Content',            P.W, 'Fri',    'queued'],
+    ['Script the next three shorts',  'Content',            P.W, '14 Sep', 'queued'],
+    ['Thumbnail pass on the backlog', 'Content',            P.W, '—',      'backburner'],
+    ['Storyboard the explainer',      'Content',            P.W, '16 Sep', 'queued'],
+    ['Book the dentist',              'Self Care',          P.S, 'Mon',    'queued'],
+    ['Sleep by 1am for a week',       'Self Care',          P.S, 'Today',  'today'],
+    ['Stretch — twenty minutes',      'Self Care',          P.S, 'Today',  'today'],
+    ['Grocery run',                   'Self Care',          P.S, 'Wed',    'queued'],
+    ['Finish the colour grading LUT', 'Skills',             P.S, '—',      'backburner'],
+    ['Rig the lower-third template',  'Skills',             P.S, '18 Sep', 'queued'],
+    ['Learn the graph editor',        'Skills',             P.S, '—',      'backburner'],
+    ['Rewrite the pricing page',      'Marketing',          P.W, 'Thu',    'queued'],
+    ['Draft the cold outreach list',  'Marketing',          P.W, 'Fri',    'queued'],
+    ['Send the follow-up batch',      'Marketing',          P.W, 'Mon',    'queued'],
+    ['Set the ad budget for the week','Marketing',          P.W, '2d ago', 'late'],
+    ['Audit the analytics events',    'Level Ai Marketing', P.L, '19 Sep', 'queued'],
+    ['Write three tweet threads',     'Content',            P.W, 'Sat',    'queued'],
+    ['Refresh the case study',        'Marketing',          P.W, '22 Sep', 'queued'],
+    ['Pitch the podcast slot',        'Marketing',          P.W, 'Wed',    'queued'],
+    ['Clean the raw footage drive',   'Content',            P.W, '—',      'backburner'],
+    ['Update the media kit',          'Marketing',          P.W, '24 Sep', 'queued'],
+    ['Waitlist welcome sequence',     'Level Ai Marketing', P.L, 'Fri',    'queued'],
+    ['Test the onboarding flow',      'Level Ai',           P.L, 'Mon',    'queued'],
+    ['Write the changelog entry',     'Level Ai',           P.L, 'Thu',    'queued'],
+    ['Fix the signup error copy',     'Level Ai',           P.L, 'Today',  'today'],
+    ['Second pass on the demo video', 'Content',            P.W, '26 Sep', 'queued'],
+    ['Face care routine — restart',   'Self Care',          P.S, 'Today',  'today'],
+    ['Walk 6k a day',                 'Self Care',          P.S, 'Today',  'today'],
+    ['Read for thirty minutes',       'Self Care',          P.S, '—',      'backburner'],
+    ['Practice keyframe easing',      'Skills',             P.S, '—',      'backburner'],
+    ['Rebuild the intro animation',   'Skills',             P.S, '28 Sep', 'queued'],
+    ['Export the brand pack',         'Skills',             P.S, 'Fri',    'queued'],
+    ['Plan the October calendar',     'Marketing',          P.W, '30 Sep', 'queued'],
+    ['Draft the investor update',     'Mutineer Work',      P.W, 'Mon',    'queued'],
+    ['Reconcile the invoices',        'Mutineer Work',      P.W, '4d ago', 'late'],
+    ['File the quarterly returns',    'Mutineer Work',      P.W, '1 Oct',  'queued'],
+    ['Back up the project archive',   'Mutineer Work',      P.W, '—',      'backburner'],
+  ].map(function (r) { return { title: r[0], list: r[1], project: r[2], due: r[3], status: r[4] }; });
+
+  const byTitle = function (t) { return OPEN.filter(function (x) { return x.title === t; })[0]; };
+  const SELF_CARE_5 = ['Oil Hair', 'Remove Body hair', 'Stretch — twenty minutes', 'Walk 6k a day', 'Face care routine — restart'].map(byTitle);
+
+  /* ---------------------------------------------------------------
+     SEEDED CONVERSATIONS. Markdown is stored as Markdown — the screen
+     renders it, which is the whole point of turn 2.
+     --------------------------------------------------------------- */
+  const PLAN_MD = [
+    '## The waitlist section',
+    '',
+    'Two weeks, one number: **1,000 signups before launch**. Everything below serves that and nothing else. The plan is *deliberately* small — you have 48 open tasks already.',
+    '',
+    '### Sequence',
+    '',
+    '1. Ship the form on the landing page. Nothing else matters until this is live.',
+    '2. Send the 30 warm emails yourself, in batches of ten, three days apart.',
+    '3. Cut two of the test videos into a 40-second teaser and pin it.',
+    '4. Turn the last 200 replies into a follow-up batch.',
+    '',
+    '### What I would not do yet',
+    '',
+    '- Paid ads. The copy is not settled, so the spend teaches you nothing.',
+    '- A referral loop. Under 1,000 people, it is furniture.',
+    '- Another landing page revision — the current one converts at `4.1%`, which is fine.',
+    '',
+    'Signup rows go straight into the sheet you already have. The field names must match exactly or the import drops them silently:',
+    '',
+    '```json',
+    '{ "email": "you@example.com", "source": "waitlist", "utm": "https://levelai.example.com/waitlist?utm_source=email&utm_medium=warm&utm_campaign=launch-batch-01&ref=founder" }',
+    '```',
+    '',
+    'The `utm` value is one unbroken line on purpose — paste it whole.',
+  ].join('\n');
+
+  const SEED = {
+    c1: [
+      {
+        id: 't1', ask: 'What is still open across everything?',
+        tool: { name: 'search_tasks', arg: 'status: open', count: 48 },
+        result: OPEN,
+        reply: [
+          '**48 open**, and three of them are late. The shape of it:',
+          '',
+          '- **Mutineer Work** — 21, mostly Content and Marketing',
+          '- **Level Ai** — 19, and the waitlist work is the live part',
+          '- **Skills** — 8, all of it optional this week',
+          '',
+          'The three late ones are the launch email, the demo replies and the ad budget. Everything else can wait until Thursday without hurting.',
+        ].join('\n'),
+      },
+      {
+        id: 't2', ask: 'Write the waitlist section of the marketing plan.',
+        thinking: { label: 'Thought for 4.2s', text: 'The plan has to fit around 48 open tasks, so it must cut more than it adds. Read the marketing list first, then write.' },
+        reply: PLAN_MD,
+      },
+      {
+        id: 't3', ask: 'Mark the self care ones done, and publish a read-only link to Level Ai Marketing so my editor can see it.',
+        reply: 'Two things, and they are not the same kind of thing. The first is undoable, so I have it ready to go. The second puts a page of yours on the public internet and cannot be pulled back once it is out.',
+        approvals: [
+          {
+            id: 'ap1', kind: 'safe', verb: 'Complete', count: 5, noun: 'tasks',
+            title: 'Complete 5 tasks', where: 'Self Care · Skills',
+            items: SELF_CARE_5, note: 'Undoable from the action log for 30 days.',
+            yes: 'Complete 5', no: 'Reject',
+          },
+          {
+            id: 'ap2', kind: 'irreversible', verb: 'Publish', count: 1, noun: 'public link',
+            title: 'Publish a public link to Level Ai Marketing', where: 'Level Ai · read-only · no expiry',
+            items: [{ title: 'Level Ai Marketing — 19 tasks, titles and deadlines visible', list: 'Anyone with the link', project: 'Level Ai', due: 'no expiry', status: 'queued' }],
+            note: 'Cannot be undone. Once the link exists it can be copied, and revoking it later does not un-share what was read.',
+            yes: 'Publish it', no: 'Reject',
+          },
+        ],
+      },
+    ],
+    c2: [
+      { id: 't4', ask: 'What should I do first today?', working: { tool: 'search_tasks', label: 'Reading today' } },
+    ],
+    c3: [],
+  };
+
+  const LONG_DRAFT = "Take the waitlist section you wrote and turn it into a two-week schedule I can actually work: put the form and the first email batch on today and tomorrow, keep Self Care where it is because I am not moving it again, and leave Thursday clear for the marketing plan itself. If something has to slip, slip the After Effects practice and the thumbnail pass — I would rather lose those than the emails.";
+
+  const CHATS = [
+    { id: 'c1', title: 'Marketing plan & waitlist', when: 'now', pinned: true },
+    { id: 'c2', title: 'Today, first thing',        when: '2h' },
+    { id: 'c3', title: 'Two-week schedule',         when: 'Mon' },
+    { id: 'c4', title: 'Self care, restarted',      when: 'Sun' },
+    { id: 'c5', title: 'After Effects practice',    when: '28 Aug' },
+  ];
+
+  const OPENERS = [
+    'What is on today?',
+    'What is late?',
+    'Write the marketing plan section on the waitlist',
+    'Show me everything still open',
+  ];
+
+  /* ---------------- markdown ------------------------------------- */
+
+  function esc(s) {
+    return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+  }
+  function inline(s) {
+    s = esc(s);
+    s = s.replace(/`([^`]+)`/g, '<code class="md-code">$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    return s;
+  }
+  function md(src) {
+    const lines = String(src).split('\n');
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      const l = lines[i];
+      if (/^```/.test(l)) {
+        const lang = l.slice(3).trim();
+        i++;
+        const buf = [];
+        while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+        i++;
+        out.push('<div class="md-codeblock"><div class="md-codebar"><span>' + esc(lang || 'text') +
+          '</span></div><pre class="md-pre"><code>' + esc(buf.join('\n')) + '</code></pre></div>');
+        continue;
+      }
+      if (/^###\s+/.test(l)) { out.push('<h4 class="md-h2">' + inline(l.replace(/^###\s+/, '')) + '</h4>'); i++; continue; }
+      if (/^##\s+/.test(l))  { out.push('<h3 class="md-h1">' + inline(l.replace(/^##\s+/, ''))  + '</h3>'); i++; continue; }
+      if (/^[-*]\s+/.test(l)) {
+        const buf = [];
+        while (i < lines.length && /^[-*]\s+/.test(lines[i])) buf.push('<li>' + inline(lines[i++].replace(/^[-*]\s+/, '')) + '</li>');
+        out.push('<ul class="md-ul">' + buf.join('') + '</ul>');
+        continue;
+      }
+      if (/^\d+[.)]\s+/.test(l)) {
+        const buf = [];
+        while (i < lines.length && /^\d+[.)]\s+/.test(lines[i])) buf.push('<li>' + inline(lines[i++].replace(/^\d+[.)]\s+/, '')) + '</li>');
+        out.push('<ol class="md-ol">' + buf.join('') + '</ol>');
+        continue;
+      }
+      if (!l.trim()) { i++; continue; }
+      const buf = [];
+      while (i < lines.length && lines[i].trim() && !/^(```|#{2,3}\s|[-*]\s|\d+[.)]\s)/.test(lines[i])) buf.push(lines[i++]);
+      out.push('<p class="md-p">' + inline(buf.join(' ')) + '</p>');
+    }
+    return out.join('');
+  }
+
+  /* ---------------- small pieces ---------------------------------- */
+
+  const Kicker = ({ children, color = 'var(--fg-4)', style }) => (
+    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color, ...style }}>{children}</span>
+  );
+
+  const Dot = ({ status }) => (
+    <span aria-hidden="true" style={{
+      width: 6, height: 6, borderRadius: '50%', flex: '0 0 auto',
+      background: STATUS[status].color,
+      boxShadow: status === 'running' ? '0 0 8px ' + STATUS[status].color : 'none',
+    }} />
+  );
+
+  /* A row of the backlog, inline in the conversation. Title, status,
+     deadline, project. Nothing else exists to show. */
+  function TaskLine({ task }) {
+    return (
+      <div className="tr" tabIndex={0}>
+        <span className="tr-title">{task.title}</span>
+        <span className="tr-meta">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+            <Dot status={task.status} />
+            <span style={{ color: task.status === 'late' ? 'var(--status-overrun)' : 'var(--fg-3)' }}>{STATUS[task.status].label}</span>
+          </span>
+          <span className="tr-due">{task.due}</span>
+          <span className="tr-proj">{task.project}</span>
+        </span>
+      </div>
+    );
+  }
+
+  /* The tool result. Six rows, then the rest morphs open into a
+     capped scroller — motion 1 of 4: transform + opacity + filter +
+     border-radius on --dur-morph / --ease-morph. */
+  function ToolResult({ tool, rows }) {
+    const [open, setOpen] = React.useState(false);
+    const shown = rows.slice(0, 6);
+    const rest = rows.slice(6);
+
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-4)', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--fg-3)' }}>
+            <Icon name="list-checks" size={14} />
+            <Kicker color="var(--fg-3)">{tool.name}</Kicker>
+          </span>
+          <Kicker>{tool.count} open</Kicker>
+        </div>
+
+        <div style={{ display: 'grid', minWidth: 0, borderTop: '1px solid var(--line-faint)' }}>
+          {shown.map(function (t, i) {
+            return (
+              <div key={t.title + i} style={{ borderBottom: '1px solid var(--line-faint)', minWidth: 0 }}>
+                <TaskLine task={t} />
+              </div>
+            );
+          })}
+        </div>
+
+        {rest.length > 0 && (
+          <React.Fragment>
+            <div className="ag-scroll" style={{
+              display: 'grid', minWidth: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+              maxHeight: open ? 320 : 0,
+              opacity: open ? 1 : 0,
+              transform: open ? 'scaleY(1)' : 'scaleY(0.94)',
+              filter: open ? 'blur(0)' : 'blur(6px)',
+              borderRadius: open ? 'var(--r-sm)' : 'var(--r-pill)',
+              transformOrigin: 'top center',
+              pointerEvents: open ? 'auto' : 'none',
+              transition: 'max-height var(--dur-morph) var(--ease-morph), transform var(--dur-morph) var(--ease-morph), border-radius var(--dur-morph) var(--ease-morph), opacity var(--dur-base) var(--ease-glass), filter var(--dur-base) var(--ease-glass)',
+            }}>
+              {rest.map(function (t, i) {
+                return (
+                  <div key={t.title + i} style={{ borderBottom: '1px solid var(--line-faint)', minWidth: 0 }}>
+                    <TaskLine task={t} />
+                  </div>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} style={{
+              justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
+              border: 0, background: 'transparent', padding: 'var(--sp-2) 0', cursor: 'pointer',
+              font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
+              textTransform: 'uppercase', color: 'var(--fg-3)',
+            }}>
+              {open ? 'Show fewer' : 'Show all ' + rows.length}
+              <span style={{ display: 'flex', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-base) var(--ease-morph)' }}>
+                <Icon name="chevron-down" size={13} />
+              </span>
+            </button>
+          </React.Fragment>
+        )}
+      </div>
+    );
+  }
+
+  /* Kept thinking. Opens closed, and its body morphs. */
+  function Thinking({ thinking }) {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} style={{
+          justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
+          border: 0, background: 'transparent', padding: 0, cursor: 'pointer',
+          font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color: 'var(--fg-4)',
+        }}>
+          <Icon name="brain" size={13} />
+          {thinking.label}
+          <span style={{ display: 'flex', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-base) var(--ease-morph)' }}>
+            <Icon name="chevron-down" size={13} />
+          </span>
+        </button>
+        <div style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', transition: 'grid-template-rows var(--dur-morph) var(--ease-morph)' }}>
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            <p style={{
+              font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)',
+              maxWidth: '62ch', textWrap: 'pretty', paddingLeft: 'var(--sp-5)',
+              borderLeft: '1px solid var(--line-soft)', margin: '0 0 var(--sp-2)',
+            }}>{thinking.text}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------
+     THE THINKING INDICATOR. Motion 4 of 4 lives here: it fades in and
+     out on --dur-fast and morphs its width on --dur-morph as the label
+     changes. It says thinking, or names one tool. It is never a log.
+     --------------------------------------------------------------- */
+  function Working({ working, effort }) {
+    const [dots, setDots] = React.useState(0);
+    const [inn, setIn] = React.useState(false);
+    React.useEffect(function () {
+      const t = requestAnimationFrame(function () { setIn(true); });
+      const iv = setInterval(function () { setDots(function (n) { return (n + 1) % 3; }); }, 420);
+      return function () { cancelAnimationFrame(t); clearInterval(iv); };
+    }, []);
+
+    const named = working && working.tool;
+    const label = named
+      ? working.label
+      : effort === 'hard' ? 'Breaking it into steps' : 'Thinking';
+
+    return (
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)',
+        justifySelf: 'start', minHeight: 38, padding: '0 var(--sp-6) 0 var(--sp-5)',
+        borderRadius: 'var(--r-pill)',
+        backgroundImage: 'var(--glass-fill-1)',
+        boxShadow: inn ? 'var(--glass-rim-1), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+        opacity: inn ? 1 : 0,
+        transform: inn ? 'scale(1)' : 'scale(0.94)',
+        filter: inn ? 'blur(0)' : 'blur(6px)',
+        transition: 'opacity var(--dur-fast) var(--ease-glass), transform var(--dur-morph) var(--ease-morph), filter var(--dur-fast) var(--ease-glass), box-shadow var(--dur-base) var(--ease-glass)',
+      }}>
+        <AiPresence state="thinking" size={26} style={{ flex: '0 0 auto' }} />
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', whiteSpace: 'nowrap' }}>
+          {label}
+          <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)' }}>
+            {'.'.repeat(dots + 1)}
+          </span>
+        </span>
+        {named && (
+          <Kicker style={{ borderLeft: '1px solid var(--line-faint)', paddingLeft: 'var(--sp-4)' }}>{working.tool}</Kicker>
+        )}
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------
+     THE ASKING CARD. Says the act, the count, and the subjects, then
+     offers two exits. An irreversible act does not get to look like an
+     ordinary one: it carries the amber tint, the amber glow, a rose
+     warning line, and its affirmative is the frost surface.
+     --------------------------------------------------------------- */
+  function AskCard({ ask, state, onYes, onNo }) {
+    const hard = ask.kind === 'irreversible';
+    const [hover, setHover] = React.useState(false);
+
+    if (state) {
+      const yes = state === 'yes';
+      return (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 48,
+          padding: '0 var(--sp-6)', borderRadius: 'var(--r-lg)',
+          backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+          animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+        }}>
+          <span style={{ display: 'flex', color: yes ? 'var(--accent)' : 'var(--fg-4)' }}>
+            <Icon name={yes ? 'check' : 'x'} size={16} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)' }}>
+            {yes
+              ? (hard ? 'Published. The link is live.' : ask.count + ' tasks completed.')
+              : 'Rejected — nothing changed.'}
+          </span>
+          <Kicker>in the log</Kicker>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)', minWidth: 0,
+          borderRadius: 'var(--r-card)',
+          backgroundColor: hard ? 'oklch(0.16 0.02 82 / 0.42)' : 'transparent',
+          backgroundImage: hard ? 'var(--glass-tint-amber)' : 'var(--glass-fill-2)',
+          backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+          boxShadow: hard
+            ? (hover ? 'var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-3), var(--glow-amber-md)' : 'var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-2), var(--glow-amber-md)')
+            : (hover ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-rim-2), var(--glass-cast-1)'),
+          transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+          animation: 'ag-condense var(--dur-slow) var(--ease-glass) both',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)', minWidth: 0 }}>
+          <span style={{
+            display: 'grid', placeItems: 'center', width: 30, height: 30, flex: '0 0 auto', marginTop: 2,
+            borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
+            color: hard ? 'var(--status-review)' : 'var(--fg-2)',
+          }}>
+            <Icon name={hard ? 'globe' : 'check-check'} size={16} />
+          </span>
+          <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+            <Kicker color={hard ? 'var(--status-review)' : 'var(--fg-4)'}>
+              {hard ? 'Cannot be undone · needs your tap' : 'Needs your tap'}
+            </Kicker>
+            <span style={{
+              font: 'var(--type-title)', fontSize: 'var(--text-md)',
+              letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', textWrap: 'pretty',
+            }}>{ask.title}</span>
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{ask.where}</span>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid', minWidth: 0, padding: '0 var(--sp-4)',
+          borderRadius: 'var(--r-sm)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+        }}>
+          {ask.items.map(function (t, i) {
+            return (
+              <div key={t.title} style={{
+                display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center',
+                gap: 'var(--sp-4)', minHeight: 40, padding: 'var(--sp-2) var(--sp-3)',
+                borderTop: i === 0 ? 'none' : '1px solid var(--line-faint)',
+              }}>
+                <span style={{
+                  minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>{t.title}</span>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', whiteSpace: 'nowrap' }}>{t.list}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+          <Button
+            variant={hard ? 'frost' : 'tint'} size="sm"
+            iconLeft={<Icon name={hard ? 'globe' : 'check'} size={15} />}
+            onClick={onYes}
+          >{ask.yes}</Button>
+          <Button variant="ghost" size="sm" onClick={onNo}>{ask.no}</Button>
+          <span style={{ flex: 1, minWidth: 'var(--sp-5)' }} />
+          <span style={{
+            font: 'var(--type-caption)', color: hard ? 'var(--status-overrun)' : 'var(--fg-3)',
+            maxWidth: '38ch', textWrap: 'pretty',
+          }}>{ask.note}</span>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------- turns ----------------------------------------- */
+
+  function UserTurn({ text }) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', minWidth: 0 }}>
+        <p style={{
+          maxWidth: 'min(74%, 56ch)', padding: 'var(--sp-4) var(--sp-6)', margin: 0,
+          borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-3)',
+          boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+          font: 'var(--type-body)', color: 'var(--fg-1)', textWrap: 'pretty',
+          overflowWrap: 'anywhere', animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+        }}>{text}</p>
+      </div>
+    );
+  }
+
+  function AtlasTurn({ turn, states, onYes, onNo, effort }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <div
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 'var(--sp-6)', minWidth: 0, animation: 'ag-condense var(--dur-base) var(--ease-glass) both' }}
+      >
+        {turn.thinking && <Thinking thinking={turn.thinking} />}
+        {turn.tool && turn.result && <ToolResult tool={turn.tool} rows={turn.result} />}
+
+        {turn.reply && (
+          <div className="md" dangerouslySetInnerHTML={{ __html: md(turn.reply) }} />
+        )}
+
+        {turn.working && <Working working={turn.working} effort={effort} />}
+
+        {turn.approvals && (
+          <div style={{ display: 'grid', gap: 'var(--sp-5)', minWidth: 0 }}>
+            {turn.approvals.map(function (a) {
+              return <AskCard key={a.id} ask={a} state={states[a.id]} onYes={() => onYes(a.id)} onNo={() => onNo(a.id)} />;
+            })}
+          </div>
+        )}
+
+        {turn.reply && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-3)',
+            opacity: hover ? 1 : 0, transition: 'opacity var(--dur-fast) var(--ease-glass)',
+          }}>
+            <IconButton label="Copy" variant="ghost" size="sm"><Icon name="copy" size={14} /></IconButton>
+            <IconButton label="Try again" variant="ghost" size="sm"><Icon name="rotate-ccw" size={14} /></IconButton>
+            <IconButton label="Good answer" variant="ghost" size="sm"><Icon name="thumbs-up" size={14} /></IconButton>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* A dial popover. Morphs open from its pill — transform + opacity +
+     filter + border-radius on --dur-morph / --ease-morph. */
+  function Popover({ open, align = 'left', width, children }) {
+    return (
+      <div style={{
+        position: 'absolute', bottom: 'calc(100% + var(--sp-4))', zIndex: 80,
+        left: align === 'left' ? 0 : 'auto', right: align === 'right' ? 0 : 'auto',
+        width, boxSizing: 'border-box', padding: 'var(--sp-5)',
+        borderRadius: open ? 'var(--r-lg)' : 'var(--r-pill)',
+        backgroundColor: 'oklch(0.155 0.004 260 / 0.94)', backgroundImage: 'var(--glass-fill-1)',
+        backdropFilter: 'var(--glass-bd-xl)', WebkitBackdropFilter: 'var(--glass-bd-xl)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-3)',
+        transformOrigin: align === 'right' ? 'bottom right' : 'bottom left',
+        transform: open ? 'scale(1) translateY(0)' : 'scale(0.9) translateY(8px)',
+        opacity: open ? 1 : 0, visibility: open ? 'visible' : 'hidden',
+        filter: open ? 'blur(0)' : 'blur(7px)', pointerEvents: open ? 'auto' : 'none',
+        transition: 'transform var(--dur-morph) var(--ease-morph), border-radius var(--dur-morph) var(--ease-morph), opacity var(--dur-fast) var(--ease-glass), filter var(--dur-fast) var(--ease-glass), visibility 0s linear ' + (open ? '0s' : 'var(--dur-fast)'),
+      }}>{children}</div>
+    );
+  }
+
+  /* The bare pill that sits under the field — label only, no chrome
+     until you touch it. */
+  function DialPill({ open, onClick, children, label }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <button type="button" onClick={onClick} aria-expanded={open} aria-label={label}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', minHeight: 30,
+          padding: '0 var(--sp-4)', border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
+          backgroundImage: open || hover ? 'var(--glass-fill-2)' : 'none',
+          boxShadow: open ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'none',
+          color: open || hover ? 'var(--fg-1)' : 'var(--fg-3)',
+          font: 'var(--type-caption)', letterSpacing: 'var(--tracking-ui)', whiteSpace: 'nowrap',
+          transition: 'box-shadow var(--dur-base) var(--ease-glass), color var(--dur-fast) var(--ease-glass), background-image var(--dur-fast) var(--ease-glass)',
+        }}>{children}</button>
+    );
+  }
+
+  /* ---------------------------------------------------------------
+     THE COMPOSER. The field is its own quiet glass pill; the dials and
+     send live on a bare row beneath it, and each dial opens as a
+     popover rather than sitting on screen as chrome.
+     --------------------------------------------------------------- */
+  function Composer({ value, onChange, onSend, onStop, busy, mode, setMode, effort, setEffort, narrow }) {
+    const [focus, setFocus] = React.useState(false);
+    const [hover, setHover] = React.useState(false);
+    const [open, setOpen] = React.useState(null);   /* 'mode' | 'effort' | null */
+    const ref = React.useRef(null);
+    const wrap = React.useRef(null);
+    const ready = value.trim().length > 0 && !busy;
+    const cap = narrow ? 168 : 260;
+
+    React.useEffect(function () {
+      const el = ref.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, cap) + 'px';
+      /* keep the caret line visible as the field fills */
+      if (el.scrollHeight > cap) el.scrollTop = el.scrollHeight;
+    }, [value, cap]);
+
+    React.useEffect(function () {
+      if (!open) return;
+      const away = function (e) { if (wrap.current && !wrap.current.contains(e.target)) setOpen(null); };
+      const esc = function (e) { if (e.key === 'Escape') setOpen(null); };
+      document.addEventListener('pointerdown', away);
+      document.addEventListener('keydown', esc);
+      return function () {
+        document.removeEventListener('pointerdown', away);
+        document.removeEventListener('keydown', esc);
+      };
+    }, [open]);
+
+    const modeLabel = MODES.filter(function (m) { return m.value === mode; })[0];
+    const effortLabel = EFFORT.filter(function (e) { return e.value === effort; })[0];
+    const effortIndex = EFFORT.map(function (e) { return e.value; }).indexOf(effort);
+
+    /* the shadow lift — box-shadow on --dur-base, nothing else moves */
+    const lift = focus
+      ? 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-3)'
+      : hover
+        ? 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)'
+        : 'var(--glass-rim-1), var(--glass-inner-1), var(--glass-cast-1)';
+
+    return (
+      <div ref={wrap} style={{ display: 'grid', gap: 'var(--sp-3)', minWidth: 0 }}>
+        <div
+          onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+          onClick={() => { if (ref.current) ref.current.focus(); }}
+          style={{
+            display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-3)', minWidth: 0,
+            padding: 'var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-6)',
+            borderRadius: 'var(--r-xl)', cursor: 'text',
+            backgroundImage: 'var(--glass-fill-2)',
+            backdropFilter: 'var(--glass-bd-lg-refract)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+            boxShadow: lift,
+            transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+          }}
+        >
+          {/* the field, masked at top and bottom so a long draft fades
+              out instead of being sliced by the edge */
+          }
+          <div style={{
+            flex: 1, minWidth: 0, position: 'relative',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, #000 var(--sp-5), #000 calc(100% - var(--sp-4)), transparent 100%)',
+            maskImage: 'linear-gradient(to bottom, transparent 0, #000 var(--sp-5), #000 calc(100% - var(--sp-4)), transparent 100%)',
+          }}>
+            <textarea
+              ref={ref} className="ag-scroll ag-field" data-ag-field="" rows={1} value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+              placeholder={busy ? 'Atlas is replying — type the next one' : mode === 'plan' ? 'Describe the job. Atlas plans it first.' : 'Message Atlas'}
+              aria-label="Message Atlas"
+              style={{
+                display: 'block', width: '100%', boxSizing: 'border-box', border: 0,
+                background: 'transparent', resize: 'none',
+                color: 'var(--fg-1)', font: 'var(--type-body)', fontSize: 'var(--text-md)',
+                letterSpacing: 'var(--tracking-ui)', lineHeight: 1.6,
+                padding: 'var(--sp-2) 0', maxHeight: cap, overflowY: 'auto',
+              }}
+            />
+          </div>
+
+          {!busy && !ready && (
+            <span onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flex: '0 0 auto', marginBottom: -5 }}>
+              <RecordTimer size="sm" label="voice message" icon={<Icon name="mic" size={16} />}
+                onSave={(s) => onChange('Voice message · ' + s + 's')} />
+            </span>
+          )}
+          <button
+            type="button" onClick={(e) => { e.stopPropagation(); (busy ? onStop : onSend)(); }}
+            disabled={!busy && !ready} aria-label={busy ? 'Stop' : 'Send'}
+            style={{
+              flex: '0 0 auto', display: 'grid', placeItems: 'center', width: 34, height: 34,
+              border: 0, borderRadius: '50%', cursor: busy || ready ? 'pointer' : 'default',
+              backgroundImage: busy ? 'var(--glass-fill-solid)' : ready ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+              boxShadow: busy ? 'var(--glass-rim-3)' : ready ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+              color: busy ? 'var(--fg-on-light)' : ready ? 'oklch(0.95 0.07 162)' : 'var(--fg-4)',
+              transition: 'var(--t-hover)',
+            }}
+          >
+            <Icon name={busy ? 'square' : 'arrow-up'} size={busy ? 12 : 16} />
+          </button>
+        </div>
+
+        {/* the bare dial row — a line of type under the field */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-2)',
+          padding: '0 var(--sp-3)', minWidth: 0,
+        }}>
+          <div style={{ position: 'relative', display: 'inline-flex' }}>
+            <DialPill label="Mode" open={open === 'mode'} onClick={() => setOpen(open === 'mode' ? null : 'mode')}>
+              {modeLabel.label}
+              <Icon name="chevron-down" size={12} />
+            </DialPill>
+            <Popover open={open === 'mode'} width={272}>
+              <div style={{ display: 'grid', gap: 'var(--sp-2)' }}>
+                <Kicker style={{ padding: '0 var(--sp-3) var(--sp-2)' }}>Mode</Kicker>
+                {MODES.map(function (m) {
+                  const on = m.value === mode;
+                  return (
+                    <button key={m.value} type="button" onClick={() => { setMode(m.value); setOpen(null); }}
+                      style={{
+                        display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'center',
+                        gap: 'var(--sp-4)', width: '100%', textAlign: 'left', border: 0, cursor: 'pointer',
+                        padding: 'var(--sp-3) var(--sp-3)', borderRadius: 'var(--r-sm)',
+                        backgroundImage: on ? 'var(--glass-fill-2)' : 'none',
+                        boxShadow: on ? 'var(--glass-rim-1)' : 'none',
+                        transition: 'background-image var(--dur-fast) var(--ease-glass), box-shadow var(--dur-base) var(--ease-glass)',
+                      }}
+                      onMouseEnter={(e) => { if (!on) e.currentTarget.style.backgroundImage = 'var(--glass-fill-1)'; }}
+                      onMouseLeave={(e) => { if (!on) e.currentTarget.style.backgroundImage = 'none'; }}
+                    >
+                      <span style={{ display: 'grid', gap: 1, minWidth: 0 }}>
+                        <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)' }}>{m.label}</span>
+                        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>{m.desc}</span>
+                      </span>
+                      <span style={{ display: 'flex', color: 'var(--accent)', opacity: on ? 1 : 0, transition: 'opacity var(--dur-fast) var(--ease-glass)' }}>
+                        <Icon name="check" size={14} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Popover>
+          </div>
+
+          <span style={{ color: 'var(--fg-4)', opacity: 0.5 }}>·</span>
+
+          <div style={{ position: 'relative', display: 'inline-flex' }}>
+            <DialPill label="Thinking effort" open={open === 'effort'} onClick={() => setOpen(open === 'effort' ? null : 'effort')}>
+              <Icon name="brain" size={12} />
+              {effortLabel.label}
+            </DialPill>
+            <Popover open={open === 'effort'} width={248}>
+              <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-3)', padding: '0 var(--sp-2)' }}>
+                  <Kicker>Thinking</Kicker>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)' }}>{effortLabel.label}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 var(--sp-2)' }}>
+                  <Kicker>Faster</Kicker><Kicker>Smarter</Kicker>
+                </div>
+                {/* three stops on one rail — the knob slides, it does not jump */}
+                <div style={{ position: 'relative', height: 26, padding: '0 var(--sp-2)' }}>
+                  <div style={{
+                    position: 'absolute', left: 'var(--sp-2)', right: 'var(--sp-2)', top: 9, height: 8,
+                    borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+                  }} />
+                  <div style={{ position: 'absolute', inset: '0 var(--sp-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {EFFORT.map(function (e, i) {
+                      const on = i === effortIndex;
+                      return (
+                        <button key={e.value} type="button" onClick={() => setEffort(e.value)} aria-label={e.label}
+                          style={{
+                            width: 26, height: 26, border: 0, background: 'transparent', cursor: 'pointer',
+                            display: 'grid', placeItems: 'center', borderRadius: '50%',
+                          }}>
+                          <span style={{
+                            width: on ? 18 : 6, height: on ? 18 : 6, borderRadius: '50%',
+                            backgroundImage: on ? 'var(--glass-tint-accent)' : 'none',
+                            background: on ? undefined : 'var(--line-strong)',
+                            boxShadow: on ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'none',
+                            transition: 'width var(--dur-morph) var(--ease-morph), height var(--dur-morph) var(--ease-morph), box-shadow var(--dur-base) var(--ease-glass)',
+                          }} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </Popover>
+          </div>
+
+          <span style={{ flex: 1, minWidth: 'var(--sp-3)' }} />
+
+          <span style={{
+            font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap',
+            opacity: busy || value.length > 220 ? 1 : 0,
+            transition: 'opacity var(--dur-fast) var(--ease-glass)',
+          }}>
+            {busy ? 'Enter queues the next one' : value.length + ' chars'}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------- conversation list ----------------------------- */
+
+  function ChatList({ chats, current, onPick, onNew, query, setQuery }) {
+    return (
+      <div style={{ display: 'grid', gridTemplateRows: 'auto auto minmax(0,1fr)', gap: 'var(--sp-5)', height: '100%', minHeight: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <Kicker color="var(--fg-3)" style={{ flex: 1 }}>Chats</Kicker>
+          <IconButton label="New chat" variant="ghost" onClick={onNew}><Icon name="message-square-plus" size={18} /></IconButton>
+        </div>
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search chats" aria-label="Search chats"
+          iconLeft={<Icon name="search" size={16} />} />
+        <div className="ag-scroll" style={{ overflowY: 'auto', overscrollBehavior: 'contain', display: 'grid', gap: 'var(--sp-2)', alignContent: 'start' }}>
+          {chats.map(function (c) { return <ChatRow key={c.id} chat={c} on={c.id === current} onPick={() => onPick(c.id)} />; })}
+          {chats.length === 0 && (
+            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-5)' }}>No chat matches that.</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function ChatRow({ chat, on, onPick }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <button
+        type="button" onClick={onPick}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', width: '100%', minHeight: 46,
+          padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', textAlign: 'left',
+          borderRadius: 'var(--r-pill)',
+          backgroundImage: on ? 'var(--glass-fill-2)' : hover ? 'var(--glass-fill-1)' : 'none',
+          boxShadow: on ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'none',
+          transition: 'box-shadow var(--dur-base) var(--ease-glass), background-image var(--dur-fast) var(--ease-glass)',
+        }}
+      >
+        {chat.pinned && <span style={{ display: 'flex', color: 'var(--fg-4)', flex: '0 0 auto' }}><Icon name="pin" size={13} /></span>}
+        <span style={{
+          flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+          color: on ? 'var(--fg-1)' : 'var(--fg-2)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{chat.title}</span>
+        <Kicker style={{ flex: '0 0 auto' }}>{chat.when}</Kicker>
+      </button>
+    );
+  }
+
+  /* The drawer. Motion 2 of 4: it slides on --dur-sheet, and the scrim
+     behind it takes the short fade on --dur-fast. */
+  function ChatDrawer({ open, onClose, children }) {
+    return (
+      <React.Fragment>
+        <div
+          onClick={onClose} aria-hidden="true"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 65, background: 'oklch(0 0 0 / 0.55)',
+            opacity: open ? 1 : 0, visibility: open ? 'visible' : 'hidden',
+            pointerEvents: open ? 'auto' : 'none',
+            transition: 'opacity var(--dur-fast) var(--ease-glass), visibility 0s linear ' + (open ? '0s' : 'var(--dur-sheet)'),
+          }}
+        />
+        <aside aria-hidden={!open} style={{
+          position: 'fixed', top: 'var(--sp-5)', left: 'var(--sp-5)', bottom: 'var(--sp-5)',
+          width: 'min(320px, calc(100vw - var(--sp-10)))', zIndex: 70, boxSizing: 'border-box',
+          padding: 'var(--sp-7)',
+          borderRadius: 'var(--r-sheet)',
+          backgroundColor: 'oklch(0.145 0.004 260 / 0.96)', backgroundImage: 'var(--glass-fill-1)',
+          border: '1px solid oklch(1 0 0 / 0.10)',
+          backdropFilter: 'var(--glass-bd-xl)', WebkitBackdropFilter: 'var(--glass-bd-xl)',
+          boxShadow: 'var(--glass-cast-3), var(--glass-inner-1)',
+          transform: open ? 'translateX(0)' : 'translateX(calc(-100% - var(--sp-9)))',
+          opacity: open ? 1 : 0, visibility: open ? 'visible' : 'hidden',
+          pointerEvents: open ? 'auto' : 'none',
+          transition: 'transform var(--dur-sheet) var(--ease-glass), opacity var(--dur-base) var(--ease-glass), visibility 0s linear ' + (open ? '0s' : 'var(--dur-sheet)'),
+        }}>
+          {children}
+        </aside>
+      </React.Fragment>
+    );
+  }
+
+  /* Atlas's surfaces, folded behind the Atlas button. It morphs open on
+     --dur-morph/--ease-morph and its rows take the shadow lift. */
+  function AtlasSub({ open, onClose, narrow }) {
+    return (
+      <React.Fragment>
+        <div onClick={onClose} aria-hidden="true" style={{
+          position: 'fixed', inset: 0, zIndex: 0, background: 'oklch(0 0 0 / 0.42)',
+          opacity: open ? 1 : 0, visibility: open ? 'visible' : 'hidden',
+          pointerEvents: open ? 'auto' : 'none',
+          transition: 'opacity var(--dur-fast) var(--ease-glass), visibility 0s linear ' + (open ? '0s' : 'var(--dur-fast)'),
+        }} />
+        <div style={{
+        position: 'relative', zIndex: 1,
+        width: narrow ? '100%' : 244, boxSizing: 'border-box',
+        display: 'grid', gap: 2, padding: 'var(--sp-4)',
+        borderRadius: open ? 'var(--r-lg)' : 'var(--r-pill)',
+        backgroundColor: 'oklch(0.178 0.005 260)',
+        backgroundImage: 'var(--glass-fill-1)',
+        backdropFilter: 'none', WebkitBackdropFilter: 'none',
+        boxShadow: 'var(--glass-shadow-thick)',
+        transformOrigin: narrow ? 'bottom center' : 'left center',
+        transform: open ? 'scale(1) translateX(0)' : narrow ? 'scale(0.94) translateY(10px)' : 'scale(0.92) translateX(-14px)',
+        opacity: open ? 1 : 0, visibility: open ? 'visible' : 'hidden',
+        filter: open ? 'blur(0)' : 'blur(7px)', pointerEvents: open ? 'auto' : 'none',
+        transition: 'transform var(--dur-morph) var(--ease-morph), border-radius var(--dur-morph) var(--ease-morph), opacity var(--dur-fast) var(--ease-glass), filter var(--dur-fast) var(--ease-glass), visibility 0s linear ' + (open ? '0s' : 'var(--dur-fast)'),
+      }}>
+        {ATLAS_SUB.map(function (s) { return <SubRow key={s.label} item={s} />; })}
+        </div>
+      </React.Fragment>
+    );
+  }
+
+  function SubRow({ item }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <a href={item.href}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 42,
+          padding: '0 var(--sp-4)', borderRadius: 'var(--r-sm)', border: 0, textDecoration: 'none',
+          backgroundImage: hover ? 'var(--glass-fill-2)' : 'none',
+          boxShadow: hover ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'none',
+          transition: 'box-shadow var(--dur-base) var(--ease-glass), background-image var(--dur-fast) var(--ease-glass)',
+        }}>
+        <span style={{ display: 'flex', color: hover ? 'var(--fg-1)' : 'var(--fg-3)', flex: '0 0 auto' }}>
+          <Icon name={item.icon} size={16} />
+        </span>
+        <span style={{ display: 'grid', gap: 0, minWidth: 0, flex: 1 }}>
+          <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', whiteSpace: 'nowrap' }}>{item.label}</span>
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap' }}>{item.note}</span>
+        </span>
+      </a>
+    );
+  }
+
+  /* ================================================================
+     THE SCREEN
+     ================================================================ */
+
+  function Atlas() {
+    const [w, setW] = React.useState(window.innerWidth);
+    const [chats, setChats] = React.useState(CHATS);
+    const [current, setCurrent] = React.useState('c1');
+    const [threads, setThreads] = React.useState(SEED);
+    const [drafts, setDrafts] = React.useState({ c3: LONG_DRAFT });
+    const [query, setQuery] = React.useState('');
+    const [busy, setBusy] = React.useState(false);
+    const [mode, setMode] = React.useState('auto');
+    const [effort, setEffort] = React.useState('some');
+    const [states, setStates] = React.useState({});
+    const [drawer, setDrawer] = React.useState(false);
+    const [dock, setDock] = React.useState(true);
+    const [sub, setSub] = React.useState(false);
+    const timer = React.useRef(null);
+    const scroller = React.useRef(null);
+
+    React.useEffect(function () {
+      const on = function () { setW(window.innerWidth); };
+      window.addEventListener('resize', on);
+      return function () { window.removeEventListener('resize', on); };
+    }, []);
+
+    const rail = w >= 900;                    /* vertical mini-nav vs bottom pill */
+    const docked = w >= 1180 && dock;         /* the list is only docked when there is room */
+    const narrow = w < 900;
+
+    const turns = threads[current] || [];
+    const draft = drafts[current] || '';
+    const empty = turns.length === 0;
+    const working = busy || turns.some(function (t) { return t.working; });
+
+    React.useEffect(function () {
+      const el = scroller.current;
+      if (!el) return;
+      const pin = function () { el.scrollTop = el.scrollHeight; };
+      pin();
+      const r1 = requestAnimationFrame(pin);
+      const r2 = setTimeout(pin, 120);
+      let ro = null;
+      if (window.ResizeObserver && el.firstElementChild) {
+        /* only follow growth while the user is already at the bottom —
+           expanding a long result must not yank the transcript. */
+        ro = new ResizeObserver(function () {
+          if (el.scrollHeight - el.scrollTop - el.clientHeight < 240) pin();
+        });
+        ro.observe(el.firstElementChild);
+      }
+      return function () {
+        cancelAnimationFrame(r1); clearTimeout(r2); if (ro) ro.disconnect();
+      };
+    }, [turns, busy, current]);
+
+    React.useEffect(function () { if (!narrow) setDrawer(false); }, [narrow]);
+
+    function setDraft(v) { setDrafts(function (d) { return Object.assign({}, d, { [current]: v }); }); }
+    function setThread(id, fn) { setThreads(function (cur) { return Object.assign({}, cur, { [id]: fn(cur[id] || []) }); }); }
+
+    function resolve(text) {
+      const t = text.toLowerCase();
+      if (/late|overdue|slip/.test(t)) {
+        const late = OPEN.filter(function (x) { return x.status === 'late'; });
+        return {
+          tool: { name: 'search_tasks', arg: 'due: past', count: late.length }, result: late,
+          reply: 'Three are past their date. The launch email is the one that actually costs you something — the other two are replies.',
+        };
+      }
+      if (/everything|all open|open/.test(t)) {
+        return { tool: { name: 'search_tasks', arg: 'status: open', count: 48 }, result: OPEN, reply: SEED.c1[0].reply };
+      }
+      if (/today|first|now/.test(t)) {
+        const today = OPEN.filter(function (x) { return x.due === 'Today'; });
+        return {
+          tool: { name: 'search_tasks', arg: 'due: today', count: today.length }, result: today,
+          reply: '**Send 30 emails** is already running, so finish that batch first. *Get waitlist* is the only other one that moves the launch — the rest of today is Self Care and it can happen at night.',
+        };
+      }
+      if (/marketing plan|waitlist section|plan/.test(t)) {
+        return { reply: PLAN_MD, thinking: { label: 'Thought for 3.4s', text: 'Read the Level Ai Marketing list first, then write only what the waitlist needs.' } };
+      }
+      if (/complete|done|mark/.test(t)) {
+        return {
+          reply: 'Five in Self Care and Skills match. Undoable, so it is one tap.',
+          approvals: [{
+            id: 'ap' + Date.now(), kind: 'safe', verb: 'Complete', count: 5, noun: 'tasks',
+            title: 'Complete 5 tasks', where: 'Self Care · Skills', items: SELF_CARE_5,
+            note: 'Undoable from the action log for 30 days.', yes: 'Complete 5', no: 'Reject',
+          }],
+        };
+      }
+      return {
+        reply: 'I can read and write tasks, lists and projects across **Mutineer Work**, **Level Ai** and **Skills**. Name a task, a list or a date and I will move on it.',
+      };
+    }
+
+    function send(text) {
+      const ask = (text != null ? text : draft).trim();
+      if (!ask || busy) return;
+      setDraft('');
+      const chat = current;
+      const id = 't' + Date.now();
+      setThread(chat, function (list) { return list.concat({ id, ask, working: { tool: 'search_tasks', label: 'Reading your backlog' } }); });
+      setChats(function (cur) {
+        return cur.map(function (c) {
+          return c.id === chat && c.untitled
+            ? Object.assign({}, c, { title: ask.length > 32 ? ask.slice(0, 32).trim() + '...' : ask, untitled: false })
+            : c;
+        });
+      });
+      setBusy(true);
+      timer.current = setTimeout(function () {
+        setThread(chat, function (list) {
+          return list.map(function (t) {
+            return t.id === id
+              ? Object.assign({}, t, { working: null }, resolve(ask), effort === 'off' ? { thinking: null } : {})
+              : t;
+          });
+        });
+        setBusy(false);
+      }, 2200);
+    }
+
+    function stop() {
+      clearTimeout(timer.current);
+      setBusy(false);
+      setThread(current, function (list) {
+        return list.map(function (t, i) {
+          return i === list.length - 1 && !t.reply
+            ? Object.assign({}, t, { working: null, reply: 'Stopped. Nothing was written.' })
+            : t;
+        });
+      });
+    }
+
+    function newChat() {
+      const id = 'n' + Date.now();
+      setChats(function (cur) { return [{ id, title: 'New chat', when: 'now', untitled: true }].concat(cur); });
+      setThreads(function (cur) { return Object.assign({}, cur, { [id]: [] }); });
+      setCurrent(id);
+      setDrawer(false);
+    }
+
+    const navItems = NAV.map(function (n) { return { value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }; });
+    function go(v) {
+      if (v === 'atlas') { setSub(function (s) { return !s; }); return; }
+      const it = NAV.filter(function (n) { return n.value === v; })[0];
+      if (it && it.href) location.href = it.href;
+    }
+
+    const filtered = chats.filter(function (c) { return c.title.toLowerCase().indexOf(query.toLowerCase()) !== -1; });
+    const title = (chats.filter(function (c) { return c.id === current; })[0] || {}).title || 'Atlas';
+
+    const list = (
+      <ChatList
+        chats={filtered} current={current} query={query} setQuery={setQuery}
+        onPick={function (id) { setCurrent(id); setDrawer(false); }} onNew={newChat}
+      />
+    );
+
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'stretch', minWidth: 0 }}>
+        <GlassFilters />
+
+        {rail && (
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 90, alignSelf: 'flex-start', flex: '0 0 auto',
+            padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
+          }}>
+            <div style={{ position: 'relative', display: 'inline-flex' }}>
+              <MiniNav orientation="vertical" items={navItems} value="atlas" onChange={go} />
+              <div style={{ position: 'absolute', left: 'calc(100% + var(--sp-4))', top: 0, zIndex: 90 }}>
+                <AtlasSub open={sub} onClose={function () { setSub(false); }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {docked && (
+          <div style={{ flex: '0 0 auto', width: 264, minHeight: 0, padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-9)', boxSizing: 'border-box' }}>
+            {list}
+          </div>
+        )}
+
+        <div style={{
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, boxSizing: 'border-box',
+          padding: narrow
+            ? 'var(--sp-7) var(--gutter-page-sm) 108px'
+            : 'var(--sp-9) var(--gutter-page) var(--sp-7)',
+        }}>
+          <header style={{
+            width: '100%', maxWidth: 820, margin: '0 auto', flex: '0 0 auto',
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0,
+          }}>
+            <IconButton
+              label={narrow ? 'Chats' : docked ? 'Hide chats' : 'Show chats'}
+              variant="ghost"
+              onClick={function () { if (narrow || w < 1180) setDrawer(true); else setDock(!dock); }}
+            >
+              <Icon name="panel-left" size={18} />
+            </IconButton>
+
+            <div style={{ display: 'grid', gap: 1, minWidth: 0, flex: 1 }}>
+              <h1 style={{
+                font: 'var(--type-title)', fontSize: 'var(--text-lg)', letterSpacing: 'var(--tracking-title)',
+                color: 'var(--fg-1)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>{title}</h1>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                <AiPresence state={working ? 'thinking' : 'idle'} size={18} style={{ flex: '0 0 auto' }} />
+                {working ? 'Working' : 'Awake on the laptop'}
+              </span>
+            </div>
+
+            <IconButton label="New chat" variant="ghost" onClick={newChat}><Icon name="message-square-plus" size={18} /></IconButton>
+          </header>
+
+          <div ref={scroller} className="ag-scroll ag-transcript" style={{
+            flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', overscrollBehavior: 'contain', marginTop: 'var(--sp-5)',
+          }}>
+            <div style={{
+              width: '100%', maxWidth: 820, margin: '0 auto', minHeight: '100%', boxSizing: 'border-box', minWidth: 0,
+              display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', alignContent: empty ? 'center' : 'start', gap: 'var(--sp-11)',
+              paddingTop: 'var(--sp-6)', paddingBottom: 'var(--sp-9)',
+            }}>
+              {empty ? (
+                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-8)', minWidth: 0 }}>
+                  <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-4)', textAlign: 'center' }}>
+                    <AiPresence state="idle" size={96} />
+                    <h2 style={{ font: 'var(--type-display)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                      48 open. Where do you want to start?
+                    </h2>
+                  </div>
+                  <div style={{ display: 'grid', gap: 'var(--sp-3)', width: '100%', maxWidth: 460 }}>
+                    {OPENERS.map(function (o, i) { return <Opener key={o} label={o} delay={i * 44} onPick={function () { send(o); }} />; })}
+                  </div>
+                </div>
+              ) : turns.map(function (t) {
+                return (
+                  <div key={t.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 'var(--sp-7)', minWidth: 0 }}>
+                    <UserTurn text={t.ask} />
+                    <AtlasTurn
+                      turn={t} states={states} effort={effort}
+                      onYes={function (id) { setStates(function (s) { return Object.assign({}, s, { [id]: 'yes' }); }); }}
+                      onNo={function (id) { setStates(function (s) { return Object.assign({}, s, { [id]: 'no' }); }); }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ flex: '0 0 auto', width: '100%', maxWidth: 820, margin: '0 auto', minWidth: 0, position: 'relative', zIndex: 10 }}>
+            <Composer
+              value={draft} onChange={setDraft} onSend={function () { send(); }} onStop={stop}
+              busy={busy} mode={mode} setMode={setMode} effort={effort} setEffort={setEffort} narrow={narrow}
+            />
+          </div>
+        </div>
+
+        <ChatDrawer open={drawer} onClose={function () { setDrawer(false); }}>{list}</ChatDrawer>
+
+        {!rail && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 90, pointerEvents: 'none' }}>
+            <span style={{ position: 'relative', pointerEvents: 'auto' }}>
+              <span style={{
+                position: 'absolute', bottom: 'calc(100% + var(--sp-4))', left: '50%', transform: 'translateX(-50%)',
+                width: 'min(360px, calc(100vw - var(--sp-9)))', pointerEvents: sub ? 'auto' : 'none',
+              }}>
+                <AtlasSub open={sub} onClose={function () { setSub(false); }} narrow />
+              </span>
+              <MiniNav items={navItems} value="atlas" onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function Opener({ label, delay, onPick }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <button type="button" onClick={onPick}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', width: '100%', minHeight: 48,
+          padding: '0 var(--sp-6)', border: 0, cursor: 'pointer', textAlign: 'left',
+          borderRadius: 'var(--r-pill)',
+          backgroundImage: hover ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          boxShadow: hover ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-rim-1)',
+          color: 'var(--fg-1)', font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+          transition: 'box-shadow var(--dur-base) var(--ease-glass), background-image var(--dur-fast) var(--ease-glass)',
+          animation: 'ag-condense var(--dur-slow) var(--ease-glass) both', animationDelay: delay + 'ms',
+        }}>
+        <span style={{ flex: 1, minWidth: 0 }}>{label}</span>
+        <span style={{ display: 'flex', color: hover ? 'var(--accent)' : 'var(--fg-4)', flex: '0 0 auto' }}>
+          <Icon name="arrow-up-right" size={15} />
+        </span>
+      </button>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Atlas />);
+});
+</script>
+</body>
+</html>

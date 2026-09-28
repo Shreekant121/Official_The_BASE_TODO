@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — The catalog</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page ag-page--calm" data-screen-label="The catalog">
+<div id="root">
+  <div style="display:flex;height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="max-width:1120px;margin:0 auto;height:120px;border-radius:var(--r-card);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/forms/Input.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/MorphMenu.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, StatusPill, Toast, Input, MiniNav, MorphMenu } = AG;
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',     icon: 'layout-dashboard', href: 'home.html' },
+    { value: 'home',      label: 'Home',          icon: 'house',            href: 'home.html' },
+    { value: 'atlas',     label: 'Atlas',         icon: 'sparkles',         href: 'atlas.html' },
+    { value: 'skills',    label: 'Skills',        icon: 'wrench',           href: 'skills.html' },
+    { value: 'inbox',     label: 'Inbox triage',  icon: 'inbox',            href: 'inbox.html' },
+    { value: 'people',    label: 'Contacts',      icon: 'users',            href: 'contacts.html' },
+    { value: 'catalog',   label: 'The catalog',   icon: 'book-open' },
+    { value: 'trash',     label: 'Trash',         icon: 'trash-2',          href: 'trash.html' },
+    { value: 'log',       label: 'Action log',    icon: 'scroll-text',      href: 'log.html' },
+    { value: 'host',      label: 'Atlas host',    icon: 'server',           href: 'atlas-host.html' },
+    { value: 'settings',  label: 'Settings',      icon: 'settings',         href: 'settings.html' },
+  ];
+
+  const BUDGET = 40;
+
+  const FOLDERS = [
+    { id: 'people',      label: 'people',      icon: 'users' },
+    { id: 'projects',    label: 'projects',    icon: 'folder' },
+    { id: 'preferences', label: 'preferences', icon: 'settings-2' },
+    { id: 'how-to',      label: 'how-to',      icon: 'wrench' },
+  ];
+
+  /* ---------------------------------------------------------------
+     THE CATALOG. Plain text files on the laptop, one per person, one
+     per project, one for preferences, one for how things are done.
+
+     Nothing here loads automatically. The file NAME is the index — it
+     tells Atlas what exists, and the body is opened only when the
+     current question needs it. `opens` is therefore the honest signal
+     of whether a note is earning its place, and `memories` is what
+     counts against the 40 that fit before something has to drop.
+     --------------------------------------------------------------- */
+  const NOTES = [
+    {
+      id: 'n1', folder: 'people', name: 'rahul-mehta.md', memories: 6, bytes: 1412,
+      edited: 'you · 19 Aug', opened: 'today, 13:58', opens: 31, author: 'you',
+      trigger: 'Opened when you mention Rahul, invoices, or Mehta Textiles.',
+      body: '# Rahul Mehta\n\nClient since March 2026. Mehta Textiles, Surat.\nrahul@mehtatextiles.in · +91 98xxx xxxxx\n\n- Almost always writing about invoices. Rarely anything else.\n- Pays late but pays. Terms are 15 days; he treats them as 30.\n- Prefers a short reply with a date in it. Long explanations get ignored.\n- Has a code: 4471-2290-1183-06. Identifies him only.\n- Open: #114 (₹84,000, 9 days late), #117 (sent 30 Aug).',
+    },
+    {
+      id: 'n2', folder: 'people', name: 'anita-cs.md', memories: 4, bytes: 860,
+      edited: 'Atlas · 1 Sep', opened: 'yesterday, 17:41', opens: 12, author: 'atlas',
+      trigger: 'Opened for CA work, GST, filings, or compliance dates.',
+      body: '# Anita Sharma (CA)\n\nSharma & Co. Handles the Empire incorporation and GST.\nanita@sharmaco.in\n\n- Answers within a day on email, never on WhatsApp.\n- Wants scanned documents as one PDF, not several images.\n- Told me on 1 Sep the GST line on #114 was wrong. Corrected copy sent.\n- Fee: ₹12,000 for the incorporation, quarterly after that.',
+    },
+    {
+      id: 'n3', folder: 'people', name: 'studio-landlord.md', memories: 3, bytes: 540,
+      edited: 'you · 24 Aug', opened: '6 days ago', opens: 4, author: 'you',
+      trigger: 'Opened for the studio, the lease, or Andheri.',
+      body: '# Vikram (studio landlord)\n\nAndheri West unit. Lease under negotiation.\n\n- Will not put anything in writing until the deposit clears.\n- Walkthrough slots only on weekday mornings.\n- Asked for 6 months deposit; 3 is the number to hold at.',
+    },
+    {
+      id: 'n4', folder: 'people', name: 'kabir-freelance.md', memories: 2, bytes: 310,
+      edited: 'Atlas · 12 Aug', opened: '21 days ago', opens: 1, author: 'atlas', stale: true,
+      trigger: 'Opened if you mention Kabir or the packaging artwork.',
+      body: '# Kabir\n\nFreelance designer, did the packaging artwork in July.\n\n- Invoiced once, paid.\n- No open work.',
+    },
+    {
+      id: 'n5', folder: 'projects', name: 'shreekant-empire.md', memories: 7, bytes: 2140,
+      edited: 'Atlas · today', opened: 'today, 14:22', opens: 58, author: 'atlas',
+      trigger: 'Opened for anything about the Empire project.',
+      body: '# Shreekant Empire\n\nThe main thing. Incorporation, then the first product line.\n\n- Incorporation filing drafted; paperwork not yet filed.\n- Current account not opened. Blocked on the incorporation certificate.\n- CA is Anita (see people/anita-cs.md).\n- Two invoices out: #114, #117 (see people/rahul-mehta.md).\n- He wants filing work done before 11am. Do not queue it late.',
+    },
+    {
+      id: 'n6', folder: 'projects', name: 'studio-launch.md', memories: 4, bytes: 980,
+      edited: 'you · 28 Aug', opened: '2 days ago', opens: 17, author: 'you',
+      trigger: 'Opened for the studio launch, the lease, or the walkthrough.',
+      body: '# Studio Launch\n\nAndheri West unit, aiming to open in November.\n\n- Lease not signed. Deposit is the open argument.\n- Share link published 1 Sep, read-only, no expiry.\n- Walkthrough to be confirmed — weekday mornings only.',
+    },
+    {
+      id: 'n7', folder: 'projects', name: 'atlas-itself.md', memories: 3, bytes: 720,
+      edited: 'Atlas · 2 Sep', opened: 'today, 09:12', opens: 9, author: 'atlas',
+      trigger: 'Opened when you ask about Atlas, models, or its own build.',
+      body: '# Atlas (this program)\n\n- Default brain is gemma4:e4b. He changed it from qwen3.5:4b on 2 Sep.\n- He likes to see the numbers, not be protected from the setting.\n- Voice is wanted but not yet built. Chatterbox VRAM unmeasured.',
+    },
+    {
+      id: 'n8', folder: 'preferences', name: 'how-shreekant-works.md', memories: 5, bytes: 1180,
+      edited: 'Atlas · yesterday', opened: 'today, 14:22', opens: 74, author: 'atlas',
+      trigger: 'Opened on almost every turn — it is how to behave, not what to know.',
+      body: '# How Shreekant works\n\n- Filing and paperwork before 11am. Calls in the afternoon.\n- Never queue more than 2 tasks in one session.\n- Terse answers. No preamble, no "certainly".\n- Wants to be told, not managed. Say the slow thing is slow, then do it.\n- Concrete numbers always. Never "a few minutes".',
+    },
+    {
+      id: 'n9', folder: 'preferences', name: 'writing-voice.md', memories: 3, bytes: 640,
+      edited: 'you · 15 Aug', opened: '4 days ago', opens: 22, author: 'you',
+      trigger: 'Opened when drafting mail or any copy in his name.',
+      body: '# Writing in his voice\n\n- Short. Two or three sentences for most replies.\n- A date in every commitment. Never "soon".\n- Apologise once, briefly, then move to the fix.\n- No exclamation marks. No emoji in mail.',
+    },
+    {
+      id: 'n10', folder: 'how-to', name: 'file-gst-return.md', memories: 1, bytes: 1520,
+      edited: 'you · 8 Aug', opened: '25 days ago', opens: 2, author: 'you', stale: true,
+      trigger: 'Opened only if you ask about filing a GST return.',
+      body: '# Filing the GST return\n\n1. Export the month from the tasks with the GST tag.\n2. Send to Anita as one PDF.\n3. She files; confirmation comes back by email.\n4. Save the ARN in projects/shreekant-empire.md.',
+    },
+    {
+      id: 'n11', folder: 'how-to', name: 'reclip-notes.md', memories: 0, bytes: 210,
+      edited: 'you · 2 Jul', opened: 'never', opens: 0, author: 'you', stale: true,
+      trigger: 'Never opened. The name has not matched a question in two months.',
+      body: '# reclip\n\n150-line media downloader. Nothing to do with Atlas.\nAn MCP tool at most.',
+    },
+  ];
+
+  const SORTS = [
+    { value: 'used',  label: 'Most used' },
+    { value: 'name',  label: 'Name' },
+    { value: 'stale', label: 'Stalest' },
+  ];
+
+  const Kicker = ({ children, color = 'var(--fg-4)', style }) => (
+    <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: 'uppercase', color, ...style }}>{children}</span>
+  );
+
+  /* The memory budget. Not a warning — a reading. Forty is where the
+     context cost starts eating the answer on a small model, and the
+     honest thing is to show the number and name what to drop. */
+  function Budget({ used, stale, onShowStale }) {
+    const pct = Math.min(100, (used / BUDGET) * 100);
+    const tight = used >= BUDGET - 4;
+    return (
+      <div style={{
+        display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6) var(--sp-7)',
+        borderRadius: 'var(--r-card)', minWidth: 260,
+        backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-4)' }}>
+          <span style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 0 }}>
+            <Kicker>Active memories</Kicker>
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)' }}>
+              <span style={{
+                font: 'var(--type-metric)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-3xl)',
+                letterSpacing: 'var(--tracking-display)', color: tight ? 'var(--status-review)' : 'var(--fg-1)',
+                fontVariantNumeric: 'tabular-nums',
+              }}>{used}</span>
+              <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>/ {BUDGET}</span>
+            </span>
+          </span>
+          {stale > 0 && (
+            <Button size="sm" variant="ghost" iconLeft={<Icon name="wind" size={14} />} onClick={onShowStale}>
+              {stale} stale
+            </Button>
+          )}
+        </div>
+        <div style={{ position: 'relative', height: 8, borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)', overflow: 'hidden' }}>
+          <span style={{
+            position: 'absolute', inset: '0 auto 0 0', width: pct + '%', borderRadius: 'var(--r-pill)',
+            background: tight
+              ? 'linear-gradient(90deg, oklch(0.75 0.15 82 / 0.5), var(--status-review))'
+              : 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.5), var(--accent))',
+            boxShadow: tight ? '0 0 14px -2px oklch(0.75 0.15 82 / 0.6)' : '0 0 14px -2px oklch(0.70 0.15 162 / 0.6)',
+            transition: 'width var(--dur-base) var(--ease-glass)',
+          }} />
+        </div>
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+          {tight
+            ? 'Near the ceiling. Five hundred stale facts crowd out the actual question.'
+            : 'Room to write. Notes are loaded by name, never all at once.'}
+        </span>
+      </div>
+    );
+  }
+
+  function FileRow({ note, on, onPick }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <button type="button" onClick={onPick}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', alignItems: 'center', gap: 'var(--sp-4)',
+          width: '100%', minHeight: 52, padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', textAlign: 'left',
+          borderRadius: 'var(--r-pill)',
+          backgroundImage: on ? 'var(--glass-fill-2)' : hover ? 'var(--glass-fill-1)' : 'none',
+          boxShadow: on ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'none',
+          transition: 'var(--t-hover)',
+        }}>
+        <span style={{ display: 'flex', color: note.stale ? 'var(--fg-4)' : on ? 'var(--accent)' : 'var(--fg-3)', flex: '0 0 auto' }}>
+          <Icon name="file-text" size={15} />
+        </span>
+        <span style={{ display: 'grid', gap: 1, minWidth: 0 }}>
+          <span style={{
+            font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: on ? 'var(--fg-1)' : 'var(--fg-2)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{note.name}</span>
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {note.memories} {note.memories === 1 ? 'memory' : 'memories'} · opened {note.opens}×
+          </span>
+        </span>
+        {note.stale && <Kicker style={{ flex: '0 0 auto' }}>stale</Kicker>}
+      </button>
+    );
+  }
+
+  /* ================================================================ */
+
+  function Catalog() {
+    const [w, setW] = React.useState(window.innerWidth);
+    const [notes, setNotes] = React.useState(NOTES);
+    const [current, setCurrent] = React.useState('n1');
+    const [query, setQuery] = React.useState('');
+    const [sort, setSort] = React.useState('used');
+    const [staleOnly, setStaleOnly] = React.useState(false);
+    const [editing, setEditing] = React.useState(false);
+    const [draft, setDraft] = React.useState('');
+    const [toast, setToast] = React.useState(null);
+    const [listOpen, setListOpen] = React.useState(false);
+
+    const wide = w >= 900;
+    /* The index docks beside the note when there is room, and slides in
+       over it when there is not. It is never simply absent — list,
+       search and New note are three of this screen's five verbs. */
+    const docked = w >= 1080;
+    const showList = docked || listOpen;
+    const note = notes.find((n) => n.id === current) || notes[0];
+
+    React.useEffect(() => {
+      const on = () => setW(window.innerWidth);
+      window.addEventListener('resize', on);
+      return () => window.removeEventListener('resize', on);
+    }, []);
+
+    React.useEffect(() => {
+      if (!toast) return;
+      const t = setTimeout(() => setToast(null), 3400);
+      return () => clearTimeout(t);
+    }, [toast]);
+
+    React.useEffect(() => { setEditing(false); }, [current]);
+
+    const used = notes.reduce((n, x) => n + x.memories, 0);
+    const staleCount = notes.filter((n) => n.stale).length;
+
+    const q = query.trim().toLowerCase();
+    let visible = notes.filter((n) =>
+      (!staleOnly || n.stale) &&
+      (q === '' || (n.name + ' ' + n.folder + ' ' + n.body).toLowerCase().includes(q))
+    );
+    if (sort === 'name') visible = visible.slice().sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === 'stale') visible = visible.slice().sort((a, b) => a.opens - b.opens);
+    else visible = visible.slice().sort((a, b) => b.opens - a.opens);
+
+    function startEdit() { setDraft(note.body); setEditing(true); }
+    function save() {
+      setNotes((cur) => cur.map((n) => (n.id === note.id
+        ? Object.assign({}, n, { body: draft, edited: 'you · just now', bytes: draft.length, stale: false })
+        : n)));
+      setEditing(false);
+      setToast({ icon: 'check', title: 'Saved', detail: note.name + ' — plain text, on the laptop.' });
+    }
+    function remove() {
+      const gone = note;
+      setNotes((cur) => cur.filter((n) => n.id !== gone.id));
+      setCurrent((cur) => {
+        const rest = notes.filter((n) => n.id !== gone.id);
+        return rest.length ? rest[0].id : null;
+      });
+      setToast({ icon: 'trash-2', title: 'Deleted ' + gone.name, detail: gone.memories + ' memories dropped. It is in the action log.' });
+    }
+    function addNote() {
+      const id = 'x' + Date.now();
+      const n = {
+        id, folder: 'people', name: 'new-note.md', memories: 0, bytes: 0,
+        edited: 'you · just now', opened: 'never', opens: 0, author: 'you',
+        trigger: 'Rename it — the name is what tells Atlas when to open it.',
+        body: '# New note\n\n',
+      };
+      setNotes((cur) => [n].concat(cur));
+      setCurrent(id);
+      setDraft(n.body);
+      setEditing(true);
+    }
+
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+    function go(v) { const it = NAV.find((n) => n.value === v); if (it && it.href) location.href = it.href; }
+
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'stretch' }}>
+        <GlassFilters />
+
+        {wide && (
+          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="catalog" onChange={go} />
+          </div>
+        )}
+
+        <div style={{
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-9)' : 'var(--sp-8) var(--gutter-page-sm) 116px',
+        }}>
+          <header style={{
+            width: '100%', maxWidth: 1120, margin: '0 auto', flex: '0 0 auto',
+            display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-7)', flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 260 }}>
+              <Kicker color="var(--fg-3)">What Atlas remembers</Kicker>
+              <h1 style={{ font: 'var(--type-display)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0 }}>
+                The catalog
+              </h1>
+              <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', margin: 0, maxWidth: '58ch', textWrap: 'pretty' }}>
+                Plain text files on your laptop. Nothing loads on its own — the file names tell Atlas
+                what exists, and it opens only what the question needs. Edit any of them in Notepad.
+              </p>
+            </div>
+            <Budget used={used} stale={staleCount} onShowStale={() => { setStaleOnly(!staleOnly); setSort('stale'); if (!docked) setListOpen(true); }} />
+          </header>
+
+          <div style={{
+            width: '100%', maxWidth: 1120, margin: 'var(--sp-9) auto 0', flex: 1, minHeight: 0,
+            display: 'grid', gridTemplateColumns: docked ? '300px minmax(0,1fr)' : 'minmax(0,1fr)', gap: 'var(--sp-7)',
+          }}>
+            {/* ---- The index. Names first, because names ARE the index.
+                   Docked at 1080+, a drawer below it. ---- */}
+            {showList && (
+              <div style={docked ? { display: 'grid', gridTemplateRows: 'auto auto auto minmax(0,1fr)', gap: 'var(--sp-5)', minHeight: 0 } : {
+                position: 'fixed', top: 'var(--sp-7)', left: 'var(--sp-7)', bottom: 'var(--sp-7)', width: 328, zIndex: 70,
+                display: 'grid', gridTemplateRows: 'auto auto auto minmax(0,1fr)', gap: 'var(--sp-5)', minHeight: 0,
+                padding: 'var(--sp-7)', boxSizing: 'border-box', borderRadius: 'var(--r-sheet)',
+                backgroundColor: 'oklch(0.145 0.004 260 / 0.96)', backgroundImage: 'var(--glass-fill-1)',
+                border: '1px solid oklch(1 0 0 / 0.10)',
+                backdropFilter: 'var(--glass-bd-xl)', WebkitBackdropFilter: 'var(--glass-bd-xl)',
+                boxShadow: 'var(--glass-cast-3), var(--glass-inner-1)',
+                animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                  <Kicker color="var(--fg-3)" style={{ flex: 1 }}>{notes.length} files</Kicker>
+                  <IconButton label="New note" variant="ghost" onClick={addNote}><Icon name="file-plus" size={18} /></IconButton>
+                  {!docked && (
+                    <IconButton label="Close index" variant="ghost" onClick={() => setListOpen(false)}><Icon name="x" size={18} /></IconButton>
+                  )}
+                </div>
+                <Input value={query} onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search names and contents" aria-label="Search the catalog"
+                  iconLeft={<Icon name="search" size={16} />} />
+                <SegmentedControl size="sm" options={SORTS} value={sort} onChange={setSort} style={{ width: '100%' }} />
+
+                <div className="ag-scroll" style={{ overflowY: 'auto', overscrollBehavior: 'contain', display: 'grid', gap: 'var(--sp-6)', alignContent: 'start' }}>
+                  {FOLDERS.map((f) => {
+                    const inFolder = visible.filter((n) => n.folder === f.id);
+                    if (inFolder.length === 0) return null;
+                    return (
+                      <div key={f.id} style={{ display: 'grid', gap: 'var(--sp-2)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', padding: '0 var(--sp-5)' }}>
+                          <span style={{ display: 'flex', color: 'var(--fg-4)' }}><Icon name={f.icon} size={13} /></span>
+                          <Kicker>{f.label}/</Kicker>
+                          <span style={{ flex: 1 }} />
+                          <Kicker>{inFolder.reduce((n, x) => n + x.memories, 0)}</Kicker>
+                        </div>
+                        {inFolder.map((n) => (
+                          <FileRow key={n.id} note={n} on={n.id === current} onPick={() => { setCurrent(n.id); if (!docked) setListOpen(false); }} />
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {visible.length === 0 && (
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-5)' }}>
+                      No file matches that.
+                    </span>
+                  )}
+                </div>
+
+                {staleOnly && (
+                  <Button size="sm" variant="ghost" iconLeft={<Icon name="x" size={14} />} onClick={() => setStaleOnly(false)}>
+                    Showing stale only
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* ---- The note itself ---- */}
+            {note ? (
+              <section style={{
+                display: 'grid', gridTemplateRows: 'auto auto minmax(0,1fr)', minHeight: 0,
+                borderRadius: 'var(--r-card-lg)',
+                backgroundImage: 'var(--glass-fill-2)',
+                backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+                boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+              }}>
+                <header style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-5)', flexWrap: 'wrap', padding: 'var(--pad-card) var(--pad-card) var(--sp-6)' }}>
+                  {!docked && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto' }}>
+                      <IconButton label="All files" variant="ghost" onClick={() => setListOpen(true)}><Icon name="panel-left" size={18} /></IconButton>
+                      <IconButton label="New note" variant="ghost" onClick={addNote}><Icon name="file-plus" size={18} /></IconButton>
+                    </div>
+                  )}
+                  <span style={{
+                    display: 'grid', placeItems: 'center', width: 38, height: 38, flex: '0 0 auto',
+                    borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
+                    color: note.stale ? 'var(--fg-4)' : 'var(--fg-3)',
+                  }}><Icon name="file-text" size={18} /></span>
+
+                  <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 200 }}>
+                    <h2 style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-lg)', color: 'var(--fg-1)', margin: 0, wordBreak: 'break-all' }}>
+                      {note.folder}/{note.name}
+                    </h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+                      <StatusPill status={note.stale ? 'archived' : 'done'} size="sm" dot={false}>
+                        {note.memories} {note.memories === 1 ? 'memory' : 'memories'}
+                      </StatusPill>
+                      <Kicker>{note.bytes} bytes</Kicker>
+                      <Kicker>edited {note.edited}</Kicker>
+                      <Kicker>opened {note.opens}× · last {note.opened}</Kicker>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto' }}>
+                    {editing
+                      ? <React.Fragment>
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+                          <Button size="sm" variant="tint" iconLeft={<Icon name="check" size={14} />} onClick={save}>Save</Button>
+                        </React.Fragment>
+                      : <Button size="sm" variant="glass" iconLeft={<Icon name="pencil" size={14} />} onClick={startEdit}>Edit</Button>}
+
+                    {/* Destructive action confirms inside the object that
+                        offered it — the row collapses and a confirm strip
+                        grows in its exact slot. No second dialog. */}
+                    <MorphMenu
+                      align="end" width={272}
+                      header={{ title: note.name, meta: note.memories + ' memories · ' + note.bytes + ' bytes' }}
+                      trigger={<IconButton label="Note actions" variant="ghost"><Icon name="ellipsis" size={18} /></IconButton>}
+                      items={[
+                        { section: 'This file' },
+                        { value: 'rename', label: 'Rename', icon: <Icon name="type" size={16} />, meta: 'the index', onSelect: () => setToast({ icon: 'type', title: 'Rename', detail: 'The name is the index — it decides when Atlas opens this.' }) },
+                        { value: 'copy', label: 'Copy path', icon: <Icon name="link" size={16} />, flash: 'Copied', flashIcon: <Icon name="check" size={16} />, onSelect: () => {} },
+                        { value: 'log', label: 'Every time it was opened', icon: <Icon name="scroll-text" size={16} />, onSelect: () => { location.href = 'log.html'; } },
+                        { divider: true },
+                        { section: 'Careful', tone: 'danger' },
+                        {
+                          value: 'delete', label: 'Delete this note', icon: <Icon name="trash-2" size={16} />, tone: 'danger',
+                          confirm: {
+                            label: 'Delete ' + note.name + '?',
+                            hint: note.memories + ' memories go with it. Atlas will not know these things tomorrow.',
+                            action: 'Delete', onConfirm: remove,
+                          },
+                        },
+                      ]}
+                    />
+                  </div>
+                </header>
+
+                {/* When this note gets loaded. The rule made visible. */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', margin: '0 var(--pad-card)',
+                  padding: 'var(--sp-4) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                  backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                }}>
+                  <span style={{ display: 'flex', color: note.stale ? 'var(--fg-4)' : 'var(--accent)', flex: '0 0 auto' }}>
+                    <Icon name={note.stale ? 'wind' : 'key-round'} size={15} />
+                  </span>
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>{note.trigger}</span>
+                </div>
+
+                <div className="ag-scroll" style={{ overflowY: 'auto', overscrollBehavior: 'contain', padding: 'var(--sp-6) var(--pad-card) var(--pad-card)' }}>
+                  {editing ? (
+                    <textarea
+                      className="ag-field" data-ag-field="" autoFocus
+                      value={draft} onChange={(e) => setDraft(e.target.value)}
+                      aria-label={'Contents of ' + note.name}
+                      style={{
+                        width: '100%', minHeight: 320, boxSizing: 'border-box', border: 0, resize: 'vertical',
+                        padding: 'var(--sp-6)', borderRadius: 'var(--r-sm)',
+                        backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+                        color: 'var(--fg-1)', font: 'var(--type-numeric)', fontSize: 'var(--text-sm)',
+                        lineHeight: 'var(--leading-relaxed)',
+                      }}
+                    />
+                  ) : (
+                    <pre style={{
+                      margin: 0, padding: 'var(--sp-6)', borderRadius: 'var(--r-sm)',
+                      backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+                      font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-relaxed)',
+                      color: 'var(--fg-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    }}>{note.body}</pre>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <section style={{ display: 'grid', placeItems: 'center', gap: 'var(--sp-5)', borderRadius: 'var(--r-card-lg)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)' }}>
+                <span style={{ display: 'grid', placeItems: 'center', width: 48, height: 48, borderRadius: '50%', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', color: 'var(--fg-4)' }}>
+                  <Icon name="book-open" size={22} />
+                </span>
+                <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>The catalog is empty.</span>
+                <Button size="sm" variant="tint" iconLeft={<Icon name="file-plus" size={14} />} onClick={addNote}>Write the first note</Button>
+              </section>
+            )}
+          </div>
+        </div>
+
+        {/* Scrim only when the index is over the note, never when docked. */}
+        {showList && !docked && (
+          <button type="button" aria-label="Close index" onClick={() => setListOpen(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 65, border: 0, cursor: 'default',
+            background: 'oklch(0.05 0 0 / 0.5)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)',
+          }} />
+        )}
+
+        {toast && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-13)', display: 'grid', placeItems: 'center', zIndex: 80, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <Toast icon={<Icon name={toast.icon} size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+            </span>
+          </div>
+        )}
+
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <MiniNav items={navItems} value="catalog" onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Catalog />);
+});
+</script>
+</body>
+</html>

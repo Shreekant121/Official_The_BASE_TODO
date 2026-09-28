@@ -1,0 +1,99 @@
+<!-- @dsCard group="Components" viewport="700x560" name="Data" subtitle="Metrics, status pills, rings, spark bars and the session clock" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Data</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+  #root { min-height: 100%; }
+  .row { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; }
+  .col { display: grid; gap: var(--sp-5); }
+  .pad { padding: var(--sp-7) var(--sp-8); }
+  .lbl { font: var(--type-kicker); letter-spacing: var(--tracking-kicker); text-transform: uppercase; color: var(--fg-4); }
+</style>
+</head>
+<body class="ag-page">
+<div id="root"></div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../core/Icon.jsx',
+  '../material/GlassFilters.jsx',
+  '../actions/IconButton.jsx',
+  '../data/StatusPill.jsx',
+  '../data/MetricCard.jsx',
+  '../data/ProgressRing.jsx',
+  '../data/SparkBars.jsx',
+  '../data/Countdown.jsx',
+  '../data/TaskRow.jsx'
+]).then(function (AG) {
+  const { Icon, GlassFilters, IconButton, StatusPill, MetricCard, ProgressRing, SparkBars, Countdown, TaskRow } = AG;
+
+  function Demo() {
+    const [done, setDone] = React.useState({ b: true });
+    const rows = [
+      { id: 'a', title: 'Draft the Q3 brief', meta: '⚡ Action Steps · 3 subtasks', allocated: '45 min', status: <StatusPill status="running" size="sm">In session</StatusPill> },
+      { id: 'b', title: 'Review the pricing deck', meta: '⚡ Action Steps', allocated: '30 min', status: <StatusPill status="done" size="sm" /> },
+      { id: 'c', title: 'Read the retention memo', meta: '📚 Reference Materials', allocated: '20 min', status: <StatusPill status="queued" size="sm" /> },
+    ];
+
+    return (
+      <div className="pad col" style={{ gap: 'var(--sp-7)' }}>
+        <GlassFilters />
+
+        <div className="row" style={{ gap: 'var(--sp-3)' }}>
+          <StatusPill status="running">In session</StatusPill>
+          <StatusPill status="queued" />
+          <StatusPill status="review" />
+          <StatusPill status="done" />
+          <StatusPill status="overrun" />
+          <StatusPill status="backburner" />
+          <StatusPill status="archived" />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--sp-5)' }}>
+          <MetricCard label="Focus time today" value="3.4" unit="h" delta="12%" deltaDirection="up" hint="vs last week" />
+          <MetricCard label="Tasks cleared" value="7" unit="/ 12" delta="2" deltaDirection="down" hint="behind pace" />
+          <MetricCard label="Session" value="24:18" glow />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 'var(--sp-8)', alignItems: 'center' }}>
+          <div className="row" style={{ gap: 'var(--sp-6)' }}>
+            <ProgressRing value={7} max={12} label="tasks" />
+            <ProgressRing value={82} tone="amber" size={84} label="focus" />
+            <ProgressRing value={112} max={100} tone="rose" size={84} label="overrun" />
+          </div>
+          <SparkBars data={[42, 68, 51, 90, 74, 33, 58]} activeIndex={3} labels={['M', 'T', 'W', 'T', 'F', 'S', 'S']} />
+          <Countdown seconds={1458} total={2700} running size="md" label="Draft the Q3 brief" />
+        </div>
+
+        <div className="col" style={{ gap: 'var(--sp-3)' }}>
+          {rows.map((r) => (
+            <TaskRow
+              key={r.id}
+              title={r.title}
+              meta={r.meta}
+              allocated={r.allocated}
+              status={r.status}
+              done={!!done[r.id]}
+              selected={r.id === 'a'}
+              onToggle={() => setDone((d) => Object.assign({}, d, { [r.id]: !d[r.id] }))}
+              actions={<IconButton label="More" size="sm" variant="ghost"><Icon name="ellipsis" size={16} /></IconButton>}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+});
+</script>
+</body>
+</html>

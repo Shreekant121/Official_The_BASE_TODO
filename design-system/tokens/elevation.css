@@ -1,0 +1,43 @@
+/* ---------------------------------------------------------------
+   ELEVATION & GLOW — two systems, never conflated.
+   SHADOW says "this is above that." Shadows are neutral black.
+   GLOW says "this is EMITTING" — running, selected, speaking, overrun.
+   A resting neutral surface never glows.
+   --------------------------------------------------------------- */
+:root {
+  --shadow-0: none;
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.5);
+  --shadow-2: 0 6px 16px -6px oklch(0 0 0 / 0.6);
+  --shadow-3: 0 24px 48px -14px oklch(0 0 0 / 0.7);
+  --shadow-4: 0 40px 90px -22px oklch(0 0 0 / 0.8);
+  --shadow-5: 0 60px 140px -30px oklch(0 0 0 / 0.88);
+
+  --glow-accent-sm: 0 0 24px -4px oklch(0.74 0.165 162 / 0.55);
+  --glow-accent-md: 0 0 40px -6px oklch(0.74 0.165 162 / 0.55), 0 0 90px -10px oklch(0.74 0.165 162 / 0.3);
+  --glow-accent-lg: 0 0 60px -6px oklch(0.74 0.165 162 / 0.6), 0 0 140px -10px oklch(0.74 0.165 162 / 0.35);
+  --glow-brand-sm:  var(--glow-accent-sm);
+  --glow-brand-md:  var(--glow-accent-md);
+  --glow-cyan-md:   0 0 30px -2px oklch(0.78 0.13 215 / 0.52), 0 0 80px -12px oklch(0.78 0.13 215 / 0.34);
+  --glow-violet-md: 0 0 30px -2px oklch(0.72 0.19 305 / 0.55), 0 0 80px -12px oklch(0.72 0.19 305 / 0.36);
+  --glow-magenta-md:0 0 30px -2px oklch(0.72 0.20 348 / 0.55), 0 0 80px -12px oklch(0.72 0.20 348 / 0.36);
+  --glow-amber-md:  0 0 30px -2px oklch(0.83 0.16  82 / 0.50), 0 0 80px -12px oklch(0.83 0.16  82 / 0.32);
+  --glow-lime-md:   0 0 30px -2px oklch(0.86 0.19 128 / 0.45), 0 0 80px -12px oklch(0.86 0.19 128 / 0.30);
+  --glow-rose-md:   0 0 30px -2px oklch(0.70 0.19  18 / 0.55), 0 0 80px -12px oklch(0.70 0.19  18 / 0.36);
+  --glow-white-sm:  0 0 22px -4px oklch(1 0 0 / 0.30);
+
+  /* Coloured cast — the hue bleeds onto the floor under a gel object */
+  --cast-brand:   var(--cast-emerald);
+  --cast-violet:  0 18px 40px -14px oklch(0.60 0.22 305 / 0.75);
+  --cast-magenta: 0 18px 40px -14px oklch(0.62 0.22 348 / 0.7);
+  --cast-emerald: 0 18px 40px -14px oklch(0.66 0.16 162 / 0.65);
+  --cast-amber:   0 18px 40px -14px oklch(0.78 0.16 75 / 0.55);
+
+  --text-glow-accent: 0 0 26px oklch(0.74 0.165 162 / 0.55);
+  --text-glow-brand: var(--text-glow-accent);
+  --text-glow-white:  0 0 25px oklch(1 0 0 / 0.22);
+
+  --elev-chip:    var(--shadow-1);
+  --elev-card:    var(--shadow-3);
+  --elev-popover: var(--shadow-4);
+  --elev-sheet:   var(--shadow-5);
+}

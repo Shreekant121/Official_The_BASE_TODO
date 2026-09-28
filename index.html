@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/Logo.png" />
+    <!-- `viewport-fit=cover` is the installed half of APP-2. An installed app on
+         Android 15 is drawn edge to edge whether it asks to be or not, so the
+         page has to own the space under the status bar and the gesture bar
+         rather than hope the browser reserves it. Declaring it here makes the
+         behaviour the same in a tab as in the installed window, so what is
+         tested is what ships. Everything that then has to step clear of the
+         system bars reads `--safe-t/-r/-b/-l` from
+         `src/ui/tokens/spacing.css`; those resolve to 0 in a desktop browser,
+         which is why no screenshot baseline moves. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Installed-app identity: the name in the drawer, the icon, its own
+         window with no address bar. `theme_color` is repeated here as a meta
+         because that is what Chrome reads for the status bar in a plain tab;
+         the manifest's copy is what the installed window uses. Both are
+         `#050505` — `--void-0`, the app's page floor — so the system bars and
+         the page read as one black. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#050505" />
+    <title>BASE</title>
+    <!-- Google Identity Services — used to silently restore Calendar access
+         tokens on session restore (see lib/googleTokenClient.ts) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <!-- `ag-page` is the Aurora Glass backdrop: near-black, an 88px measured
+       grid, one soft emerald pool low on the page and a fine grain. The grid
+       is not decoration — it is what the glass refracts, and a pane that
+       blurs nothing reads as a grey rectangle. See src/ui/tokens/backdrop.css. -->
+  <body class="ag-page">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Assistant</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  /* Placeholders are --fg-4 everywhere; pseudo-elements need a sheet. */
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+
+  /* The transcript and the keys sheet both scroll without showing a
+     track — a browser scrollbar inside 40px glass reads as a browser
+     part, not a surface. */
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page" data-screen-label="Assistant">
+<div id="root">
+  <!-- Static first paint: the composer well and header sit on screen
+       before React hydrates, so the page never flashes empty. -->
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;padding:var(--sp-11) var(--gutter-page) var(--sp-9)">
+      <div style="height:56px"></div>
+      <div style="max-width:760px;margin:0 auto;width:100%;height:62px;border-radius:var(--r-pill);background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/data/TaskRow.jsx',
+  '../components/feedback/Toast.jsx',
+  '../components/navigation/MiniNav.jsx',
+  '../components/overlay/Dialog.jsx',
+  '../components/forms/Input.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, StatusPill, TaskRow, Toast, MiniNav, Dialog, Input } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  const NAV = [
+    { value: 'dashboard', label: 'Dashboard',     icon: 'layout-dashboard', href: 'home.html' },
+    { value: 'home',      label: 'Home',          icon: 'house',            href: 'home.html' },
+    { value: 'assistant', label: 'Assistant',     icon: 'sparkles' },
+    { value: 'session',   label: 'New Session',   icon: 'zap',              href: 'session.html' },
+    { value: 'score',     label: 'Score',         icon: 'award', badge: 6,  href: 'scoring.html' },
+    { value: 'alerts',    label: 'Notifications', icon: 'bell',             href: 'home.html' },
+    { value: 'settings',  label: 'Settings',      icon: 'settings',         href: 'settings.html' },
+  ];
+
+  /* Three openers, and they are the three things the assistant is
+     actually good at: reading today, writing one task, finding what
+     slipped. Anything longer than a line belongs in the composer. */
+  const OPENERS = [
+    'What am I doing today?',
+    'Add a task to call the CA, due Thursday 6pm',
+    "What's overdue?",
+  ];
+
+  /* Canned turns. Each one carries what it DID as structured changes,
+     because the revert contract is per-turn and has to be legible. */
+  function resolve(text) {
+    const t = text.toLowerCase();
+
+    if (/overdue|late|slipp|past due/.test(t)) {
+      return {
+        reply: 'Two tasks are past their due date. Both are in Shreekant Empire.',
+        readOnly: true,
+        tasks: [
+          { title: 'Shortlist the CA', meta: '⚡ Action Steps · due 3 days ago', allocated: '25 min', status: 'overrun', statusLabel: '3d late' },
+          { title: 'Open the current account', meta: '⚡ Action Steps · due yesterday', allocated: '30 min', status: 'overrun', statusLabel: '1d late' },
+        ],
+      };
+    }
+
+    if (/today|now|next|doing/.test(t)) {
+      return {
+        reply: 'Three tasks are on today — 1h 55m of work, and the first one is running.',
+        readOnly: true,
+        tasks: [
+          { title: 'Draft the incorporation filing', meta: 'Shreekant Empire · ⚡ Action Steps', allocated: '45 min', status: 'running', statusLabel: 'Running' },
+          { title: 'Sign the lease', meta: 'Studio Launch · ⚡ Action Steps', allocated: '30 min', status: 'queued', statusLabel: 'Queued' },
+          { title: 'File the incorporation paperwork', meta: 'Shreekant Empire · ⚡ Action Steps', allocated: '40 min', status: 'queued', statusLabel: 'Queued' },
+        ],
+      };
+    }
+
+    if (/^(add|create|new)\b|remind|due/.test(t)) {
+      return {
+        reply: 'Added it to Shreekant Empire → ⚡ Action Steps. I set the estimate to 25 min; change it in the task if that is wrong.',
+        changes: [
+          { icon: 'plus', label: 'Call the CA', meta: 'Shreekant Empire · ⚡ Action Steps' },
+          { icon: 'calendar-clock', label: 'Due Thursday, 6:00 PM', meta: '25 min allocated' },
+        ],
+      };
+    }
+
+    if (/done|complete|finish|mark/.test(t)) {
+      return {
+        reply: 'Marked it done and pulled the next task in that list into today.',
+        changes: [
+          { icon: 'circle-check', label: 'Sign the lease — done', meta: 'Studio Launch · ⚡ Action Steps' },
+          { icon: 'zap', label: 'Queued: Countersign the studio lease', meta: '40 min · today' },
+        ],
+      };
+    }
+
+    if (/queue|session|focus|schedule/.test(t)) {
+      return {
+        reply: 'Queued the two highest-priority tasks that fit the time left today.',
+        changes: [
+          { icon: 'zap', label: 'Queued: Draft the incorporation filing', meta: '45 min · today' },
+          { icon: 'zap', label: 'Queued: Shortlist the CA', meta: '25 min · today' },
+        ],
+      };
+    }
+
+    return {
+      reply: 'Nothing matched that. Name a task, a list or a date and I will act — search, create, edit, complete or queue.',
+      readOnly: true,
+    };
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  /* The one place the assistant's own voice sits. Not a bubble: the
+     product has no assistant persona, so its output is plain text on
+     the page and only its CHANGES get a container. */
+  function AssistantTurn({ turn, onRevert }) {
+    const changes = turn.changes || [];
+    const reverted = turn.reverted;
+
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: 'var(--sp-5)', animation: 'ag-condense var(--dur-base) var(--ease-glass) both' }}>
+        <span style={{
+          display: 'grid', placeItems: 'center', width: 30, height: 30, marginTop: 2, flex: '0 0 auto',
+          borderRadius: '50%', backgroundImage: 'var(--glass-tint-accent)',
+          boxShadow: 'var(--glass-rim-2)', color: 'oklch(0.93 0.07 162)',
+        }}>
+          <Icon name="sparkles" size={15} />
+        </span>
+
+        <div style={{ display: 'grid', gap: 'var(--sp-5)', minWidth: 0 }}>
+          <p style={{ font: 'var(--type-body)', color: 'var(--fg-2)', textWrap: 'pretty', maxWidth: '62ch' }}>
+            {turn.reply}
+          </p>
+
+          {turn.tasks && (
+            <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+              {turn.tasks.map((t) => (
+                <TaskRow
+                  key={t.title}
+                  title={t.title}
+                  meta={t.meta}
+                  allocated={t.allocated}
+                  status={<StatusPill status={t.status} size="sm">{t.statusLabel}</StatusPill>}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* What it wrote. This container IS the revert unit — the
+              turn's changes and the button that undoes them share one
+              surface, so there is never a doubt what "revert" covers. */}
+          {changes.length > 0 && (
+            <div style={{
+              borderRadius: 'var(--r-lg)',
+              backgroundImage: reverted ? 'var(--glass-fill-1)' : 'var(--glass-fill-2)',
+              boxShadow: reverted ? 'var(--glass-rim-1)' : 'var(--glass-rim-2), var(--glass-cast-1)',
+              opacity: reverted ? 0.62 : 1,
+              transition: 'var(--t-hover)',
+            }}>
+              <div style={{ display: 'grid', padding: '0 var(--sp-6)' }}>
+                {changes.map((c, i) => (
+                  <div key={c.label} style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 52,
+                    padding: 'var(--sp-3) 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--line-faint)',
+                  }}>
+                    <span style={{ display: 'flex', color: reverted ? 'var(--fg-4)' : 'var(--accent)', flex: '0 0 auto' }}>
+                      <Icon name={reverted ? 'undo-2' : c.icon} size={16} />
+                    </span>
+                    <span style={{
+                      flex: 1, minWidth: 0, font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+                      color: reverted ? 'var(--fg-3)' : 'var(--fg-1)',
+                      textDecoration: reverted ? 'line-through' : 'none', textDecorationColor: 'var(--fg-4)',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {c.label}
+                    </span>
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+                      {c.meta}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap',
+                padding: 'var(--sp-4) var(--sp-5) var(--sp-4) var(--sp-6)',
+                borderTop: '1px solid var(--line-faint)',
+              }}>
+                <span className="ag-kicker" style={{ color: 'var(--fg-4)' }}>
+                  {reverted ? 'Reverted' : changes.length + (changes.length === 1 ? ' change written' : ' changes written')}
+                </span>
+                <span style={{ flex: 1 }} />
+                {reverted ? (
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)' }}>
+                    backlog restored
+                  </span>
+                ) : (
+                  <Button size="sm" variant="ghost" iconLeft={<Icon name="undo-2" size={14} />} onClick={() => onRevert(turn.id)}>
+                    Revert this turn
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {turn.readOnly && (
+            <span className="ag-kicker" style={{ color: 'var(--fg-4)' }}>Read only · nothing changed</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function Thinking() {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
+        <AiPresence state="thinking" size={34} style={{ flex: '0 0 auto' }} />
+        <span className="ag-kicker" style={{ color: 'var(--fg-3)' }}>Reading your backlog...</span>
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  /* Keys. The product's own rule: a selected key calls Gemini directly,
+     no selection means the deployment's proxy does it. Both are legible
+     from one place, so the header pill can state which is live. */
+  function KeysDialog({ open, onClose, keys, selected, onSelect, onAdd, onRemove }) {
+    const [name, setName] = React.useState('');
+    const [secret, setSecret] = React.useState('');
+
+    React.useEffect(() => { if (!open) { setName(''); setSecret(''); } }, [open]);
+
+    const valid = name.trim().length > 0 && secret.trim().length >= 12;
+
+    function submit() {
+      if (!valid) return;
+      onAdd({ id: 'k' + Math.random().toString(36).slice(2, 8), name: name.trim(), secret: secret.trim() });
+      setName(''); setSecret('');
+    }
+
+    function Row({ id, icon, title, detail, on, onPick, onDrop }) {
+      return (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-5)',
+          padding: 'var(--sp-5) var(--sp-5) var(--sp-5) var(--sp-6)',
+          borderRadius: 'var(--r-lg)',
+          backgroundImage: on ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+          boxShadow: on ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+          transition: 'var(--t-hover)',
+        }}>
+          <button
+            type="button"
+            onClick={onPick}
+            aria-pressed={on}
+            style={{
+              flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--sp-5)',
+              border: 0, background: 'transparent', padding: 0, cursor: 'pointer', textAlign: 'left',
+            }}
+          >
+            <span style={{ display: 'flex', color: on ? 'var(--accent)' : 'var(--fg-3)', flex: '0 0 auto' }}>
+              <Icon name={icon} size={18} />
+            </span>
+            <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+              <span style={{ font: 'var(--type-label)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {title}
+              </span>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {detail}
+              </span>
+            </span>
+          </button>
+          {onDrop && (
+            <IconButton label={'Remove ' + title} variant="ghost" onClick={onDrop}><Icon name="trash-2" size={16} /></IconButton>
+          )}
+          <span aria-hidden="true" style={{ display: 'flex', width: 20, justifyContent: 'center', color: on ? 'var(--accent)' : 'transparent', flex: '0 0 auto' }}>
+            <Icon name="check" size={18} />
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <Dialog open={open} onClose={onClose} width={520} style={{ gap: 0, padding: 0, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+        <div className="ag-scroll" style={{
+          display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-7)',
+          padding: 'var(--pad-sheet)', boxSizing: 'border-box', maxHeight: '86vh', overflowY: 'auto', overscrollBehavior: 'contain',
+        }}>
+          <header style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+              <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-3)' }}>
+                <Icon name="key-round" size={20} />
+              </span>
+              <h2 style={{ flex: 1, minWidth: 0, font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                Gemini API keys
+              </h2>
+              <IconButton label="Close" variant="ghost" onClick={onClose}><Icon name="x" size={18} /></IconButton>
+            </div>
+            <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+              Stored in this browser and, when signed in, also synced to your account so it can be
+              remembered across sessions. A selected key calls Gemini directly; with none selected
+              the request goes through the server proxy.
+            </p>
+          </header>
+
+          <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+            <Row
+              icon="server"
+              title="Server proxy"
+              detail="Uses GEMINI_API_KEY on the deployment. Needs no key here."
+              on={selected === null}
+              onPick={() => onSelect(null)}
+            />
+            {keys.map((k) => (
+              <Row
+                key={k.id}
+                icon="key-round"
+                title={k.name}
+                detail={k.secret.slice(0, 6) + '••••••••' + k.secret.slice(-4)}
+                on={selected === k.id}
+                onPick={() => onSelect(k.id)}
+                onDrop={() => onRemove(k.id)}
+              />
+            ))}
+          </div>
+
+          <div style={{ height: 1, background: 'var(--line-faint)' }} />
+
+          <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={'Name it — "personal", "the paid one"'}
+              aria-label="Key name"
+            />
+            <Input
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+              placeholder="AIza..."
+              aria-label="Gemini API key"
+              style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)' }}
+            />
+            <Button variant="tint" block disabled={!valid} iconLeft={<Icon name="plus" size={16} />} onClick={submit}>
+              Add key
+            </Button>
+          </div>
+
+          <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+            A free key allows about 5 requests a minute and 20 a day, and one chat turn spends 3–6 of
+            them — roughly four turns a day per key. Get one at{' '}
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
+          </p>
+        </div>
+      </Dialog>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  function Composer({ value, onChange, onSend, busy }) {
+    const [focus, setFocus] = React.useState(false);
+    const ready = value.trim().length > 0 && !busy;
+    const ref = React.useRef(null);
+
+    /* Grows with the text up to five lines, then scrolls. A chat field
+       that stays one line hides half of what you typed. */
+    React.useEffect(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 132) + 'px';
+    }, [value]);
+
+    return (
+      <div style={{ display: 'grid', gap: 'var(--sp-4)', justifyItems: 'center' }}>
+        <div style={{
+          display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-4)', width: '100%',
+          padding: 'var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-7)',
+          borderRadius: 'var(--r-pill)',
+          backgroundImage: 'var(--glass-fill-2)',
+          backdropFilter: 'var(--glass-bd-lg-refract)',
+          WebkitBackdropFilter: 'var(--glass-bd-lg)',
+          boxShadow: focus
+            ? 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-3), 0 0 0 1px var(--accent-hairline), var(--glow-accent-sm)'
+            : 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+          transition: 'box-shadow var(--dur-base) var(--ease-glass)',
+        }}>
+          <textarea
+            ref={ref}
+            className="ag-field"
+            data-ag-field=""
+            rows={1}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFocus(true)}
+            onBlur={() => setFocus(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
+            }}
+            placeholder="Tell it what to do..."
+            aria-label="Tell it what to do"
+            style={{
+              flex: 1, minWidth: 0, border: 0, background: 'transparent', resize: 'none',
+              color: 'var(--fg-1)', font: 'var(--type-body)', fontSize: 'var(--text-md)',
+              letterSpacing: 'var(--tracking-ui)', lineHeight: 1.5,
+              padding: 'var(--sp-4) 0', maxHeight: 132, overflowY: 'auto',
+            }}
+          />
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={!ready}
+            aria-label="Send"
+            style={{
+              flex: '0 0 auto', display: 'grid', placeItems: 'center', width: 44, height: 44,
+              border: 0, borderRadius: '50%', cursor: ready ? 'pointer' : 'default',
+              backgroundImage: ready ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+              boxShadow: ready ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+              color: ready ? 'oklch(0.95 0.07 162)' : 'var(--fg-4)',
+              transition: 'var(--t-hover)',
+            }}
+          >
+            {busy ? <AiPresence state="thinking" size={26} /> : <Icon name="arrow-up" size={18} />}
+          </button>
+        </div>
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textAlign: 'center' }}>
+          It writes to your real backlog. Nothing is ever deleted — that stays manual.
+        </span>
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  function Assistant() {
+    const [wide, setWide] = React.useState(window.innerWidth >= 900);
+    const [draft, setDraft] = React.useState('');
+    const [turns, setTurns] = React.useState([]);
+    const [busy, setBusy] = React.useState(false);
+    const [keysOpen, setKeysOpen] = React.useState(false);
+    const [keys, setKeys] = React.useState([{ id: 'k1', name: 'personal', secret: 'AIzaSyD7f2Qw1xR4mn' }]);
+    const [selected, setSelected] = React.useState(null);
+    const [toast, setToast] = React.useState(null);
+    const scroller = React.useRef(null);
+
+    React.useEffect(() => {
+      const on = () => setWide(window.innerWidth >= 900);
+      window.addEventListener('resize', on);
+      return () => window.removeEventListener('resize', on);
+    }, []);
+
+    /* Keep the newest turn in view without scrollIntoView. */
+    React.useEffect(() => {
+      const el = scroller.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, [turns, busy]);
+
+    React.useEffect(() => {
+      if (!toast) return;
+      const t = setTimeout(() => setToast(null), 3200);
+      return () => clearTimeout(t);
+    }, [toast]);
+
+    function send(text) {
+      const ask = (text != null ? text : draft).trim();
+      if (!ask || busy) return;
+      setDraft('');
+      const id = 't' + Date.now();
+      setTurns((cur) => cur.concat({ id, ask }));
+      setBusy(true);
+      setTimeout(() => {
+        setTurns((cur) => cur.map((t) => (t.id === id ? Object.assign({}, t, resolve(ask)) : t)));
+        setBusy(false);
+      }, 950);
+    }
+
+    function revert(id) {
+      setTurns((cur) => cur.map((t) => (t.id === id ? Object.assign({}, t, { reverted: true }) : t)));
+      const t = turns.find((x) => x.id === id);
+      const n = t && t.changes ? t.changes.length : 0;
+      setToast({ title: 'Turn reverted', detail: n + (n === 1 ? ' change' : ' changes') + ' undone in your backlog.' });
+    }
+
+    const source = selected === null ? 'Server proxy' : (keys.find((k) => k.id === selected) || {}).name;
+    const navItems = NAV.map((n) => ({ value: n.value, label: n.label, icon: <Icon name={n.icon} size={20} />, badge: n.badge }));
+    const empty = turns.length === 0;
+
+    function go(v) {
+      const item = NAV.find((n) => n.value === v);
+      if (item && item.href) location.href = item.href;
+    }
+
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'stretch' }}>
+        <GlassFilters />
+
+        {wide && (
+          <div style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+            <MiniNav orientation="vertical" items={navItems} value="assistant" onChange={go} />
+          </div>
+        )}
+
+        <div style={{
+          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
+          height: '100vh', boxSizing: 'border-box',
+          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-8)' : 'var(--sp-8) var(--gutter-page-sm) 116px',
+        }}>
+          {/* Header. The source pill is the one piece of machine state on
+              this screen, so it sits at the top right and never moves. */}
+          <header style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
+            width: '100%', maxWidth: 860, margin: '0 auto var(--sp-8)', flex: '0 0 auto',
+          }}>
+            <a href="home.html" style={{ display: 'flex', border: 0 }} aria-label="Back to Home">
+              <IconButton label="Back to Home" variant="ghost"><Icon name="arrow-left" size={18} /></IconButton>
+            </a>
+            <span aria-hidden="true" style={{
+              display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 auto',
+              borderRadius: '50%', backgroundImage: 'var(--glass-tint-accent)',
+              boxShadow: 'var(--glass-rim-2), var(--glow-accent-sm)', color: 'oklch(0.93 0.07 162)',
+            }}>
+              <Icon name="sparkles" size={20} />
+            </span>
+            <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+              <h1 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                Assistant
+              </h1>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                Types into your real backlog. Every turn can be reverted.
+              </span>
+            </div>
+            <span style={{ flex: 1 }} />
+            {!empty && (
+              <IconButton label="New chat" variant="ghost" onClick={() => { setTurns([]); setDraft(''); }}>
+                <Icon name="message-square-plus" size={18} />
+              </IconButton>
+            )}
+            <button
+              type="button"
+              onClick={() => setKeysOpen(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 44, flex: '0 0 auto',
+                padding: '0 var(--sp-6)', border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
+                backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+                color: 'var(--fg-1)', font: 'var(--type-label)', fontSize: 'var(--text-sm)',
+                transition: 'var(--t-hover)',
+              }}
+            >
+              <span style={{ display: 'flex', color: selected === null ? 'var(--fg-3)' : 'var(--accent)' }}>
+                <Icon name={selected === null ? 'server' : 'key-round'} size={16} />
+              </span>
+              {source}
+            </button>
+          </header>
+
+          {/* Transcript. Scrolls under the header, never past the composer. */}
+          <div ref={scroller} className="ag-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+            <div style={{
+              width: '100%', maxWidth: 860, margin: '0 auto',
+              minHeight: '100%', display: 'grid', alignContent: empty ? 'center' : 'start',
+              gap: 'var(--sp-9)', paddingBottom: 'var(--sp-8)', boxSizing: 'border-box',
+            }}>
+              {empty ? (
+                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-7)' }}>
+                  <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-4)', textAlign: 'center' }}>
+                    <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-2xl)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
+                      Ask for something.
+                    </h2>
+                    <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', maxWidth: '46ch', textWrap: 'pretty' }}>
+                      It can search, create, edit, complete and queue tasks. It cannot delete
+                      anything — that stays manual.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 'var(--sp-3)', width: '100%', maxWidth: 460 }}>
+                    {OPENERS.map((o, i) => (
+                      <Opener key={o} label={o} delay={i * 44} onPick={() => send(o)} />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                turns.map((t) => (
+                  <div key={t.id} style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <p style={{
+                        maxWidth: '74%', padding: 'var(--sp-4) var(--sp-6)',
+                        borderRadius: 'var(--r-lg)', backgroundImage: 'var(--glass-fill-3)',
+                        boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+                        font: 'var(--type-body)', color: 'var(--fg-1)', textWrap: 'pretty',
+                        animation: 'ag-condense var(--dur-base) var(--ease-glass) both',
+                      }}>
+                        {t.ask}
+                      </p>
+                    </div>
+                    {t.reply ? <AssistantTurn turn={t} onRevert={revert} /> : <Thinking />}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Composer */}
+          <div style={{ flex: '0 0 auto', width: '100%', maxWidth: 760, margin: 'var(--sp-6) auto 0' }}>
+            <Composer value={draft} onChange={setDraft} onSend={() => send()} busy={busy} />
+          </div>
+        </div>
+
+        {toast && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-13)', display: 'grid', placeItems: 'center', zIndex: 60, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <Toast icon={<Icon name="undo-2" size={16} />} title={toast.title} detail={toast.detail} onDismiss={() => setToast(null)} />
+            </span>
+          </div>
+        )}
+
+        <KeysDialog
+          open={keysOpen}
+          onClose={() => setKeysOpen(false)}
+          keys={keys}
+          selected={selected}
+          onSelect={setSelected}
+          onAdd={(k) => { setKeys((cur) => cur.concat(k)); setSelected(k.id); }}
+          onRemove={(id) => { setKeys((cur) => cur.filter((k) => k.id !== id)); setSelected((s) => (s === id ? null : s)); }}
+        />
+
+        {!wide && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 'var(--sp-5)', display: 'grid', placeItems: 'center', zIndex: 50, pointerEvents: 'none' }}>
+            <span style={{ pointerEvents: 'auto' }}>
+              <MiniNav items={navItems} value="assistant" onChange={go} />
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* An opener is a suggestion, not a control: hairline glass, and it
+     lifts on hover like every other clickable pane in the system. */
+  function Opener({ label, delay, onPick }) {
+    const [hover, setHover] = React.useState(false);
+    return (
+      <button
+        type="button"
+        onClick={onPick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%',
+          minHeight: 52, padding: '0 var(--sp-6)', border: 0, cursor: 'pointer', textAlign: 'left',
+          borderRadius: 'var(--r-pill)',
+          backgroundImage: hover ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          boxShadow: hover ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-rim-1)',
+          color: 'var(--fg-1)', font: 'var(--type-body)', fontSize: 'var(--text-sm)',
+          transform: hover ? 'translateY(-2px)' : 'none',
+          transition: 'var(--t-hover)',
+          animation: 'ag-condense var(--dur-slow) var(--ease-glass) both',
+          animationDelay: delay + 'ms',
+        }}
+      >
+        <span style={{ flex: 1, minWidth: 0 }}>{label}</span>
+        <span style={{ display: 'flex', color: hover ? 'var(--accent)' : 'var(--fg-4)', flex: '0 0 auto', transition: 'var(--t-hover)' }}>
+          <Icon name="arrow-up-right" size={15} />
+        </span>
+      </button>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Assistant />);
+});
+</script>
+</body>
+</html>

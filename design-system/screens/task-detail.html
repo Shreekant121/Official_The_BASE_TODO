@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Task detail</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  .ag-field::placeholder { color: var(--fg-4); opacity: 1; }
+  .ag-field:focus { outline: none; }
+  .ag-field::-webkit-calendar-picker-indicator { filter: invert(1) brightness(0.72); opacity: .8; cursor: pointer; }
+  .ag-field::-webkit-inner-spin-button { display: none; }
+  .ag-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .ag-scroll::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+</head>
+<body class="ag-page" data-screen-label="Task detail">
+<div id="root">
+  <div style="display:flex;min-height:100vh">
+    <div style="width:104px;flex:0 0 auto"></div>
+    <div style="flex:1;min-width:0;padding:var(--sp-9) var(--gutter-page)">
+      <div style="height:60px;border-radius:var(--r-pill);background-image:var(--glass-fill-1);box-shadow:var(--glass-rim-1)"></div>
+    </div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/forms/Switch.jsx',
+  '../components/forms/Checkbox.jsx',
+  '../components/data/ScoreDial.jsx',
+  '../components/data/StatusPill.jsx',
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/overlay/TaskSheet.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, ScoreDial, TaskSheet } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  /* The sheet in isolation. The board behind it is a static stand-in so
+     the glass has something real to refract; the live version opens
+     straight off a task card in project.html. */
+
+  const NOW = '2026-08-21T09:00';
+
+  const TASK = {
+    id: 'copy',
+    title: 'Rewrite the landing page copy',
+    project: 'Shreekant Empire',
+    list: 'Build',
+    status: 'todo',
+    quadrant: 'schedule',
+    importance: 4,
+    value: 40000,
+    quasi: true,
+    deadline: '2026-09-19T18:00',
+    start: '',
+    est: 150,
+    desc: 'Lead with the outcome, not the process. Three sections, one call to action.',
+    notes: '',
+    repeat: { every: 1, unit: 'months', days: [], ends: 'after', count: 3 },
+    occurrence: 3,
+    reminder: '1 hour before',
+    shared: ['⚡ Action Steps'],
+    blockedBy: '',
+    assignee: null,
+    tags: ['writing', 'web'],
+    links: [
+      { label: 'Current draft', url: 'https://docs.example/landing-copy' },
+      { label: 'Competitor teardown', url: 'https://docs.example/teardown' },
+    ],
+    subtasks: [
+      { id: 's1', title: 'Hero section', done: false },
+      { id: 's2', title: 'Proof section', done: false },
+      { id: 's3', title: 'Call to action', done: false },
+    ],
+    publicLink: null,
+    visibleInShared: true,
+    cover: null,
+  };
+
+  const BOARD = [
+    { name: 'Build', budget: '₹40,000', tasks: [{ title: 'Rewrite the landing page copy', note: 'Lead with the outcome, not the process.', score: 7.5, open: true }] },
+    { name: 'Operations', budget: '₹25,000', tasks: [
+      { title: 'File the incorporation paperwork', note: 'Form INC-32 plus the MOA and AOA.', score: 11.5, live: true },
+      { title: 'Quarterly compliance review', note: 'Registers, minutes and the statutory file.', score: 7.0 },
+    ] },
+    { name: 'Money', budget: '₹95,000', tasks: [
+      { title: 'Open the current account', note: 'Needs the certificate of incorporation.', score: 7.0 },
+      { title: 'Chase the outstanding invoices', note: 'Two are past thirty days.', score: 9.0 },
+    ] },
+  ];
+
+  function Backdrop() {
+    return (
+      <div aria-hidden="true" style={{ display: 'flex', minHeight: '100vh', alignItems: 'flex-start', pointerEvents: 'none' }}>
+        <div style={{ display: 'grid', gap: 'var(--sp-3)', padding: 'var(--sp-9) var(--sp-6)' }}>
+          {['layout-dashboard', 'house', 'sparkles', 'zap', 'award', 'bell', 'settings'].map((n, i) => (
+            <span key={n} style={{
+              display: 'grid', placeItems: 'center', width: 52, height: 52, borderRadius: 'var(--r-pill)',
+              backgroundImage: i === 1 ? 'var(--glass-fill-3)' : 'var(--glass-fill-1)',
+              boxShadow: 'var(--glass-rim-1)', color: i === 1 ? 'var(--fg-1)' : 'var(--fg-3)',
+            }}>
+              <Icon name={n} size={20} />
+            </span>
+          ))}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 'var(--sp-8)', padding: 'var(--sp-9) var(--gutter-page) var(--sp-11)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', padding: 'var(--pad-card)', borderRadius: 'var(--r-card-lg)', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-shadow-pane)' }}>
+            <span style={{ display: 'grid', placeItems: 'center', width: 46, height: 46, borderRadius: 'var(--r-md)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', fontSize: 20 }}>📋</span>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <span style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', color: 'var(--fg-1)' }}>Shreekant Empire</span>
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>3 lists · 5 tasks · ₹1.6L</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--gap-card)' }}>
+            {BOARD.map((l) => (
+              <div key={l.name} style={{ display: 'grid', gap: 'var(--sp-4)', alignContent: 'start', padding: 'var(--pad-card)', borderRadius: 'var(--r-card)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+                  <span style={{ font: 'var(--type-title)', fontSize: 'var(--text-md)', color: 'var(--fg-1)', flex: 1 }}>{l.name}</span>
+                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)' }}>{l.budget}</span>
+                </div>
+                {l.tasks.map((t) => (
+                  <div key={t.title} style={{
+                    display: 'grid', gap: 'var(--sp-3)', padding: 'var(--sp-5)', borderRadius: 'var(--r-md)',
+                    backgroundImage: t.open ? 'var(--glass-fill-3)' : 'var(--glass-well)',
+                    boxShadow: t.open ? 'var(--glass-rim-2), var(--glass-cast-2)' : 'var(--glass-well-shadow)',
+                  }}>
+                    <div style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'flex-start' }}>
+                      <span style={{ flex: 1, minWidth: 0, font: 'var(--type-label)', color: 'var(--fg-1)' }}>{t.title}</span>
+                      <ScoreDial value={t.score} size="sm" />
+                    </div>
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>{t.note}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function Screen() {
+    const [open, setOpen] = React.useState(true);
+    return (
+      <React.Fragment>
+        <GlassFilters />
+        <Backdrop />
+        {open ? (
+          <TaskSheet
+            task={TASK}
+            now={NOW}
+            lists={['Build', 'Operations', 'Money']}
+            shareLists={['⚡ Action Steps', '🧊 Backburner', '📚 Reference Materials']}
+            prereqs={['File the incorporation paperwork', 'Open the current account', 'Quarterly compliance review']}
+            onClose={() => setOpen(false)}
+            onSave={() => setOpen(false)}
+            onDelete={() => setOpen(false)}
+          />
+        ) : (
+          <div style={{ position: 'fixed', left: '50%', bottom: 'var(--sp-9)', transform: 'translateX(-50%)', zIndex: 90 }}>
+            <Button variant="frost" onClick={() => setOpen(true)} iconLeft={<Icon name="panel-right-open" size={16} />}>
+              Open task detail
+            </Button>
+          </div>
+        )}
+      </React.Fragment>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Screen />);
+});
+</script>
+</body>
+</html>

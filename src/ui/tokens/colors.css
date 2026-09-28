@@ -1,0 +1,74 @@
+/* ---------------------------------------------------------------
+   COLOR — dark only, and deliberately monochrome. The product is a
+   focus tool: one accent, one meaning. Emerald is that accent, taken
+   straight from the live app (#10B981 boot state, #34D399 power icon).
+
+   Everything else is a neutral near-black ladder anchored on the
+   product's own #050505 page and #121212 surface. The extra hues at the
+   bottom exist ONLY to carry task status — they are never decoration
+   and never brand.
+   --------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+
+  /* ---- Base ladder. Neutral, with a cast so faint it reads as black. ---- */
+  --void-0: oklch(0.075 0.002 260);   /* #050505 — page floor            */
+  --void-1: oklch(0.120 0.003 260);   /* app chrome, rails               */
+  --void-2: oklch(0.180 0.003 260);   /* #121212 — opaque card fallback  */
+  --void-3: oklch(0.240 0.004 260);   /* raised / hover fill             */
+  --void-4: oklch(0.300 0.004 260);   /* pressed / heavy divider         */
+
+  /* ---- Foreground ladder ---- */
+  --fg-1: oklch(1 0 0);               /* headings, primary — pure white  */
+  --fg-2: oklch(0.790 0.004 260);     /* body copy                       */
+  --fg-3: oklch(0.610 0.005 260);     /* labels, captions, metadata      */
+  --fg-4: oklch(0.450 0.005 260);     /* placeholder, disabled           */
+  --fg-on-accent: oklch(0.145 0.02 162);
+  --fg-on-light:  oklch(0.130 0 0);
+
+  /* ---- THE accent. Emerald, from the product. ---- */
+  --accent:        oklch(0.700 0.150 162);   /* #10B981 */
+  --accent-lift:   oklch(0.785 0.140 165);   /* #34D399 — hover          */
+  --accent-sink:   oklch(0.600 0.130 161);   /* #059669 — press          */
+  --accent-wash:   oklch(0.700 0.150 162 / 0.14);
+  --accent-hairline: oklch(0.700 0.150 162 / 0.34);
+
+  /* ---- Status hues. Same L and C as the accent so none out-shouts it.
+          Semantic use only — never as brand colour or decoration. ---- */
+  --hue-cyan:   oklch(0.70 0.15 210);
+  --hue-violet: oklch(0.70 0.15 296);
+  --hue-amber:  oklch(0.75 0.15  82);
+  --hue-rose:   oklch(0.70 0.15  20);
+  --hue-grey:   oklch(0.70 0.01 260);
+
+  /* ---- Semantic aliases — reach for these, not the raw values ---- */
+  --brand:          var(--accent);
+  --text-heading:   var(--fg-1);
+  --text-body:      var(--fg-2);
+  --text-muted:     var(--fg-3);
+  --text-disabled:  var(--fg-4);
+  --surface-page:   var(--void-0);
+  --surface-chrome: var(--void-1);
+  --surface-card:   var(--void-2);
+  --surface-raised: var(--void-3);
+
+  /* Task + session status, mapped to the app's real vocabulary */
+  --status-running:   var(--accent);       /* timer live               */
+  --status-queued:    var(--hue-cyan);     /* in the queue, not started */
+  --status-review:    var(--hue-amber);    /* needs a decision         */
+  --status-done:      oklch(0.70 0.15 150);
+  --status-overrun:   var(--hue-rose);     /* over allocated time      */
+  --status-backburner: var(--hue-violet);
+  --status-archived:  var(--hue-grey);
+
+  /* ---- Hairlines. Matches the product's rgba(255,255,255,0.06–0.08). ---- */
+  --line-faint:  oklch(1 0 0 / 0.06);
+  --line-soft:   oklch(1 0 0 / 0.08);
+  --line-strong: oklch(1 0 0 / 0.18);
+
+  /* Focus. An outline, not a box-shadow: it follows the control's
+     border-radius instead of boxing a rectangle inside it. */
+  --focus-ring-color: var(--accent);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}

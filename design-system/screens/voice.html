@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASE — Voice (Dock mode)</title>
+<link rel="icon" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.js"></script>
+<script src="../_ds_loader.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; overflow: hidden; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-hairline); }
+  a:hover { color: var(--accent-lift); border-bottom-color: var(--accent-lift); }
+
+  /* Two metres, one column, nothing small. Every size is fluid against
+     BOTH axes (vmin) so the screen fits portrait and landscape without
+     ever scrolling. */
+  .v-lead { font: var(--weight-medium) clamp(28px, min(4.6vh, 5.2vmin), 68px) / 1.08 var(--font-sans); letter-spacing: var(--tracking-display); color: var(--fg-1); margin: 0; text-wrap: balance; }
+  .v-body { font: var(--weight-normal) clamp(20px, min(3vh, 2.9vmin), 36px) / 1.36 var(--font-sans); letter-spacing: var(--tracking-title); color: var(--fg-2); margin: 0; text-wrap: pretty; }
+  .v-sub  { font: var(--weight-normal) clamp(17px, min(2.4vh, 2.2vmin), 26px) / 1.4 var(--font-sans); letter-spacing: var(--tracking-title); color: var(--fg-3); margin: 0; text-wrap: pretty; }
+  .v-kick { font: var(--weight-normal) clamp(12px, min(1.7vh, 1.5vmin), 16px) / 1.2 var(--font-mono); letter-spacing: var(--tracking-kicker); text-transform: uppercase; white-space: nowrap; }
+  .v-word { display: inline-block; animation: ag-condense var(--dur-base) var(--ease-glass) both; }
+</style>
+</head>
+<body class="ag-page" data-screen-label="Voice — Dock mode">
+<div id="root">
+  <div style="display:grid;place-items:center;height:100vh">
+    <div style="width:min(240px,40vmin);aspect-ratio:1;border-radius:50%;background-image:var(--glass-fill-2);backdrop-filter:var(--glass-bd-md);-webkit-backdrop-filter:var(--glass-bd-md);box-shadow:var(--glass-shadow-pane)"></div>
+  </div>
+</div>
+<script type="text/ag-jsx">
+AG_LOAD([
+  '../components/data/AiPresence.jsx',
+  '../components/actions/RecordTimer.jsx',
+  '../components/feedback/LoadingPill.jsx',
+  '../components/material/GlassFilters.jsx',
+  '../components/core/Icon.jsx',
+  '../components/actions/Button.jsx',
+  '../components/actions/IconButton.jsx',
+  '../components/actions/SegmentedControl.jsx',
+  '../components/feedback/Waveform.jsx'
+]).then(function (AG) {
+  const { GlassFilters, Icon, Button, IconButton, SegmentedControl, Waveform } = AG;
+  const { AiPresence, RecordTimer, LoadingPill, showProgress } = AG;
+
+  const WORDS = ['What', 'is', 'late', 'right', 'now'];
+  const ANSWER = 'Three are past their date. The launch email is the one that costs you something.';
+
+  const STATES = [
+    { value: 'waiting',  label: 'Waiting' },
+    { value: 'hearing',  label: 'Hearing' },
+    { value: 'thinking', label: 'Thinking' },
+    { value: 'speaking', label: 'Speaking' },
+  ];
+
+  /* ---------------------------------------------------------------
+     ONE OBJECT, FOUR STATES. The orb never unmounts — only its
+     contents and the rings behind it change. Emerald is on it while
+     the microphone is open, and nowhere else on the screen.
+     --------------------------------------------------------------- */
+  function Orb({ state, muted }) {
+    const live = !muted && (state === 'waiting' || state === 'hearing');
+    const hot = state === 'hearing';
+
+    return (
+      <div style={{ position: 'relative', width: 'clamp(104px, min(19vh, 26vmin), 260px)', aspectRatio: '1', display: 'grid', placeItems: 'center' }}>
+        {live && [0, 1, 2].map(function (i) {
+          return (
+            <span key={i} aria-hidden="true" style={{
+              position: 'absolute', inset: 0, borderRadius: '50%',
+              border: '1px solid var(--accent-hairline)', boxShadow: 'var(--glow-accent-sm)', opacity: 0,
+              animation: 'ag-ripple ' + (hot ? 2000 : 3600) + 'ms var(--ease-glass) ' + (i * (hot ? 660 : 1200)) + 'ms infinite',
+            }} />
+          );
+        })}
+
+        <div style={{
+          position: 'relative', width: '100%', height: '100%', borderRadius: '50%', boxSizing: 'border-box',
+          display: 'grid', placeItems: 'center', padding: muted ? '16%' : 0,
+          backgroundImage: live ? 'var(--glass-tint-accent)' : 'var(--glass-fill-2)',
+          backdropFilter: 'var(--glass-bd-lg-refract)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
+          boxShadow: live
+            ? 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2), ' + (hot ? 'var(--glow-accent-lg)' : 'var(--glow-accent-md)')
+            : 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+          transition: 'background-image var(--dur-base) var(--ease-glass), box-shadow var(--dur-morph) var(--ease-glass)',
+        }}>
+          {muted ? (
+            <span style={{ display: 'grid', placeItems: 'center', width: '46%', height: '46%', color: 'var(--fg-4)' }}>
+              <Icon name="mic-off" size="100%" />
+            </span>
+          ) : (
+            /* Atlas's mark. Waiting idles; hearing and thinking stir; speaking follows the voice. */
+            <AiPresence state={state === 'waiting' ? 'idle' : state === 'speaking' ? 'speaking' : 'thinking'} size={220} style={{ width: '150%', height: '150%', margin: '-25%' }} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function Voice() {
+    const [state, setState] = React.useState('waiting');
+    const [muted, setMuted] = React.useState(false);
+    const [heard, setHeard] = React.useState(2);
+
+    React.useEffect(function () {
+      if (state !== 'hearing') return;
+      setHeard(2);
+      const iv = setInterval(function () {
+        setHeard(function (n) { return n >= WORDS.length ? 2 : n + 1; });
+      }, 900);
+      return function () { clearInterval(iv); };
+    }, [state]);
+
+    React.useEffect(function () {
+      const key = function (e) {
+        const i = ['1', '2', '3', '4'].indexOf(e.key);
+        if (i !== -1) setState(STATES[i].value);
+      };
+      document.addEventListener('keydown', key);
+      return function () { document.removeEventListener('keydown', key); };
+    }, []);
+
+    const words = WORDS.slice(0, heard);
+    const leave = function () { location.href = 'atlas.html'; };
+
+    const label = muted ? 'Microphone blocked'
+      : state === 'waiting' ? 'Listening for “Atlas”'
+      : state === 'hearing' ? 'Hearing you'
+      : state === 'thinking' ? 'Working'
+      : 'Reading it out';
+
+    return (
+      <div style={{
+        height: '100vh', boxSizing: 'border-box', display: 'grid',
+        gridTemplateRows: 'auto minmax(0, 1fr) auto',
+        padding: 'clamp(20px, 3vmin, 40px)', minWidth: 0,
+      }}>
+        <GlassFilters />
+
+        {/* Two facts and one way out. */}
+        <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-6)', minWidth: 0 }}>
+          <span className="v-kick" style={{ color: 'var(--fg-3)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            Dock mode
+          </span>
+          <Button variant="ghost" size="lg" iconLeft={<Icon name="corner-up-left" size={18} />} onClick={leave}>Leave</Button>
+        </header>
+
+        {/* The stage. One column, centred, never taller than the row. */}
+        <main key={state + String(muted)} style={{
+          minHeight: 0, minWidth: 0, overflow: 'hidden', display: 'grid', justifyItems: 'center', alignContent: 'center',
+          gap: 'clamp(12px, min(2.6vh, 3vmin), 44px)', textAlign: 'center',
+          animation: 'ag-condense var(--dur-slow) var(--ease-glass) both',
+        }}>
+          <Orb state={state} muted={muted} />
+
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            {!muted && (state === 'waiting' || state === 'hearing') && (
+              <span aria-hidden="true" style={{
+                width: 9, height: 9, borderRadius: '50%', background: 'var(--accent)',
+                boxShadow: '0 0 10px var(--accent)', animation: 'ag-pulse 1800ms var(--ease-in-out) infinite',
+              }} />
+            )}
+            <span className="v-kick" style={{ color: !muted && (state === 'waiting' || state === 'hearing') ? 'var(--accent)' : muted ? 'var(--status-review)' : 'var(--fg-3)' }}>
+              {label}
+            </span>
+          </span>
+
+          {muted ? (
+            <div style={{ display: 'grid', justifyItems: 'center', gap: 'clamp(12px, min(2.2vh, 2.6vmin), 32px)', maxWidth: '26ch' }}>
+              <p className="v-lead">Allow the microphone.</p>
+              <p className="v-sub">Dock mode cannot hear the wake word until you do.</p>
+              <Button variant="frost" size="lg" iconLeft={<Icon name="settings" size={18} />} onClick={function () { setMuted(false); }}>
+                Open sound &amp; permissions
+              </Button>
+            </div>
+          ) : state === 'waiting' ? (
+            <div style={{ display: 'grid', justifyItems: 'center', gap: 'clamp(12px, min(1.9vh, 2.2vmin), 28px)' }}>
+              <p className="v-lead" style={{ maxWidth: '20ch' }}>Say “Atlas”, then the message.</p>
+              <p className="v-sub" style={{ maxWidth: '38ch' }}>
+                Only from this screen, awake and in front. Not with the screen off, not from another app, not from the next room.
+              </p>
+            </div>
+          ) : state === 'hearing' ? (
+            <p className="v-lead" style={{ maxWidth: '20ch' }}>
+              {words.map(function (word, i) {
+                return (
+                  <span key={word + i} className="v-word" style={{ color: i === words.length - 1 ? 'var(--fg-4)' : undefined }}>
+                    {word}{i < words.length - 1 ? '\u00A0' : ''}
+                  </span>
+                );
+              })}
+            </p>
+          ) : state === 'thinking' ? (
+            <p className="v-lead" style={{ maxWidth: '20ch' }}>Thinking<span style={{ color: 'var(--fg-4)' }}>…</span></p>
+          ) : (
+            <div style={{ display: 'grid', justifyItems: 'center', gap: 'clamp(14px, min(2.4vh, 3vmin), 36px)' }}>
+              <p className="v-body" style={{ maxWidth: '26ch' }}>{ANSWER}</p>
+              <Button variant="frost" size="lg" iconLeft={<Icon name="square" size={18} />} onClick={function () { setState('waiting'); }}>Stop</Button>
+            </div>
+          )}
+        </main>
+
+        {/* The state harness — a spec affordance, kept to one trough at
+            the bottom edge and out of the reading line. */}
+        <footer style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-5)', maxWidth: '100%',
+            padding: 'var(--sp-3) var(--sp-5)', borderRadius: 'var(--r-pill)',
+            backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+          }}>
+            <RecordTimer size="sm" label="push to talk" armed={!muted} icon={<Icon name="mic" size={17} />}
+              onStart={function () { setState('hearing'); }}
+              onSave={function () { setState('thinking'); setTimeout(function () { setState('speaking'); }, 1800); }} />
+            <SegmentedControl options={STATES} value={state} onChange={setState} />
+            <IconButton label={muted ? 'Allow microphone' : 'Block microphone'} variant="ghost" size="md" active={muted} onClick={function () { setMuted(!muted); }}>
+              <Icon name={muted ? 'mic-off' : 'mic'} size={18} />
+            </IconButton>
+          </span>
+        </footer>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Voice />);
+});
+</script>
+</body>
+</html>

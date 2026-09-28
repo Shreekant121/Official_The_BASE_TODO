@@ -1,0 +1,155 @@
+/* ---------------------------------------------------------------
+   BACKDROP — near-black with a faint measured grid. The grid is doing
+   real work: it is the thing the glass refracts, so panes read as
+   physical objects with edges that bend lines. No aurora, no colour
+   wash by default — this is a focus tool and the field stays quiet.
+
+   Usage:  <body class="ag-page">
+     --calm    grid only, for dense data screens
+     --focal   grid + one emerald pool behind a single object
+     --field   opt-in colour field, for onboarding and marketing only
+
+   DEVIATES FROM design-system/tokens/backdrop.css IN TWO PLACES.
+
+   ONE: `isolation: isolate` on `.ag-page` (UI-36). The mirror does not
+   have it, and without it the pool, the grain and all three variants are
+   dead everywhere `.ag-page` is on a nested element rather than <body>.
+   Both pseudos carry a NEGATIVE z-index (-2, -1) while `.ag-page` is
+   `position: relative; z-index: auto` — which is not a stacking
+   context, so they are hoisted out to the root's negative layer and
+   land UNDER this element's own opaque `--surface-page`. On <body> the
+   background propagates to the canvas, nothing opaque is left to bury
+   them, and the token appears to work; on a nested div it never does.
+   Isolating makes `.ag-page` the stacking context the pseudos assume,
+   which paints them above its background and below its content.
+   The bug is in the source token, not in our use of it:
+   `design-system/foundations/backdrop.card.html` puts the four
+   variants on four side-by-side divs, and as authored they all render
+   identically. Verified by forcing `::before` to solid red — no red
+   without this line, full red with it.
+
+   TWO: the pool and the grain are background layers on `.ag-page`
+   itself rather than `::before` and `::after` (UI-37 — the long note on
+   the rule below has the measurements). The mirror still carries them as
+   pseudo-elements, so the mirror still has the scroll seam.
+
+   Those two fixes are not redundant. UI-36 made the pseudos paint; UI-37
+   makes the two layers everything actually uses stop depending on a
+   pseudo at all, so they survive a scrolling wrapper as well as a nested
+   one. `isolation: isolate` stays either way: `--field` still owns a
+   negative-z pseudo, and screens stack content against the context it
+   creates.
+
+   BOTH SHIPPED UNDER ITEM 20, WHICH AUDITED THE RESULT SCREEN BY SCREEN.
+   Every route was read back out of the running app — which page-level
+   element carries `.ag-page`, which variant it resolves to, and whether
+   the element is its own scroller — and checked against the variant its
+   mockup in `design-system/screens/` wears. Everything agreed except two
+   screens, and both are recorded where they live rather than here:
+   `/login` is `--calm` against a `--focal` mockup because Shreekant cut
+   the pool (LoginPage.tsx says why), and `/log` had NO page-level
+   `.ag-page` at all, so it inherited the default pool where `log.html`
+   asks for `--calm` (LogPage.tsx says why).
+
+   ONE THING THE SHOT HARNESS CANNOT SEE, WHICH MATTERS TO THE NEXT
+   SESSION TOUCHING THIS FILE. The pool at its default 0.17 alpha, low on
+   the page, moves NO cells in `imageDiff.ts` — `log-asleep` gains and
+   loses it with `raw=0` at half resolution and a 20/255 channel
+   tolerance, while the two captures are visibly different when opened.
+   Only `settings-keys`, scrolled to the bottom of a tall page, moved
+   (12,084 cells desktop / 2,279 tablet — the pool arriving where UI-37
+   stopped it scrolling away). So a change to this file is proved by
+   opening the images, never by the harness's verdict, and all 158
+   baselines were re-banked here whether or not a cell moved.
+   --------------------------------------------------------------- */
+/* No overflow clipping here: app screens must be able to scroll. The
+   drifting --field variant insets its own gradient layer instead. */
+.ag-page {
+  position: relative;
+  /* Load-bearing, but no longer for the pool or the grain — those are
+     background layers on this element now (UI-37) and paint without any
+     help from a stacking context. It stays because `--field` still owns
+     a negative-z pseudo, and because screens stack content against the
+     context this creates. */
+  isolation: isolate;
+  min-height: 100%;
+  color: var(--text-body);
+
+  /* THE POOL AND THE GRAIN LIVE ON THE ELEMENT, NOT ON PSEUDOS (UI-37).
+
+     They were `::before` and `::after` at `position: absolute; inset: 0`.
+     On any `.ag-page` that is ITSELF the scroll container — `h-screen
+     overflow-y-auto`, which is Home, Login and the OAuth callback — an
+     absolutely positioned child is sized to the PADDING BOX, one
+     viewport tall, and anchored to the top of the scrollable content. So
+     both layers scrolled away with the content and simply ran out.
+
+     Measured on Home: 2386px of scroll height against 720px of grain,
+     and a hard horizontal seam across the full width at exactly 720px
+     where the noise stopped and flat `--surface-page` black took over.
+     Grain is pale noise at low alpha over near-black, so the half with it
+     reads visibly lighter than the half without — it looked like two
+     different background colours meeting at a line. Confirmed by forcing
+     `::after` to solid red and scrolling: the red ended on the predicted
+     pixel, not one caused by anything else on the page.
+
+     As background layers they inherit the grid's behaviour instead.
+     `background-attachment` defaults to `scroll`, which pins the whole
+     stack to THIS ELEMENT'S box rather than to its contents, so nothing
+     can run out at any scroll offset or any content height. That is the
+     rule the grid comment already stated and the other two layers were
+     not following.
+
+     Layer order reproduces the pseudos' painting order exactly: grain
+     over pool over grid. The grain's old `opacity: 0.26` is baked into
+     the SVG's own `opacity` — 0.55 x 0.26 = 0.143 — because a background
+     layer cannot carry one, and multiplying the two is what the pseudo
+     was compositing anyway.
+
+     Variants swap ONE custom property. `none` is a legal layer value, so
+     the stack keeps its shape and the layer order never shifts. */
+  --ag-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.143'/%3E%3C/svg%3E");
+  --ag-pool: radial-gradient(70% 55% at 50% 118%, oklch(0.700 0.150 162 / 0.17) 0%, transparent 72%);
+
+  /* Horizontals carry the grid; verticals are half strength so it never
+     reads as graph paper. */
+  background-color: var(--surface-page);
+  background-image:
+    var(--ag-grain),
+    var(--ag-pool),
+    repeating-linear-gradient(to bottom, oklch(1 0 0 / 0.075) 0 1px, transparent 1px 88px),
+    repeating-linear-gradient(to right,  oklch(1 0 0 / 0.040) 0 1px, transparent 1px 88px);
+  background-repeat: repeat, no-repeat, repeat, repeat;
+}
+
+/* Grid only — for dense data screens */
+.ag-page--calm { --ag-pool: none; }
+
+/* One pool of light behind a single focal object */
+.ag-page--focal {
+  --ag-pool: radial-gradient(34% 30% at 50% 50%, oklch(0.700 0.150 162 / 0.22) 0%, transparent 70%);
+}
+
+/* Opt-in colour field. Drifts on a slow loop. Onboarding, empty
+   states and marketing only — never behind a task list.
+
+   The one layer still on a pseudo, because it animates `transform` and a
+   background layer cannot carry an animation. So this variant KEEPS the
+   scroll-away behaviour described above. That is acceptable only because
+   it is scoped to short marketing and onboarding screens that do not
+   scroll, and because nothing in src/ currently wears it. If it is ever
+   put on a scrolling screen, move the drift to `background-position` and
+   fold it into `--ag-pool` with the other two. */
+.ag-page--field { --ag-pool: none; }
+.ag-page--field::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  z-index: -2;
+  pointer-events: none;
+  background-image:
+    radial-gradient(46% 40% at 16% 12%, oklch(0.700 0.150 162 / 0.34) 0%, transparent 68%),
+    radial-gradient(40% 44% at 84% 80%, oklch(0.700 0.150 210 / 0.22) 0%, transparent 70%);
+  animation: var(--kf-drift) var(--dur-ambient) var(--ease-in-out) infinite;
+  will-change: transform;
+}
