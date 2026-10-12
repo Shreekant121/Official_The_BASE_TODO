@@ -11,8 +11,9 @@ export default defineConfig([
    * vendored reference material, not app code. Nothing imports it and Vite
    * never builds it, but its `.d.ts` sidecars would otherwise be linted as
    * project source and held to rules they were never written against.
+   * `promo/` is the Remotion promo video: its own package, deps and config.
    */
-  globalIgnores(['dist', 'design-system']),
+  globalIgnores(['dist', 'design-system', 'promo']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
