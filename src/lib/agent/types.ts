@@ -315,6 +315,8 @@ export interface SnapshotCapture {
   captureTask(handle: TurnHandle, taskId: string): void;
   captureList(handle: TurnHandle, listId: string): void;
   captureProject(handle: TurnHandle, projectId: string): void;
+  /** 29-2a: an event, before an event tool changes it (`agent/tools/eventTools.ts`). */
+  captureEvent(handle: TurnHandle, eventId: string): void;
 }
 
 export interface ToolContext {

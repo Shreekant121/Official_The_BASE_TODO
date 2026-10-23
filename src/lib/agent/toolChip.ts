@@ -258,6 +258,9 @@ export function describeToolCall(call: AgentToolCall, timezone: string, now: Dat
       create_task: 'create',
       update_task: 'update',
       move_task: 'update',
+      send_to_evening: 'update',
+      schedule_task: 'update',
+      list_undated: 'read',
       complete_task: 'complete',
       add_to_today: 'queue',
       remove_from_today: 'queue',
@@ -280,7 +283,7 @@ export function describeToolCall(call: AgentToolCall, timezone: string, now: Dat
       delete_project: 'delete',
       delete_list: 'delete',
     };
-    return { ...base, icon: iconByTool[call.name] ?? 'read', verb: call.name.replace(/_/g, ' '), detail: call.summary };
+    return { ...base, icon: iconByTool[call.name] ?? 'read', verb: toolNameAsVerb(call.name), detail: call.summary };
   }
 
   switch (call.name) {
@@ -420,6 +423,35 @@ export function describeToolCall(call: AgentToolCall, timezone: string, now: Dat
       };
     }
 
+    /* 29-1c2: the Today block's moon, by Atlas. Counted like a move: the ones
+       already where they were asked to go are not "sent". */
+    case 'send_to_evening': {
+      const rows = readRows(call.data, 'tasks');
+      const moved = rows.filter((task) => task.moved === true);
+      const back = (call.data as { back?: unknown } | undefined)?.back === true;
+      return {
+        ...base,
+        icon: 'update',
+        verb: moved.length === 0 ? (back ? 'Not in the evening' : 'Already this evening') : back ? 'Back from the evening' : 'Sent to this evening',
+        subject: batchSubject(moved.length > 0 ? moved.length : rows.length, 'task', subject),
+        detail: withFailures(call.data, []),
+      };
+    }
+
+    /* 29-2e3a: a block dragged on the Calendar, by Atlas. */
+    case 'schedule_task': {
+      const rows = readRows(call.data, 'tasks');
+      const moved = rows.filter((task) => task.moved === true);
+      const first = moved[0]?.starts;
+      return {
+        ...base,
+        icon: 'update',
+        verb: moved.length === 0 ? 'Already in place' : 'Scheduled',
+        subject: batchSubject(moved.length > 0 ? moved.length : rows.length, 'task', subject),
+        detail: withFailures(call.data, [typeof first === 'string' ? `from ${first.slice(11)}` : null]),
+      };
+    }
+
     case 'complete_task': {
       const finished = readRows(call.data, 'tasks');
       const already = finished.filter((task) => task.alreadyCompleted === true).length;
@@ -455,6 +487,12 @@ export function describeToolCall(call: AgentToolCall, timezone: string, now: Dat
         subject: batchSubject(dropped.length, 'task', subject),
         detail: withFailures(call.data, []),
       };
+    }
+
+    /* 29-2e3b: the Calendar's "No date" tray, read. */
+    case 'list_undated': {
+      const total = readCount(call.data, 'total') ?? readArrayLength(call.data, 'tasks');
+      return { ...base, icon: 'read', verb: 'Read the tasks with no date', detail: `${total} task${total === 1 ? '' : 's'}` };
     }
 
     case 'list_today': {
@@ -746,8 +784,15 @@ export function describeToolCall(call: AgentToolCall, timezone: string, now: Dat
     }
 
     default:
-      return { ...base, icon: 'read', verb: call.name.replace(/_/g, ' '), detail: call.summary };
+      return { ...base, icon: 'read', verb: toolNameAsVerb(call.name), detail: call.summary };
   }
+}
+
+/** `read_note` -> `Read note`, for a tool this file has no wording for. Lowercase, it was the
+    one row on `/log` that did not start with a capital like every verb beside it (OPT-2). */
+function toolNameAsVerb(name: string): string {
+  const words = name.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** `example.com`, for a chip. `www.` goes because it is never the distinguishing part. */

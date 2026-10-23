@@ -24,7 +24,7 @@ const ZONE = resolveUserTimeZone();
 const at = (wall: string) => Date.parse(wall);
 
 const PROJECTS: Project[] = [
-  { id: 'p-empire', name: 'Shreekant Empire', color: '#8b5cf6', createdAt: 0, order: 0 },
+  { id: 'p-empire', name: 'Shreekant Empire', createdAt: 0, order: 0 },
 ];
 
 const LISTS: TaskList[] = [

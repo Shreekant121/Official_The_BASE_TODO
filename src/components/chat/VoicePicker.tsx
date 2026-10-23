@@ -4,7 +4,7 @@
  * WHY IT IS ITS OWN FILE (DESIGN-1)
  * ---------------------------------
  * There are two places to choose a voice and they must not be two lists: the
- * `VoiceDial` popover on the composer, and dock mode, where the tablet is on
+ * Settings → Atlas (the composer's Voice pill until OPT-8), and dock mode, where the tablet is on
  * its stand and the picker is the one thing on that screen you actually
  * operate. One component, two hosts — `big` is the only difference, and it is
  * type size, not behaviour.
@@ -12,7 +12,7 @@
  * `screens/voice.html` does not draw this. It draws Leave and the state
  * harness and nothing else, so the layout below is the design system's own
  * parts rather than a reconciliation: `Input`'s trough for the search field,
- * the same row shape `VoiceDial` already had, no new colour and no new
+ * the same row shape the old Voice pill already had, no new colour and no new
  * motion. DESIGN-1's click-path is what says it belongs on the dock screen at
  * all — *"open the voice list, search it, and pick a voice"* — and Shreekant
  * chose on 2026-09-16 that one list serves both surfaces.
@@ -118,10 +118,10 @@ export function VoicePicker({ all, chosen, onChoose, big = false, onPicked }: Vo
             display: 'grid', gap: 'var(--sp-3)',
             padding: 'var(--sp-4)', borderRadius: 'var(--r-sm)',
             backgroundImage: 'var(--glass-fill-1)',
-            boxShadow: 'var(--glass-rim-1), 0 0 0 1px color-mix(in oklab, var(--status-review) 35%, transparent)',
+            boxShadow: 'var(--glass-rim-1), 0 0 0 1px var(--line-strong)', /* a warning: quiet, 29-1P2c2 */
           }}
         >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--status-review)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--status-warn)' }}>
             <Icon name="volume-x" size={16} />
             <span style={{ font: 'var(--type-body)', fontSize: big ? 'var(--text-md)' : 'var(--text-sm)' }}>
               The voice you chose is not installed any more
@@ -148,7 +148,7 @@ export function VoicePicker({ all, chosen, onChoose, big = false, onPicked }: Vo
           a grid inside a `1fr` track, and without it four rows stretch to fill
           560px of sheet and the list reads as a menu with nothing in it. */}
       <div
-        className="ag-scroll"
+        className="ag-scroll ag-fade"
         style={{
           display: 'grid', gap: 2, alignContent: 'start',
           minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',

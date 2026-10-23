@@ -18,14 +18,10 @@
  * nothing more: it calls no tool, contacts no model, and writes nothing
  * anywhere by itself.
  *
- * The snapshot ring is part of it. `ChatPage` seeds `useSnapshotStore` from
- * `snapshots` in the same guarded branch, so the Revert button in the shot is
- * the live one and pressing it runs the real `revertTurn` against the real
- * store — which makes `chat-turns-reverted` a test of the revert path rather
- * than a drawing of one. **Every captured `prior` below is the whole task as
- * `scripts/fixture.ts` seeds it, with exactly one field changed**: `revertTurn`
- * diffs prior against current key by key and writes back every difference, so
- * a partial record would revert by *deleting* the fields it omitted.
+ * Every turn here is Atlas's since BIG-12 (27A-5): the basic assistant and the
+ * snapshot-ring Revert it carried are retired, so the ring this fixture used to
+ * seed — and `chat-turns-reverted`, which pressed its Revert — are gone, and a
+ * turn's changes are reverted from the Log.
  *
  * HOW IT IS KEPT OUT OF THE SHIPPED BUNDLE
  * ----------------------------------------
@@ -45,7 +41,6 @@
  * no call to `Date.now()`.
  */
 import type { AgentToolCall, TokenUsage } from './agent/types';
-import type { SnapshotTurn } from '../store/useSnapshotStore';
 import type { AtlasConversationSummary } from './atlas/client';
 
 /** One turn, shaped exactly like `ChatPage`'s own `ChatTurn`. */
@@ -55,7 +50,8 @@ export interface DevChatTurn {
   assistantText: string;
   toolCalls: AgentToolCall[];
   status: 'running' | 'done' | 'error';
-  snapshotTurnId: string | null;
+  /** When a running turn was sent; `long-job` sets it twelve seconds back (29-1P15d). */
+  startedAt?: number;
   /**
    * The reasoning Atlas kept (item 12), which no fixture carried until the
    * animation audit went looking for it.
@@ -72,10 +68,8 @@ export interface DevChatTurn {
    *
    * `elapsedMs` is measured from a clock in the real page, so it must be
    * stated rather than left out — an absent one prints nothing and the
-   * baseline would never photograph the field. `ranOnAtlas` is `false`
-   * throughout because this **is** an in-browser transcript: it seeds the
-   * snapshot ring, and `chat-turns-reverted` presses the real Revert. Setting
-   * it true would draw the Atlas sentence over a button that works.
+   * baseline would never photograph the field. `ranOnAtlas` is `true`: since
+   * 27A-5 every turn is Atlas's, and its changes say to revert from the Log.
    */
   model?: string;
   elapsedMs?: number;
@@ -84,8 +78,6 @@ export interface DevChatTurn {
 
 export interface DevChatFixture {
   turns: DevChatTurn[];
-  /** Seeded into `useSnapshotStore` so Revert is the real button. */
-  snapshots: SnapshotTurn[];
   /**
    * The conversation list (item 10).
    *
@@ -150,6 +142,11 @@ export function devChatFixture(search: string): DevChatFixture | null {
 
   /* ── ITEM 13G: the two motions nothing else could photograph ── */
   if (search.includes('__dev-chat-fixture__=working')) return workingFixture();
+
+  /* ── 29-1P15d: the same running turn, twelve seconds in, so its pill is a
+     long job (colours drifting, "12s"). Started relative to now because the
+     pill counts from `startedAt`; the harness's held clock reads it once. ── */
+  if (search.includes('__dev-chat-fixture__=long-job')) return workingFixture(Date.now() - 12_400);
 
   /* ── BUILD-16: the question card, waiting, and then answered ── */
   if (search.includes('__dev-chat-fixture__=ask-answered')) return askFixture(true);
@@ -254,11 +251,10 @@ export function devChatFixture(search: string): DevChatFixture | null {
         ].join('\n'),
         toolCalls: [listToday],
         status: 'done',
-        snapshotTurnId: null,
         usage: { promptTokens: 3_140, responseTokens: 208, thoughtsTokens: 0, totalTokens: 3_348, requests: 2 },
         model: 'Gemini 2.5 Flash',
         elapsedMs: 2_400,
-        ranOnAtlas: false,
+        ranOnAtlas: true,
       },
       {
         id: 'dev-turn-write',
@@ -269,68 +265,13 @@ export function devChatFixture(search: string): DevChatFixture | null {
           'rather than on top of it.',
         toolCalls: [moveAudit, moveLease],
         status: 'done',
-        snapshotTurnId: 'dev-snapshot-write',
         usage: { promptTokens: 4_022, responseTokens: 191, thoughtsTokens: 0, totalTokens: 4_213, requests: 3 },
         model: 'Gemini 2.5 Flash',
         elapsedMs: 5_100,
-        ranOnAtlas: false,
+        ranOnAtlas: true,
       },
     ],
 
-    snapshots: [
-      {
-        id: 'dev-snapshot-write',
-        label: 'Push the compliance review to Saturday and pull the lease in to Tuesday',
-        // Literal, and two minutes before FROZEN_NOW.
-        createdAt: 1_773_286_080_000,
-        entries: [
-          {
-            kind: 'task',
-            id: 't-audit',
-            label: 'Quarterly compliance review',
-            location: 'backlog',
-            // `scripts/fixture.ts`'s `t-audit`, with only the deadline older.
-            prior: {
-              id: 't-audit',
-              title: 'Quarterly compliance review',
-              status: 'needsAction',
-              listId: 'l-empire-ops',
-              listName: 'Operations',
-              deadline: '2026-03-11T11:00',
-              estimatedTime: 60,
-              humanOverride: 5,
-              recurrence: 'custom',
-              recurrenceRule: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH;COUNT=8',
-              reminderMinutes: 60,
-              tags: ['compliance'],
-              createdAt: 1_740_340_000_000,
-              order: 2,
-              subtasks: [],
-            },
-          },
-          {
-            kind: 'task',
-            id: 't-lease',
-            label: 'Countersign the studio lease',
-            location: 'backlog',
-            // `scripts/fixture.ts`'s `t-lease`, with only the deadline later.
-            prior: {
-              id: 't-lease',
-              title: 'Countersign the studio lease',
-              status: 'needsAction',
-              priority: 'urgent',
-              listId: 'l-studio-space',
-              listName: 'The Space',
-              deadline: '2026-03-19T16:00',
-              valueINR: 180_000,
-              createdAt: 1_740_350_000_000,
-              order: 0,
-              subtasks: [],
-            },
-          },
-        ],
-      },
-    ],
   };
 }
 
@@ -373,14 +314,9 @@ export function devChatFixture(search: string): DevChatFixture | null {
  * making a claim about the thing it falls back from. It costs nothing here
  * because this fixture seeds no snapshot ring and offers no Revert.
  *
- * **The two transcripts above cannot follow it, and the reason is mechanical
- * rather than a preference.** `chat-turns-reverted` presses the *real* Revert
- * button, which runs against `useSnapshotStore` in this browser; a turn
- * carrying `ranOnAtlas: true` draws the "Atlas wrote these, Revert cannot
- * reach them" footer instead of a button, and there would be nothing left to
- * press. That is why they stay on the in-browser path — see the note on
- * `DevChatTurn.ranOnAtlas` — and `atlasFixture` is the one that shows the
- * laptop doing the same work.
+ * The two transcripts above were in-browser turns until BIG-12 (27A-5) retired
+ * the basic assistant, kept so because `chat-turns-reverted` pressed their
+ * ring's Revert; that shot went with it, and they are Atlas turns now too.
  *
  * Literal throughout, like everything else in this file — a baseline is only
  * worth diffing if the data behind it never moves.
@@ -420,14 +356,12 @@ function markdownFixture(): DevChatFixture {
         ].join('\n'),
         toolCalls: [],
         status: 'done',
-        snapshotTurnId: null,
         usage: { promptTokens: 1_020, responseTokens: 312, thoughtsTokens: 0, totalTokens: 1_332, requests: 1 },
         model: 'gemma4:e4b',
         elapsedMs: 1_900,
         ranOnAtlas: true,
       },
     ],
-    snapshots: [],
   };
 }
 
@@ -477,13 +411,12 @@ function askFixture(answered: boolean): DevChatFixture {
     assistantText: 'Nothing like it is open, so it will be new. It needs four answers first — the date, the time and the score change where it lands in your week.',
     toolCalls: [ask],
     status: 'done',
-    snapshotTurnId: null,
     model: 'gemma4:e4b',
     elapsedMs: 9_400,
     ranOnAtlas: true,
   };
 
-  if (!answered) return { turns: [asked], snapshots: [] };
+  if (!answered) return { turns: [asked] };
 
   const create: AgentToolCall = {
     name: 'create_task',
@@ -509,13 +442,11 @@ function askFixture(answered: boolean): DevChatFixture {
         assistantText: 'In Admin, due Monday 16 March — 30 min, 8 / 9. The two prep steps sit under it as subtasks.',
         toolCalls: [create],
         status: 'done',
-        snapshotTurnId: null,
         model: 'gemma4:e4b',
         elapsedMs: 11_200,
         ranOnAtlas: true,
       },
     ],
-    snapshots: [],
   };
 }
 
@@ -546,7 +477,7 @@ function askFixture(answered: boolean): DevChatFixture {
  * button beside it is the ordinary resting one, and that is worth knowing
  * before anybody reads the shot as a bug.
  */
-function workingFixture(): DevChatFixture {
+function workingFixture(runningSince?: number): DevChatFixture {
   return {
     turns: [
       {
@@ -560,7 +491,6 @@ function workingFixture(): DevChatFixture {
         ].join('\n'),
         toolCalls: [],
         status: 'done',
-        snapshotTurnId: null,
         thinking: [
           {
             round: 1,
@@ -584,11 +514,10 @@ function workingFixture(): DevChatFixture {
         assistantText: '',
         toolCalls: [],
         status: 'running',
-        snapshotTurnId: null,
         ranOnAtlas: true,
+        startedAt: runningSince,
       },
     ],
-    snapshots: [],
   };
 }
 
@@ -694,14 +623,12 @@ function backlogFixture(): DevChatFixture {
         ].join('\n'),
         toolCalls: [searchTasks],
         status: 'done',
-        snapshotTurnId: null,
         usage: { promptTokens: 2_140, responseTokens: 268, thoughtsTokens: 0, totalTokens: 2_408, requests: 1 },
         model: 'gemma4:e4b',
         elapsedMs: 3_400,
         ranOnAtlas: true,
       },
     ],
-    snapshots: [],
   };
 }
 
@@ -861,7 +788,6 @@ function atlasFixture(): DevChatFixture {
         ].join('\n'),
         toolCalls: [searchTasks],
         status: 'done',
-        snapshotTurnId: null,
         usage: { promptTokens: 2_180, responseTokens: 96, thoughtsTokens: 0, totalTokens: 2_276, requests: 2 },
         model: 'gemma4:e4b',
         elapsedMs: 3_800,
@@ -875,7 +801,6 @@ function atlasFixture(): DevChatFixture {
         toolCalls: [removeSubtask, deleteTask],
         status: 'done',
         // Atlas wrote these and this browser's ring never saw them.
-        snapshotTurnId: null,
         usage: { promptTokens: 2_910, responseTokens: 74, thoughtsTokens: 0, totalTokens: 2_984, requests: 3 },
         model: 'gemma4:e4b',
         elapsedMs: 6_200,
@@ -904,7 +829,6 @@ function atlasFixture(): DevChatFixture {
         status: 'done',
         // Nothing was written, so there is nothing to revert — and both of
         // these came from a server the app does not own.
-        snapshotTurnId: null,
         usage: { promptTokens: 1_640, responseTokens: 88, thoughtsTokens: 0, totalTokens: 1_728, requests: 3 },
         model: 'gemma4:e4b',
         elapsedMs: 7_100,
@@ -912,7 +836,6 @@ function atlasFixture(): DevChatFixture {
       },
     ],
     // Nothing to seed. That absence is the fixture's whole second claim.
-    snapshots: [],
 
     /*
      * ── ITEM 10: THE CONVERSATION LIST ──

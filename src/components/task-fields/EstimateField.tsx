@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import PertEstimationModal from '../PertEstimationModal';
-import { Icon, IconButton, Input } from '../../ui';
+import { Icon, Input, SoftIconButton } from '../../ui';
 
 interface EstimateFieldProps {
   /** Minutes, held as a string so the input can be empty. */
@@ -34,12 +34,12 @@ export default function EstimateField({ value, onChange, subtitle }: EstimateFie
         suffix="min"
         style={{ flex: 1, minWidth: 0 }}
       />
-      <IconButton
+      <SoftIconButton
         label="PERT estimation calculator"
         onClick={() => setPertOpen(true)}
       >
         <Icon name="calculator" size={18} />
-      </IconButton>
+      </SoftIconButton>
 
       {/* Portalled for the same containing-block reason as RecurrencePicker. */}
       {createPortal(

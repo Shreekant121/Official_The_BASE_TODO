@@ -114,7 +114,7 @@
  */
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Button, Icon, IconButton, MorphMenu, ScoreDial, type MorphMenuItem } from '../../ui';
+import { BadgeFold, Icon, IconButton, MorphMenu, ScoreDial, SoftButton, type MorphMenuItem } from '../../ui';
 import { BlockedLine } from '../project/parts';
 import { SelectDot } from './SelectDot';
 import { taskFocusSeconds, type Task } from '../../store/useStore';
@@ -124,6 +124,8 @@ import { AvoidedMark, EmergencyMark } from '../task-fields/TaskMarks';
 import { formatSpan } from '../../lib/timeSpan';
 import { Z } from '../../lib/zLayers';
 import { archiveTask } from '../../lib/archive';
+import { dustAttr } from '../../lib/dust';
+import { SwipeRow, type SwipeSide } from '../../ui/core/SwipeRow';
 
 /** See `QueueSubtaskTree`'s copy — same field, same two reasons it stays an `<input>`. */
 const INLINE_FIELD = {
@@ -131,7 +133,7 @@ const INLINE_FIELD = {
   minWidth: 0,
   padding: '0 0 3px',
   border: 0,
-  borderBottom: '1px solid var(--accent-hairline)',
+  borderBottom: '1px solid var(--job-lime-line)',
   borderRadius: 0,
   outline: 'none',
   background: 'transparent',
@@ -191,6 +193,8 @@ export interface TaskRowProps {
   onToggleExpand?: () => void;
   /** The subtask tree and, on the available side, its inline add field. */
   children?: ReactNode;
+  /** 29-1P6b (17): what a finger swiping this row right / left does. Absent: no swipe. */
+  swipe?: { right?: SwipeSide | null; left?: SwipeSide | null };
 }
 
 export default function TaskRow({
@@ -215,6 +219,7 @@ export default function TaskRow({
   expanded,
   onToggleExpand,
   children,
+  swipe,
 }: TaskRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hover, setHover] = useState(false);
@@ -290,8 +295,10 @@ export default function TaskRow({
           >
             {task.title}
           </span>
-          <RedAlertBadge redAlert={reading.redAlert} compact />
-          {/* **Read-only here, and that is deliberate.** The board's rows offer
+          {/* 29-1P7a (idea 162): one badge at a time — Red Alert, then the
+              Emergency mark, then the score, his order — the rest behind "+N".
+
+              The mark is **read-only here, and that is deliberate.** The board's rows offer
               the flag from their ⋯ menu; these do not, because a queued row is
               a snapshot copy of a backlog task and the available side can be a
               subtask proxy — a write from this screen would have to decide
@@ -299,12 +306,23 @@ export default function TaskRow({
               to do today rather than re-judging what matters. The mark still
               shows, because a flagged task arriving in today's queue is
               exactly what you want to see. */}
-          <EmergencyMark
-            level={task.emergencyBoost}
-            lapsed={(task.emergencyBoost ?? 0) > 0 && reading.variables.emergency === 0}
-            compact
+          <BadgeFold
+            gap={6}
+            items={[
+              reading.redAlert && { key: 'alert', node: <RedAlertBadge redAlert compact /> },
+              (task.emergencyBoost ?? 0) > 0 && {
+                key: 'emergency',
+                node: (
+                  <EmergencyMark
+                    level={task.emergencyBoost}
+                    lapsed={reading.variables.emergency === 0}
+                    compact
+                  />
+                ),
+              },
+              score > 0 && { key: 'score', node: <ScoreDial value={score} max={scores.peak} alert={reading.redAlert} size="sm" /> },
+            ]}
           />
-          {score > 0 && <ScoreDial value={score} max={scores.peak} alert={reading.redAlert} size="sm" />}
         </div>
       )}
       <div
@@ -368,16 +386,15 @@ export default function TaskRow({
             one name for it, whichever screen you happen to be building the day
             from. */}
         {locked && onScheduleAnyway && (
-          <Button
+          <SoftButton
             size="sm"
-            variant="glass"
-            iconLeft={<Icon name="zap" size={14} />}
+            icon={<Icon name="zap" size={14} />}
             onClick={onScheduleAnyway}
             title="Add it to today even though it is waiting on something"
             style={{ flex: '0 0 auto' }}
           >
             Schedule anyway
-          </Button>
+          </SoftButton>
         )}
       </div>
     </>
@@ -481,116 +498,121 @@ export default function TaskRow({
   ];
 
   return (
-    <motion.div
-      className="ag-card"
-      /* Inspectable, and the same attribute the board's rows carry — the DIM
-         is in `animate` below, for the reason written there. */
-      data-locked={locked ? 'true' : 'false'}
-      layout={!isDragging}
-      /* Panes in this system arrive by CONDENSING, never by sliding in from
-         off-screen (tokens/motion.css). The two lists used to disagree about
-         this — one came in from below, the other from the right. */
-      initial={{ opacity: 0, scale: 0.94 }}
-      /* The mockup's `translateX(2px)` on hover, written as Framer's `x`
-         rather than a CSS transform: `scale` here already writes
-         `style.transform`, and the two would overwrite each other. */
-      /* The locked dim rides in `animate` rather than on `screens.css`'s
-         `.ag-row[data-locked]`, and it has to: this is a `motion.div` whose
-         `animate` writes `style.opacity` INLINE, and an inline opacity beats
-         any class. Same numbers as that rule — 0.62 at rest, all the way back
-         the moment the row is `lifted` — because they are one treatment and
-         the CSS is where it is written down. */
-      animate={{
-        opacity: locked && !lifted ? 0.62 : 1,
-        scale: isDragging ? 1.02 : 1,
-        x: lifted && !isDragging ? 2 : 0,
-      }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      /* `.trow`'s material, which `project/TaskRow.tsx` already carries: a
-         level-1 row that lifts on hover rather than a resting level-2 pane
-         that cannot. The 2px nudge is the mockup's own. */
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        flex: '0 0 auto',
-        borderRadius: 'var(--r-md)',
-        padding: 'var(--sp-5) var(--sp-6)',
-        backgroundImage: lifted ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
-        backdropFilter: 'var(--glass-bd-sm)',
-        WebkitBackdropFilter: 'var(--glass-bd-sm)',
-        boxShadow: isDragging
-          ? 'var(--glass-rim-2), var(--glass-cast-3)'
-          : lifted
-            ? 'var(--glass-rim-2), var(--glass-cast-2)'
-            : 'var(--glass-rim-1)',
-        cursor: queued ? (isDragging ? 'grabbing' : 'grab') : undefined,
-        transition: 'var(--t-hover)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
-        {body}
+    /* 29-1P6b (17): a finger swiping the row right finishes the task, left
+       starts it tomorrow — `TaskSelection` says what each does on its side. */
+    <SwipeRow radius="var(--r-md)" right={swipe?.right} left={swipe?.left} style={{ flex: '0 0 auto' }}>
+      <motion.div
+        className="ag-card"
+        {...dustAttr('task', task.id)}
+        /* Inspectable, and the same attribute the board's rows carry — the DIM
+           is in `animate` below, for the reason written there. */
+        data-locked={locked ? 'true' : 'false'}
+        layout={!isDragging}
+        /* Panes in this system arrive by CONDENSING, never by sliding in from
+           off-screen (tokens/motion.css). The two lists used to disagree about
+           this — one came in from below, the other from the right. */
+        initial={{ opacity: 0, scale: 0.94 }}
+        /* The mockup's `translateX(2px)` on hover, written as Framer's `x`
+           rather than a CSS transform: `scale` here already writes
+           `style.transform`, and the two would overwrite each other. */
+        /* The locked dim rides in `animate` rather than on `screens.css`'s
+           `.ag-row[data-locked]`, and it has to: this is a `motion.div` whose
+           `animate` writes `style.opacity` INLINE, and an inline opacity beats
+           any class. Same numbers as that rule — 0.62 at rest, all the way back
+           the moment the row is `lifted` — because they are one treatment and
+           the CSS is where it is written down. */
+        animate={{
+          opacity: locked && !lifted ? 0.62 : 1,
+          scale: isDragging ? 1.02 : 1,
+          x: lifted && !isDragging ? 2 : 0,
+        }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        /* `.trow`'s material, which `project/TaskRow.tsx` already carries: a
+           level-1 row that lifts on hover rather than a resting level-2 pane
+           that cannot. The 2px nudge is the mockup's own. */
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: '0 0 auto',
+          borderRadius: 'var(--r-md)',
+          padding: 'var(--sp-5) var(--sp-6)',
+          backgroundImage: lifted ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+          backdropFilter: 'var(--glass-bd-sm)',
+          WebkitBackdropFilter: 'var(--glass-bd-sm)',
+          boxShadow: isDragging
+            ? 'var(--glass-rim-2), var(--glass-cast-3)'
+            : lifted
+              ? 'var(--glass-rim-2), var(--glass-cast-2)'
+              : 'var(--glass-rim-1)',
+          cursor: queued ? (isDragging ? 'grabbing' : 'grab') : undefined,
+          transition: 'var(--t-hover)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          {body}
 
-        <span
-          className="ag-card-actions"
-          data-open={menuOpen ? 'true' : 'false'}
-          style={{ display: 'flex', flex: '0 0 auto' }}
-        >
-          <MorphMenu
-            align="end"
-            width={248}
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            /* Both lists are their own scroller inside a pane that must not
-               grow, so an in-flow panel is cut off by the list it belongs
-               to — 179px of it on a tablet. `portal` is MorphMenu's port
-               note 4, written for exactly this. */
-            portal
-            zIndex={Z.dropdown}
-            trigger={
-              <IconButton size="sm" variant="ghost" label={`Actions for ${task.title}`}>
-                <Icon name="ellipsis" size={16} />
-              </IconButton>
-            }
-            /* The panel covers the row it acts on, so the row is restated
-               inside it — otherwise "Delete" is offered against nothing. */
-            header={{
-              title: task.title,
-              meta: [
-                listTitle,
-                score > 0 ? `score ${score.toFixed(1)}` : null,
-                reading.redAlert ? 'red alert' : null,
-                subtaskCount > 0 ? `${subtaskCount} subtask${subtaskCount === 1 ? '' : 's'}` : null,
-              ].filter(Boolean).join('  ·  '),
-            }}
-            items={items}
-          />
-        </span>
-      </div>
-
-      <AnimatePresence>
-        {expanded && children && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            style={{ overflow: 'hidden' }}
+          <span
+            className="ag-card-actions"
+            data-open={menuOpen ? 'true' : 'false'}
+            style={{ display: 'flex', flex: '0 0 auto' }}
           >
-            <div
-              style={{
-                marginTop: 'var(--sp-4)',
-                marginLeft: 'var(--sp-3)',
-                paddingLeft: 'var(--sp-4)',
-                borderLeft: '1px solid var(--line-faint)',
+            <MorphMenu
+              align="end"
+              width={248}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              /* Both lists are their own scroller inside a pane that must not
+                 grow, so an in-flow panel is cut off by the list it belongs
+                 to — 179px of it on a tablet. `portal` is MorphMenu's port
+                 note 4, written for exactly this. */
+              portal
+              zIndex={Z.dropdown}
+              trigger={
+                <IconButton size="sm" variant="ghost" label={`Actions for ${task.title}`}>
+                  <Icon name="ellipsis" size={16} />
+                </IconButton>
+              }
+              /* The panel covers the row it acts on, so the row is restated
+                 inside it — otherwise "Delete" is offered against nothing. */
+              header={{
+                title: task.title,
+                meta: [
+                  listTitle,
+                  score > 0 ? `score ${score.toFixed(1)}` : null,
+                  reading.redAlert ? 'red alert' : null,
+                  subtaskCount > 0 ? `${subtaskCount} subtask${subtaskCount === 1 ? '' : 's'}` : null,
+                ].filter(Boolean).join('  ·  '),
               }}
+              items={items}
+            />
+          </span>
+        </div>
+
+        <AnimatePresence>
+          {expanded && children && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              style={{ overflow: 'hidden' }}
             >
-              {children}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+              <div
+                style={{
+                  marginTop: 'var(--sp-4)',
+                  marginLeft: 'var(--sp-3)',
+                  paddingLeft: 'var(--sp-4)',
+                  borderLeft: '1px solid var(--line-faint)',
+                }}
+              >
+                {children}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </SwipeRow>
   );
 }

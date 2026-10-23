@@ -41,7 +41,8 @@ import {
   type PriorityTask,
   type ScoreBreakdown,
 } from '../lib/priority';
-import { useStore, type Task, type TaskList } from './useStore';
+import { ignoredWorkOf, type IgnoredWork } from '../lib/ignoredWork';
+import { useStore, type Project, type Task, type TaskList } from './useStore';
 
 /** How often `now` moves. See the header — a minute is far finer than the score can read. */
 const TICK_MS = 60_000;
@@ -136,15 +137,35 @@ export interface PriorityScores {
    * A brand-new task has no saved side and gets 0 for the graph half — not an
    * approximation, since nothing can depend on a task that does not exist yet.
    */
-  readDraft: (draft: PriorityTask) => ScoreBreakdown;
+  readDraft: (draft: PriorityTask & { ignored?: boolean }) => ScoreBreakdown;
+  /**
+   * Ignored work (BIG-3) — the same answer the pass scored against, so a screen
+   * that filters on it and a screen that ranks by the score never disagree.
+   */
+  ignored: IgnoredWork;
 }
 
 let cache: {
   tasks: readonly Task[];
   lists: readonly TaskList[];
+  projects: readonly Project[];
   minute: number;
   value: PriorityScores;
 } | null = null;
+
+/**
+ * Told about every fresh scoring pass — the task's story (29-1P9c) watches
+ * for a task turning Red Alert here, because Red Alert is worked out by the
+ * score and stored nowhere. A watcher must be cheap and must not write to
+ * the store: a pass can run inside a render.
+ */
+type PassWatcher = (map: ReturnType<typeof scoreAll>, now: number, tasks: readonly Task[]) => void;
+const passWatchers = new Set<PassWatcher>();
+
+export function onScorePass(fn: PassWatcher): () => void {
+  passWatchers.add(fn);
+  return () => { passWatchers.delete(fn); };
+}
 
 /**
  * The memoised pass. Exported for the places that have the arrays but not a
@@ -155,13 +176,22 @@ export function priorityScores(
   tasks: readonly Task[],
   lists: readonly TaskList[],
   atMinute: number,
+  projects: readonly Project[] = [],
 ): PriorityScores {
-  if (cache && cache.tasks === tasks && cache.lists === lists && cache.minute === atMinute) {
+  if (
+    cache &&
+    cache.tasks === tasks &&
+    cache.lists === lists &&
+    cache.projects === projects &&
+    cache.minute === atMinute
+  ) {
     return cache.value;
   }
 
   const now = atMinute * TICK_MS;
-  const map = scoreAll(tasks, now, { taskLists: lists });
+  const ignored = ignoredWorkOf(tasks, lists, projects);
+  const map = scoreAll(tasks, now, { taskLists: lists, ignored: ignored.ids });
+  for (const fn of passWatchers) fn(map, now, tasks);
 
   let peak = 1;
   let redAlertCount = 0;
@@ -175,8 +205,13 @@ export function priorityScores(
     if (entry.variables.emergency > 0) emergencyCount += 1;
   }
 
+  /* A task the pass never saw — a draft, a subtask stand-in — is asked about
+     directly, since its list or project may be what ignores it. */
+  const ignoredSetFor = (task: PriorityTask & { ignored?: boolean }) =>
+    task.ignored || ignored.has(task) ? new Set([task.id]) : undefined;
+
   const read = (task: PriorityTask): ScoreBreakdown =>
-    map.get(task.id) ?? scoreDraft(task, null, now, { taskLists: lists });
+    map.get(task.id) ?? scoreDraft(task, null, now, { taskLists: lists, ignored: ignoredSetFor(task) });
 
   const value: PriorityScores = {
     now,
@@ -186,10 +221,12 @@ export function priorityScores(
     emergencyCount,
     read,
     scoreOf: (task) => read(task).score,
-    readDraft: (draft) => scoreDraft(draft, map.get(draft.id) ?? null, now, { taskLists: lists }),
+    readDraft: (draft) =>
+      scoreDraft(draft, map.get(draft.id) ?? null, now, { taskLists: lists, ignored: ignoredSetFor(draft) }),
+    ignored,
   };
 
-  cache = { tasks, lists, minute: atMinute, value };
+  cache = { tasks, lists, projects, minute: atMinute, value };
   return value;
 }
 
@@ -201,6 +238,7 @@ export function priorityScores(
 export function usePriorityScores(): PriorityScores {
   const tasks = useStore((s) => s.backlogTasks);
   const lists = useStore((s) => s.taskLists);
+  const projects = useStore((s) => s.projects);
   const atMinute = useSyncExternalStore(subscribe, getMinute, getMinute);
-  return useMemo(() => priorityScores(tasks, lists, atMinute), [tasks, lists, atMinute]);
+  return useMemo(() => priorityScores(tasks, lists, atMinute, projects), [tasks, lists, atMinute, projects]);
 }

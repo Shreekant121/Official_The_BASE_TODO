@@ -83,17 +83,28 @@
  * is fifteen, so seven tool names had never reached that file and fell to its
  * `default` — which drew a `delete_task` as the words *"delete task"* under a
  * `file-text` glyph, inside the changes container. All seven have cases now.
+ *
+ * BIG-12 (27A-5) — THE BASIC ASSISTANT IS RETIRED
+ * ------------------------------------------------
+ * His call, 2026-09-29: "Retire it, Atlas for all." The in-browser loop, its
+ * eight tools and its snapshot-ring Revert are gone. Atlas answers from the
+ * laptop when it can take the turn, and otherwise from this page
+ * (`lib/atlas/engine/`) — on his own key, or with none, on the owner's key
+ * through `api/chat`, which is what the basic assistant used. What is left for
+ * this function to refuse is only a turn nothing can run: no signed-in account,
+ * or a local model with the laptop away. The notes above are history.
  */
-import { runAgentTurn, type RunAgentTurnOptions } from '../../lib/agent/core';
 import {
   runAtlasTurn,
   type AtlasEffort,
   type AtlasMode,
-  type AtlasTurnCost,
+  type AtlasTurnOptions,
 } from '../../lib/atlas/client';
 import { tokensForStep } from '../../lib/atlas/contextReadings';
+import { runTabletAtlasTurn } from '../../lib/atlas/engine/runTabletAtlasTurn';
 import type { AgentMessage } from '../../lib/agent/types';
 import type { ChatTurn } from './chatShared';
+import { AgentTransportError } from '../../lib/agent/transports/errors';
 
 export interface ChatTurnRun {
   /**
@@ -102,9 +113,17 @@ export interface ChatTurnRun {
    * the two machines is made there, once.
    */
   atlasBase: string | null;
+  /**
+   * BIG-12: the laptop is shut and Atlas runs in this page instead, for the
+   * account named. `null` otherwise. Never set together with `atlasBase` —
+   * the page decides which machine once, as it always has.
+   */
+  tablet?: { uid: string } | null;
   message: string;
   history: AgentMessage[];
   model: { id: string; label: string };
+  /** BIG-1: the key a cloud pick carries to the laptop, or `null`. Never used in the browser. */
+  apiKey?: string | null;
   timezone: string;
   conversationId: string | null;
   /** The context slider's stop, in thousands of tokens. */
@@ -113,12 +132,10 @@ export interface ChatTurnRun {
   /** Go ahead's one-turn override of `mode` (item 12). */
   runFor?: AtlasMode;
   effort: AtlasEffort;
-  carryOn?: { resumeTurnId?: string; overMonthlyCeiling?: boolean };
+  carryOn?: { resumeTurnId?: string };
   /** The `/` summon waiting to be sent, read and cleared in one step; `undefined` for none. */
   takeSkill: () => string | null | undefined;
   signal: AbortSignal;
-  geminiTransport: RunAgentTurnOptions['transport'];
-  session: RunAgentTurnOptions['session'];
   /** Applies an update to the turn on screen. */
   patch: (update: (turn: ChatTurn) => ChatTurn) => void;
   onConversation: (id: string) => void;
@@ -128,9 +145,11 @@ export interface ChatTurnRun {
 
 export function runChatTurn({
   atlasBase,
+  tablet,
   message,
   history,
   model,
+  apiKey,
   timezone,
   conversationId,
   contextK,
@@ -140,8 +159,6 @@ export function runChatTurn({
   carryOn,
   takeSkill,
   signal,
-  geminiTransport,
-  session,
   patch,
   onConversation,
   onApproval,
@@ -150,153 +167,120 @@ export function runChatTurn({
     patch((turn) => ({ ...turn, assistantText: turn.assistantText + delta }));
 
   /*
-   * The two machines, and everything after this is shared.
+   * The machines, and everything after this is shared.
    *
-   * Both branches stream into the same turn, hand back the same history
-   * to feed in next time, and report the same `usage`. What differs is
-   * the two things only one of them can have: **tools**, which is why
-   * only the in-browser branch has a `snapshotTurnId` to revert, and
-   * **model swaps**, which is why only the Atlas branch has notices.
+   * Every branch streams into the same turn, hands back the same history
+   * to feed in next time, and reports the same `usage`. What differs is
+   * what only one of them can have: the in-browser fallback's
+   * `snapshotTurnId` to revert, and Atlas's notices and action log.
+   *
+   * **Atlas runs in one of two places since BIG-12**: on the laptop, over the
+   * wire, or in this page with the lid shut. Both take the one options object
+   * below, so the two can never be told different things about the same turn.
    */
+  const atlasOptions: Omit<AtlasTurnOptions, 'baseUrl'> = {
+    userMessage: message,
+    history,
+    model: model.id,
+    apiKey,
+    timezone,
+    /* Item 10. `null` on the first message of a new chat — Atlas
+       makes one and says which on `start`, which is why the callback
+       below adopts the id rather than waiting for `done`: the turn
+       can be abandoned and the conversation still exists. */
+    conversationId,
+    /* The exact count for the chosen stop, never the label times a
+       multiplier — the two disagree at 131 and 262, and one token
+       over the declared maximum is silently clamped (§2.4). */
+    numCtx: tokensForStep(contextK) ?? undefined,
+    /* Item 12. `runFor` is the Go-ahead override; the dial is what
+       every other turn runs as. */
+    mode: runFor ?? mode,
+    /* The `/` summon, sent only on the turn it changes — the laptop
+       carries it on the conversation afterwards. Read and cleared in
+       one step so a retry does not announce it twice. */
+    ...((): { skill?: string | null } => {
+      const asked = takeSkill();
+      return asked !== undefined ? { skill: asked } : {};
+    })(),
+    /* Item 13A. Only ever set by the interrupted card's button. */
+    ...(carryOn?.resumeTurnId ? { resumeTurnId: carryOn.resumeTurnId } : {}),
+    effort,
+    onConversation,
+    signal,
+    onTextDelta: stream,
+    /* Item 9D. The same callback the in-browser branch below hands
+       `runAgentTurn`, doing the same thing to the same turn — which
+       is the point of `runAtlasTurn` being shaped like it. Before
+       this, an Atlas turn that searched, wrote and deleted arrived
+       as prose claiming to have done so and nothing else. */
+    onToolCall: (call) =>
+      patch((turn) => ({
+        ...turn,
+        toolCalls: [...turn.toolCalls, call],
+        // Anything said before reaching for a tool is a preamble,
+        // not part of the answer that follows it.
+        assistantText: turn.assistantText === '' ? '' : `${turn.assistantText.trimEnd()}\n\n`,
+      })),
+    onNotice: (notice) =>
+      patch((turn) => ({ ...turn, notices: [...(turn.notices ?? []), notice] })),
+    /* Item 12. The reasoning, kept and timed.
+       `ms` is measured here rather than reported for `elapsedMs`'s
+       reason — the client is the only end that knows when the first
+       character arrived — and it is the time the thought *streamed*
+       for, which is the honest thing the mockup's "Thought for 3.1s"
+       can mean from this side. */
+    onThinking: (delta, round) =>
+      patch((turn) => {
+        const existing = turn.thinking ?? [];
+        const at = existing.findIndex((entry) => entry.round === round);
+        const now = performance.now();
+        if (at === -1) {
+          return { ...turn, thinking: [...existing, { round, text: delta, ms: 0, startedAt: now }] };
+        }
+        const next = [...existing];
+        next[at] = { ...next[at], text: next[at].text + delta, ms: now - next[at].startedAt };
+        return { ...turn, thinking: next };
+      }),
+    onPlan: (steps) => patch((turn) => ({ ...turn, plan: steps })),
+    onAsk: (card) => patch((turn) => ({ ...turn, ask: card })),
+    onHeld: (heldMode, calls) =>
+      patch((turn) => ({ ...turn, held: { mode: heldMode, calls } })),
+    /* Item 13. Appended rather than replaced, and the tray refreshed
+       straight after: the act is now on the laptop and the pill in
+       the header has to say so even if this turn is abandoned. */
+    onApproval: (approval) => {
+      patch((turn) => ({ ...turn, approvals: [...(turn.approvals ?? []), approval] }));
+      onApproval();
+    },
+  };
+
+  /* What both Atlases' turns come back as, for the page. */
+  const fromAtlas = (atlas: Awaited<ReturnType<typeof runAtlasTurn>>) => ({
+    text: atlas.text,
+    history: atlas.history,
+    usage: atlas.usage,
+    /* The chat's name, which the first message of a new one decides.
+       Refreshing the list here rather than polling it: this is the
+       one moment it is known to be out of date. */
+    conversationTitle: atlas.conversationTitle,
+    /* Atlas has hands (item 9) and its turns really do write, but
+       what makes that work undoable is Atlas's own action log rather
+       than this browser's snapshot ring — so there is never a ring
+       entry here to point at. `ChangeList` says so on that path
+       instead of offering a button that cannot reach the laptop. */
+    turnId: null,
+    /* Not the model that was asked for: Ollama's swaps fail, and
+       whatever was already resident is what answered. */
+    model: atlas.modelUsed,
+  });
+
+  if (tablet) return runTabletAtlasTurn({ ...atlasOptions, uid: tablet.uid }).then(fromAtlas);
   return atlasBase !== null
-    ? runAtlasTurn({
-        baseUrl: atlasBase,
-        userMessage: message,
-        history,
-        model: model.id,
-        timezone,
-        /* Item 10. `null` on the first message of a new chat — Atlas
-           makes one and says which on `start`, which is why the callback
-           below adopts the id rather than waiting for `done`: the turn
-           can be abandoned and the conversation still exists. */
-        conversationId,
-        /* The exact count for the chosen stop, never the label times a
-           multiplier — the two disagree at 131 and 262, and one token
-           over the declared maximum is silently clamped (§2.4). */
-        numCtx: tokensForStep(contextK) ?? undefined,
-        /* Item 12. `runFor` is the Go-ahead override; the dial is what
-           every other turn runs as. */
-        mode: runFor ?? mode,
-        /* The `/` summon, sent only on the turn it changes — the laptop
-           carries it on the conversation afterwards. Read and cleared in
-           one step so a retry does not announce it twice. */
-        ...((): { skill?: string | null } => {
-          const asked = takeSkill();
-          return asked !== undefined ? { skill: asked } : {};
-        })(),
-        /* Item 13A. Only ever set by a button — the interrupted card and
-           the ceiling's Continue — and both are the same act to Atlas. */
-        ...(carryOn?.resumeTurnId ? { resumeTurnId: carryOn.resumeTurnId } : {}),
-        ...(carryOn?.overMonthlyCeiling ? { overMonthlyCeiling: true } : {}),
-        /* §3.4's tap, before the turn rather than after it. Recorded on
-           the turn instead of thrown, so the card sits where the answer
-           would have been rather than beside an error saying Atlas
-           broke — it did not, it asked a question. */
-        onMonthlyCeiling: (report) => patch((turn) => ({ ...turn, monthlyStop: report })),
-        effort,
-        onConversation,
-        signal,
-        onTextDelta: stream,
-        /* Item 9D. The same callback the in-browser branch below hands
-           `runAgentTurn`, doing the same thing to the same turn — which
-           is the point of `runAtlasTurn` being shaped like it. Before
-           this, an Atlas turn that searched, wrote and deleted arrived
-           as prose claiming to have done so and nothing else. */
-        onToolCall: (call) =>
-          patch((turn) => ({
-            ...turn,
-            toolCalls: [...turn.toolCalls, call],
-            // Anything said before reaching for a tool is a preamble,
-            // not part of the answer that follows it.
-            assistantText: turn.assistantText === '' ? '' : `${turn.assistantText.trimEnd()}\n\n`,
-          })),
-        onNotice: (notice) =>
-          patch((turn) => ({ ...turn, notices: [...(turn.notices ?? []), notice] })),
-        /* Item 12. The reasoning, kept and timed.
-           `ms` is measured here rather than reported for `elapsedMs`'s
-           reason — the client is the only end that knows when the first
-           character arrived — and it is the time the thought *streamed*
-           for, which is the honest thing the mockup's "Thought for 3.1s"
-           can mean from this side. */
-        onThinking: (delta, round) =>
-          patch((turn) => {
-            const existing = turn.thinking ?? [];
-            const at = existing.findIndex((entry) => entry.round === round);
-            const now = performance.now();
-            if (at === -1) {
-              return { ...turn, thinking: [...existing, { round, text: delta, ms: 0, startedAt: now }] };
-            }
-            const next = [...existing];
-            next[at] = { ...next[at], text: next[at].text + delta, ms: now - next[at].startedAt };
-            return { ...turn, thinking: next };
-          }),
-        onPlan: (steps) => patch((turn) => ({ ...turn, plan: steps })),
-        onAsk: (card) => patch((turn) => ({ ...turn, ask: card })),
-        onHeld: (heldMode, calls) =>
-          patch((turn) => ({ ...turn, held: { mode: heldMode, calls } })),
-        /* Item 13. Appended rather than replaced, and the tray refreshed
-           straight after: the act is now on the laptop and the pill in
-           the header has to say so even if this turn is abandoned. */
-        onApproval: (approval) => {
-          patch((turn) => ({ ...turn, approvals: [...(turn.approvals ?? []), approval] }));
-          onApproval();
-        },
-      }).then((atlas) => ({
-        text: atlas.text,
-        history: atlas.history,
-        usage: atlas.usage,
-        /* The chat's name, which the first message of a new one decides.
-           Refreshing the list here rather than polling it: this is the
-           one moment it is known to be out of date. */
-        conversationTitle: atlas.conversationTitle,
-        /* Atlas has hands (item 9) and its turns really do write, but
-           what makes that work undoable is Atlas's own action log rather
-           than this browser's snapshot ring — so there is never a ring
-           entry here to point at. `ChangeList` says so on that path
-           instead of offering a button that cannot reach the laptop. */
-        turnId: null,
-        /* Not the model that was asked for: Ollama's swaps fail, and
-           whatever was already resident is what answered. */
-        model: atlas.modelUsed,
-        /* Item 12. Worked out on the laptop from the model that actually
-           answered — see `atlas/src/agent/pricing.ts` for why a model
-           with no price gets `null` rather than a zero. */
-        cost: atlas.cost,
-        /* Item 13A. Carried out of the turn so the block below can draw
-           the Continue button; `undefined` on the in-browser path, which
-           has no ceilings and never stopped at one. */
-        ceilingStop: atlas.stoppedAtCeiling
-          ? { rupees: atlas.ceilingRupees, logTurnId: atlas.logTurnId }
-          : undefined,
-      }))
-    : runAgentTurn({
-        userMessage: message,
-        history,
-        transport: geminiTransport,
-        model: model.id,
-        session,
-        signal,
-        onTextDelta: stream,
-        onToolCall: (call) =>
-          patch((turn) => ({
-            ...turn,
-            toolCalls: [...turn.toolCalls, call],
-            // Anything the model said before reaching for a tool is a
-            // preamble, not part of the answer that follows it.
-            assistantText: turn.assistantText === '' ? '' : `${turn.assistantText.trimEnd()}\n\n`,
-          })),
-      }).then((agent) => ({
-        ...agent,
-        model: model.label,
-        conversationTitle: null,
-        /* The in-browser path has never counted what a turn cost and
-           does not start here: this whole branch is the fallback for a
-           closed lid, its usage is reported by Gemini in this browser,
-           and item 13's ceilings are Atlas's. `TurnFooter` prints
-           nothing rather than a zero. */
-        cost: undefined as AtlasTurnCost | undefined,
-        /* The fallback has no ceilings — item 13A's are Atlas's, and
-           this branch is what runs when there is no Atlas. */
-        ceilingStop: undefined as ChatTurn['ceilingStop'],
-      }));
+    ? runAtlasTurn({ baseUrl: atlasBase, ...atlasOptions }).then(fromAtlas)
+    : Promise.reject(
+        new AgentTransportError(
+          'Nothing can answer this yet: sign in to talk to Atlas here, or wake the laptop for a local model.',
+        ),
+      );
 }

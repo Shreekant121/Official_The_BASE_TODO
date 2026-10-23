@@ -19,8 +19,8 @@
  *
  * 1. **"A total with nothing to compare it to."** UI-10 had already half-fixed
  *    this with a spare/overrun note; the source's answer is a budget *line* —
- *    the allocated figure against the window, with a bar that goes amber the
- *    second the plan outruns it. Ported whole, and the `Countdown` that used to
+ *    the allocated figure against the window, with a bar that goes coral the
+ *    second the plan outruns it (amber until 29-1P2c2). Ported whole, and the `Countdown` that used to
  *    carry the total leaves this screen: the loudest number here is the finish
  *    time, not the sum.
  * 2. **"Subtasks in a drawer that covered the task it described."** The
@@ -90,7 +90,7 @@
  * - **Add / remove a step from inside the breakdown.** Editing the subtask tree
  *   is the task sheet's job; this screen allocates to the tree it is given.
  *
- * AND ONE THING WE HAVE THAT IT DOES NOT: the amber **"Needs time"** pill, and
+ * AND ONE THING WE HAVE THAT IT DOES NOT: the grey **"Needs time"** pill, and
  * a Start Protocol that stays disabled until every task has one. The source
  * only disables when *nothing* is allocated. A field you have not filled in is
  * *needs a decision*, which is the same call UI-9 made for its "Needs …" chips
@@ -133,22 +133,27 @@ import {
 } from '../store/useStore';
 import { motion } from 'framer-motion';
 import CaptureModal from './CaptureModal';
+import { startsBySlide } from '../lib/focusCommitment';
+import { cue } from '../lib/sound';
 import { Z } from '../lib/zLayers';
 import { DeadlineSubtaskRow } from './SubtaskRows';
 import PertEstimationModal from './PertEstimationModal';
 import { SortableList, SortableRow } from './SortableList';
 import { TimeWell } from './TimeWell';
 import {
-  Button, Icon, IconButton, MetaKicker, MiniNav, ScoreDial, Slider, StatusPill, Stepper, useMedia,
+  BadgeFold, EmptyCalm, FloatingAddButton, GelButton, Icon, IconButton, Lit, LitLine, MetaKicker, MiniNav, ScoreDial, Slider, SlideToStart,
+  SoftButton, SoftIconButton, StatusPill, Stepper, useMedia,
   useMotion, V3Scope, WIDE,
 } from '../ui';
 import { usePriorityScores } from '../store/usePriorityScores';
 import { useFooterReserve } from '../lib/useFooterReserve';
 import { RedAlertBadge } from './task-fields/RedAlertBadge';
+import { DueDate } from './task-fields/DueDate';
 import { formatClock, formatSpan } from '../lib/timeSpan';
 import { BudgetTrack } from './session/BudgetTrack';
 import { useNavModel } from './navModel';
 import { RailMark } from './BrandMark';
+import { setHoursToday } from '../lib/dashboard/todayHours';
 
 /** The slider's ceiling. A "work session" longer than this is not one. */
 const MAX_SESSION_SECONDS = 12 * 3600;
@@ -168,8 +173,6 @@ const SESSION_STEP_SECONDS = 300;
  */
 const TWO_PANE = '(min-width: 1180px)';
 
-const DAY = 86_400_000;
-
 /**
  * One answer for what a row on this screen is worth. A parent's allocation is
  * what its children add up to; only a leaf carries its own number.
@@ -177,20 +180,6 @@ const DAY = 86_400_000;
 function rowSeconds(task: Task): number {
   const rolled = subtasksTotalSeconds(task.subtasks ?? []);
   return rolled > 0 ? rolled : task.allocatedTime || 0;
-}
-
-/**
- * The mockup's `dueText`, on the app's own deadline field. Copy only — the
- * scoring authority is `lib/priority.ts` through `usePriorityScores`, as it is
- * everywhere else.
- */
-function dueReading(iso: string | undefined, now: number): { text: string; hot: boolean } | null {
-  if (!iso) return null;
-  const days = (new Date(iso).getTime() - now) / DAY;
-  if (days < 0) return { text: 'Overdue', hot: true };
-  if (days <= 1) return { text: `Due in ${Math.max(1, Math.round(days * 24))}h`, hot: true };
-  if (days <= 7) return { text: `Due in ${Math.ceil(days)}d`, hot: false };
-  return { text: `Due in ${Math.round(days / 7)}w`, hot: false };
 }
 
 /* The switch (V3-6). Its own component for Focus's reason: `useMotion()` reads
@@ -216,7 +205,6 @@ function SetDeadlinesScreen() {
     updateTask,
     setTasks,
     sessionDuration,
-    setSessionDuration,
     taskTimeMemory,
     setTaskTimeMemory,
   } = useStore();
@@ -298,6 +286,8 @@ function SetDeadlinesScreen() {
   };
 
   const totalSeconds = tasks.reduce((acc, t) => acc + rowSeconds(t), 0);
+  /* A session of 90 minutes or more starts by a slide (29-1P2, his call). */
+  const bySlide = startsBySlide(totalSeconds / 60);
 
   const taskIds = tasks.map((t) => t.id);
   const reorderTasks = (orderedIds: string[]) => {
@@ -358,7 +348,7 @@ function SetDeadlinesScreen() {
     <div className="ag-page" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
       {wide && (
         <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
-          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
         </div>
       )}
 
@@ -426,10 +416,11 @@ function SetDeadlinesScreen() {
               animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
             }}
           >
-            {/* Round glass since V3-6, as the board's, Focus's and Score's Back. */}
-            <IconButton label="Back to task selection" onClick={() => navigate('/select')}>
+            {/* Round glass since V3-6, as the board's, Focus's and Score's Back;
+                the design system's round soft button since 29-1P2. */}
+            <SoftIconButton label="Back to task selection" onClick={() => navigate('/select')}>
               <Icon name="arrow-left" size={18} />
-            </IconButton>
+            </SoftIconButton>
             <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
               {/*
                 The source's header says "Deadlines"; this app's own name for
@@ -482,11 +473,11 @@ function SetDeadlinesScreen() {
               {/* The budget line. Minutes only mean something against a window. */}
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-3)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-                  <MetaKicker icon="timer" tone={overrun ? 'var(--hue-amber)' : 'var(--fg-3)'}>Allocated</MetaKicker>
+                  <MetaKicker icon="timer" tone={overrun ? 'var(--status-overrun)' : 'var(--fg-3)'}>Allocated</MetaKicker>
                   <span
                     style={{
                       font: 'var(--type-numeric)', fontSize: 'var(--text-lg)', fontVariantNumeric: 'tabular-nums',
-                      color: overrun ? 'var(--hue-amber)' : 'var(--fg-1)',
+                      color: overrun ? 'var(--status-overrun)' : 'var(--fg-1)',
                     }}
                   >
                     {formatSpan(totalSeconds)}
@@ -495,7 +486,7 @@ function SetDeadlinesScreen() {
                     of a {formatSpan(sessionDuration)} window
                   </span>
                   <span style={{ flex: 1 }} />
-                  <span style={{ font: 'var(--type-caption)', color: overrun ? 'oklch(0.95 0.07 82)' : 'var(--fg-4)' }}>
+                  <span style={{ font: 'var(--type-caption)', color: overrun ? 'var(--job-coral-text)' : 'var(--fg-4)' }}>
                     {overrun ? `${formatSpan(-spareSeconds)} past the window` : `${formatSpan(spareSeconds)} unplanned`}
                   </span>
                 </div>
@@ -510,7 +501,6 @@ function SetDeadlinesScreen() {
                   const subCounts = task.subtasks && task.subtasks.length > 0
                     ? countSubtasksRecursive(task.subtasks)
                     : null;
-                  const due = dueReading(task.deadline, now);
                   const blockedBy = (task.dependsOn ?? [])
                     .map((id) => backlogTasks.find((b) => b.id === id)?.title)
                     .filter((title): title is string => !!title);
@@ -577,29 +567,36 @@ function SetDeadlinesScreen() {
                                     ScoreDial's own doc names for this. Only when
                                     the task has actually been scored: a 0.0 chip
                                     is a claim, not a blank. */}
-                                {isTaskScored(task) && (
-                                  <ScoreDial
-                                    value={scores.scoreOf(task)}
-                                    max={scores.peak}
-                                    alert={scores.read(task).redAlert}
-                                    size="sm"
-                                  />
-                                )}
-                                <RedAlertBadge redAlert={scores.read(task).redAlert} compact />
+                                {/* 29-1P7a (idea 162): Red Alert out front,
+                                    the score behind "+1" — his order. */}
+                                <BadgeFold
+                                  gap={6}
+                                  items={[
+                                    scores.read(task).redAlert && { key: 'alert', node: <RedAlertBadge redAlert compact /> },
+                                    isTaskScored(task) && {
+                                      key: 'score',
+                                      node: (
+                                        <ScoreDial
+                                          value={scores.scoreOf(task)}
+                                          max={scores.peak}
+                                          alert={scores.read(task).redAlert}
+                                          size="sm"
+                                        />
+                                      ),
+                                    },
+                                  ]}
+                                />
                               </span>
                               <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
                                 {task.listName && <MetaKicker tone="var(--fg-4)">{task.listName}</MetaKicker>}
-                                {due && (
-                                  <MetaKicker icon="calendar-clock" tone={due.hot ? 'var(--hue-amber)' : 'var(--fg-4)'}>
-                                    {due.text}
-                                  </MetaKicker>
-                                )}
+                                {/* 29-1P7a (ideas 165, 66): the tiny calendar page. */}
+                                <DueDate deadline={task.deadline} face="kicker" />
                                 {blockedBy.length > 0 && (
                                   <MetaKicker icon="lock" tone="var(--fg-4)">After {blockedBy.join(', ')}</MetaKicker>
                                 )}
-                                {/* Amber, not rose: a field you have not filled
-                                    in needs a decision, it is not a live
-                                    problem — and it is why Start Protocol is
+                                {/* Grey with its icon, not coral: a field you
+                                    have not filled in needs a look, it is not a
+                                    live problem (29-1P2c2) — and it is why Start Protocol is
                                     greyed out. */}
                                 {seconds === 0 && (
                                   <StatusPill status="review" size="sm" dot={false}>Needs time</StatusPill>
@@ -650,6 +647,11 @@ function SetDeadlinesScreen() {
                                   updateTask(task.id, { allocatedTime: secs });
                                   setTaskTimeMemory(task.title, secs);
                                 }}
+                                /* 29-1P10a, idea 97: a press opens the minute
+                                   ruler, saying when the whole run would end. */
+                                ruler={{
+                                  hint: (secs) => `The run ends at ${formatClock(endsAt + Math.round((secs - seconds) / 60))}`,
+                                }}
                               />
                             </div>
                           </div>
@@ -690,6 +692,22 @@ function SetDeadlinesScreen() {
                   );
                 })}
               </SortableList>
+
+              {/* 29-1P14c (idea 113): reached with nothing chosen, this pane was an
+                 empty list. Now the leaf, his approved sentence and the way back. */}
+              {tasks.length === 0 && (
+                <EmptyCalm
+                  art="leaf"
+                  title="Nothing to time yet."
+                  actions={(
+                    <SoftButton onClick={() => navigate('/select')} icon={<Icon name="arrow-left" size={16} />}>
+                      Back to New Session
+                    </SoftButton>
+                  )}
+                >
+                  <LitLine><Lit>Pick today's tasks</Lit> first, then give each one <Lit>its time</Lit> here.</LitLine>
+                </EmptyCalm>
+              )}
             </div>
 
             {/* ═══════════ THE RUN ═══════════ */}
@@ -713,27 +731,28 @@ function SetDeadlinesScreen() {
                 style={{
                   display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)',
                   gap: 'var(--sp-3)', padding: 'var(--sp-7)', borderRadius: 'var(--r-lg)',
-                  backgroundImage: overrun ? 'var(--glass-tint-amber)' : 'var(--glass-tint-accent)',
+                  /* 29-1P2c2: when the session ends is a time, sky's job; past
+                     the window you set is over time, coral's. */
+                  backgroundImage: overrun ? 'var(--glass-tint-coral)' : 'var(--glass-tint-sky)',
                   boxShadow: overrun
-                    ? 'var(--glass-rim-2), var(--glow-amber-md)'
-                    : 'var(--glass-rim-2), var(--glow-accent-sm)',
+                    ? 'var(--glass-rim-2), var(--job-coral-shine-md)'
+                    : 'var(--glass-rim-2), var(--job-sky-shine)',
                   transition: 'background-image var(--dur-base) var(--ease-glass)',
                 }}
               >
-                <MetaKicker icon="flag-triangle-right" tone={overrun ? 'oklch(0.95 0.07 82)' : 'var(--accent)'}>
+                <MetaKicker icon="flag-triangle-right" tone={overrun ? 'var(--job-coral-text)' : 'var(--job-sky-text)'}>
                   Session ends
                 </MetaKicker>
                 <span
                   style={{
                     font: 'var(--type-numeric)', fontSize: 'var(--text-5xl)', lineHeight: 1,
                     color: 'var(--fg-1)', fontVariantNumeric: 'tabular-nums',
-                    /* The token, not a typed hue, so V3's emerald reaches it. */
-                    textShadow: overrun ? 'none' : 'var(--text-glow-accent)',
+                    textShadow: overrun ? 'none' : 'var(--text-glow-sky)',
                   }}
                 >
                   {formatClock(endsAt)}
                 </span>
-                <span style={{ font: 'var(--type-caption)', color: overrun ? 'oklch(0.95 0.07 82)' : 'var(--fg-2)' }}>
+                <span style={{ font: 'var(--type-caption)', color: overrun ? 'var(--job-coral-text)' : 'var(--fg-2)' }}>
                   {overrun
                     ? `${formatSpan(-spareSeconds)} past the window you set.`
                     : `${formatSpan(spareSeconds)} of the window still unplanned.`}
@@ -768,8 +787,9 @@ function SetDeadlinesScreen() {
                         flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
                         height: Math.max(38, Math.min(120, block.minutes * 0.5)),
                         padding: '0 var(--sp-5)', borderRadius: 'var(--r-sm)',
-                        backgroundImage: i === 0 ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
-                        boxShadow: i === 0 ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+                        /* The plan is a timeline, sky's job (29-1P2c2). */
+                        backgroundImage: i === 0 ? 'var(--glass-tint-sky)' : 'var(--glass-fill-1)',
+                        boxShadow: i === 0 ? 'var(--glass-rim-2), var(--job-sky-shine)' : 'var(--glass-rim-1)',
                         transition: 'height var(--dur-slow) var(--ease-glass)',
                       }}
                     >
@@ -858,7 +878,10 @@ function SetDeadlinesScreen() {
               style={{
                 flex: 1, minWidth: 0,
                 display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
-                padding: 'var(--sp-4) var(--sp-5)', borderRadius: 'var(--r-pill)',
+                padding: 'var(--sp-4) var(--sp-5)',
+                /* A rounded rectangle, never a pill: his call for bars (his
+                   BASE list, 2026-10-06, for this one). */
+                borderRadius: 'var(--r-md)',
                 backgroundImage: 'var(--glass-fill-2)',
                 WebkitBackdropFilter: 'var(--glass-bd-lg)',
                 backdropFilter: 'var(--glass-bd-lg)',
@@ -870,8 +893,8 @@ function SetDeadlinesScreen() {
                 size="lg"
                 seconds={sessionDuration}
                 name="in this work session"
-                tone={overrun ? 'amber' : undefined}
-                onSeconds={setSessionDuration}
+                tone={overrun ? 'coral' : undefined}
+                onSeconds={setHoursToday}
               />
               {/*
                 Sweep it for the shape of the afternoon, type in the boxes when it
@@ -889,14 +912,15 @@ function SetDeadlinesScreen() {
                   min={0}
                   max={MAX_SESSION_SECONDS}
                   step={SESSION_STEP_SECONDS}
-                  onValueChange={setSessionDuration}
+                  detent={3600}
+                  onValueChange={setHoursToday}
                 />
               </div>
               {/* Dropped on a narrow window: the bar has to stay one line for
                   Start Protocol to fit beside the field, and the run pane says
                   the same thing directly above it there, much louder. */}
               {wide && (
-                <span style={{ font: 'var(--type-label)', color: overrun ? 'oklch(0.95 0.07 82)' : 'var(--fg-3)', minWidth: 0 }}>
+                <span style={{ font: 'var(--type-label)', color: overrun ? 'var(--job-coral-text)' : 'var(--fg-3)', minWidth: 0 }}>
                   {overrun
                     ? `${formatSpan(-spareSeconds)} more work than window`
                     : totalSeconds === 0
@@ -905,29 +929,48 @@ function SetDeadlinesScreen() {
                 </span>
               )}
               <span style={{ flex: 1 }} />
-              {/* The screen's one emerald: this is what makes the session live,
-                  and it is only offered once every task has a time on it.
-                  Gel since V3-6 — V3's one primary; `solid` outside a scope. */}
-              <Button
-                variant="gel"
-                onClick={() => navigate('/focus')}
-                disabled={!allTasksHaveTime || tasks.length === 0}
-                title={allTasksHaveTime ? 'Start the focus session' : 'Every task needs a time first'}
-                iconRight={<Icon name="arrow-right" size={16} />}
-                style={{ flex: '0 0 auto' }}
-              >
-                Start Protocol
-              </Button>
+              {/* The screen's one lit button: this is what makes the session
+                  live, and it is only offered once every task has a time on
+                  it. Since 29-1P2 it is the design system's Start — his orange
+                  gel with the tile — and for a session of 90 minutes or more,
+                  his call, the slide: committing to that long is a gesture,
+                  not a tap. */}
+              {/* On a narrow window the slide cannot share the line (the
+                  session field, its slider and the slide need ~770px of the
+                  bar's ~670), so it takes the whole second row. */}
+              {bySlide ? (
+                <div
+                  title={allTasksHaveTime ? undefined : 'Every task needs a time first'}
+                  style={wide ? { flex: '1 0 240px', maxWidth: 320 } : { flex: '1 1 100%' }}
+                >
+                  <SlideToStart
+                    disabled={!allTasksHaveTime || tasks.length === 0}
+                    onConfirm={() => navigate('/focus')}
+                    style={wide ? undefined : { maxWidth: 'none' }}
+                  >
+                    Slide to start Protocol
+                  </SlideToStart>
+                </div>
+              ) : (
+                <GelButton
+                  colour="orange"
+                  size="md"
+                  onClick={() => { cue('start'); navigate('/focus'); }}
+                  disabled={!allTasksHaveTime || tasks.length === 0}
+                  title={allTasksHaveTime ? 'Start the focus session' : 'Every task needs a time first'}
+                  style={{ flex: '0 0 auto' }}
+                >
+                  Start Protocol
+                </GelButton>
+              )}
             </div>
-            <IconButton
-              label="Capture an idea or task"
-              title="Capture an idea or task"
-              size="lg"
-              onClick={() => setIsCapturing(true)}
+            {/* The floating + (29-1P2), where the capture button always was. */}
+            <FloatingAddButton
+              open={isCapturing}
+              label={isCapturing ? 'Close capture' : 'Capture an idea or task'}
+              onClick={() => setIsCapturing(!isCapturing)}
               style={{ flex: '0 0 auto' }}
-            >
-              <Icon name="plus" size={22} />
-            </IconButton>
+            />
           </div>
         </div>
       </div>
@@ -941,7 +984,7 @@ function SetDeadlinesScreen() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}

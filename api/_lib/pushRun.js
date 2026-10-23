@@ -38,6 +38,78 @@ import webpush from "web-push";
 import { create as create4 } from "zustand";
 import { persist as persist3 } from "zustand/middleware";
 
+// src/lib/projectTree.ts
+function resolveParent(byId, id) {
+  const parentId = byId.get(id)?.parentId;
+  if (!parentId || !byId.has(parentId)) return null;
+  const seen = /* @__PURE__ */ new Set();
+  let cursor = parentId;
+  while (cursor) {
+    if (cursor === id) return null;
+    if (seen.has(cursor)) break;
+    seen.add(cursor);
+    const next = byId.get(cursor)?.parentId;
+    cursor = next && byId.has(next) ? next : void 0;
+  }
+  return parentId;
+}
+var byOrder = (a, b) => a.order - b.order || a.createdAt - b.createdAt;
+function buildProjectTree(projects) {
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  const parent = /* @__PURE__ */ new Map();
+  const children = /* @__PURE__ */ new Map();
+  for (const p of projects) {
+    const parentId = resolveParent(byId, p.id);
+    parent.set(p.id, parentId);
+    const siblings = children.get(parentId);
+    if (siblings) siblings.push(p);
+    else children.set(parentId, [p]);
+  }
+  for (const siblings of children.values()) siblings.sort(byOrder);
+  const childrenOf = (id) => children.get(id) ?? [];
+  return {
+    parentOf: (id) => parent.get(id) ?? null,
+    childrenOf,
+    subtreeIds: (id) => {
+      if (!byId.has(id)) return [];
+      const out = [];
+      const walk = (at) => {
+        out.push(at);
+        for (const child of childrenOf(at)) walk(child.id);
+      };
+      walk(id);
+      return out;
+    },
+    ancestorsOf: (id) => {
+      const chain = [];
+      let cursor = parent.get(id) ?? null;
+      while (cursor) {
+        const p = byId.get(cursor);
+        if (!p) break;
+        chain.unshift(p);
+        cursor = parent.get(cursor) ?? null;
+      }
+      return chain;
+    }
+  };
+}
+function canMoveInto(projects, id, targetId) {
+  if (targetId === null) return true;
+  if (targetId === id || !projects.some((p) => p.id === targetId)) return false;
+  return !buildProjectTree(projects).subtreeIds(id).includes(targetId);
+}
+function planProjectMove(projects, id, targetId) {
+  const moving = projects.find((p) => p.id === id);
+  if (!moving || !canMoveInto(projects, id, targetId)) return null;
+  const tree = buildProjectTree(projects);
+  const siblings = tree.childrenOf(targetId).filter((p) => p.id !== id);
+  const order = siblings.reduce((max, p) => Math.max(max, p.order), -1) + 1;
+  const { parentId: _dropped, ...rest } = moving;
+  void _dropped;
+  const moved = targetId === null ? { ...rest, order } : { ...rest, parentId: targetId, order };
+  return projects.map((p) => p.id === id ? moved : p);
+}
+
 // src/lib/cascadeDelete.ts
 function subtaskIds(task) {
   const out = [];
@@ -136,15 +208,20 @@ function planListDeletion(state, listId) {
 function planProjectDeletion(state, projectId) {
   const project = state.projects.find((p) => p.id === projectId);
   if (!project) return noMatch("project", state);
-  const lists = state.taskLists.filter((l) => l.projectId === projectId);
+  const tree = buildProjectTree(state.projects);
+  const parentId = tree.parentOf(projectId);
+  const parent = parentId ? state.projects.find((p) => p.id === parentId) : void 0;
+  const subtree = new Set(tree.subtreeIds(projectId));
+  const projects = [project, ...state.projects.filter((p) => p.id !== projectId && subtree.has(p.id))];
+  const lists = state.taskLists.filter((l) => !!l.projectId && subtree.has(l.projectId));
   const listIds = new Set(lists.map((l) => l.id));
   const tasks = state.backlogTasks.filter((t) => !!t.listId && listIds.has(t.listId));
   return {
     kind: "project",
     title: project.name,
     matched: true,
-    ancestors: {},
-    ...applyRemoval(state, [project], lists, tasks)
+    ancestors: parent ? { project: parent } : {},
+    ...applyRemoval(state, projects, lists, tasks)
   };
 }
 
@@ -391,7 +468,7 @@ function resolveRule(task) {
 function toUtcRRuleTime(instant) {
   return `${instant.toISOString().slice(0, 19).replace(/[-:]/g, "")}Z`;
 }
-function calendarRRuleOf(task, timeZone) {
+function calendarRRuleOf(task, timeZone, allDay = false) {
   const rule = resolveRule(task);
   if (!rule) return null;
   const forGoogle = { ...rule };
@@ -400,7 +477,9 @@ function calendarRRuleOf(task, timeZone) {
     if (remaining <= 1) return null;
     forGoogle.count = remaining;
   }
-  if (rule.until) {
+  if (rule.until && allDay) {
+    forGoogle.until = rule.until.slice(0, 8);
+  } else if (rule.until) {
     const ends = untilInstant(rule, timeZone);
     if (ends) forGoogle.until = toUtcRRuleTime(ends);
   }
@@ -568,6 +647,18 @@ function scheduleAt(task, rule, anchorValue, anchor, step, timeZone) {
 function endedByCount(rule, occurrence) {
   return rule.count !== void 0 && occurrence > rule.count;
 }
+function seriesOccurrenceAfter(source, anchorValue, after, timeZone) {
+  const rule = resolveRule(source);
+  if (!rule) return { kind: "none" };
+  const anchor = readAnchor(anchorValue, timeZone);
+  if (!anchor) return { kind: "none" };
+  const step = firstStepAfter(anchor, rule, 0, after, timeZone);
+  if (step === null || endedByCount(rule, step + 1)) return { kind: "ended" };
+  const at = occurrenceInstant(anchor, rule, step, timeZone);
+  const endsAt = untilInstant(rule, timeZone);
+  if (endsAt && at.getTime() > endsAt.getTime()) return { kind: "ended" };
+  return { kind: "at", occurrence: step + 1, at };
+}
 function undatedNextOccurrence(rule, completed, now, endsAt) {
   const occurrence = completed + 1;
   if (endedByCount(rule, occurrence)) return { kind: "ended", reason: "count" };
@@ -630,6 +721,7 @@ function buildSuccessorTask(task, next, options) {
   successor.shortUrlKeyword = void 0;
   successor.shortUrlDomain = void 0;
   successor.googleEventId = void 0;
+  successor.eventId = void 0;
   for (const key of Object.keys(successor)) {
     if (successor[key] === void 0) delete successor[key];
   }
@@ -819,14 +911,15 @@ function hasEmergencyLapsed(task, now, timeZone = resolveUserTimeZone()) {
 
 // src/lib/deadlineMath.ts
 var DEADLINE_GAP_DAYS = 1;
+var NOTHING_IGNORED = /* @__PURE__ */ new Set();
 var EMPTY = { moves: [], conflicts: [], patches: [] };
 function addDaysInZone(instant, days, timeZone) {
   const p = zonedParts(instant, timeZone);
   return zonedTimeToInstant({ ...p, day: p.day + days }, timeZone);
 }
-function planDeadlineCascade(tasks, { timeZone, gapDays = DEADLINE_GAP_DAYS }) {
+function planDeadlineCascade(tasks, { timeZone, gapDays = DEADLINE_GAP_DAYS, ignored = NOTHING_IGNORED }) {
   const byId = new Map(tasks.map((t) => [t.id, t]));
-  const active = (task) => task.status !== "completed";
+  const active = (task) => task.status !== "completed" && !ignored.has(task.id);
   const resolved = /* @__PURE__ */ new Map();
   const visiting = /* @__PURE__ */ new Set();
   const moves = [];
@@ -867,7 +960,7 @@ function planDeadlineCascade(tasks, { timeZone, gapDays = DEADLINE_GAP_DAYS }) {
     }
     const requiredString = toTaskDateString(required, timeZone);
     const ownString = toTaskDateString(own, timeZone);
-    if (task.deadlineIsFixed) {
+    if (task.deadlineIsFixed || task.eventId) {
       conflicts.push({
         taskId: task.id,
         title: task.title,
@@ -904,6 +997,7 @@ function isQuietPlan(plan) {
 function affectsDeadlines(before, updates) {
   if ("deadline" in updates && updates.deadline !== before.deadline) return true;
   if ("deadlineIsFixed" in updates && !!updates.deadlineIsFixed !== !!before.deadlineIsFixed) return true;
+  if ("eventId" in updates && !!updates.eventId !== !!before.eventId) return true;
   if ("status" in updates && updates.status !== before.status) return true;
   if ("dependsOn" in updates) {
     const next = updates.dependsOn ?? [];
@@ -911,6 +1005,67 @@ function affectsDeadlines(before, updates) {
     if (next.length !== previous.length || next.some((id, i) => id !== previous[i])) return true;
   }
   return false;
+}
+
+// src/lib/ignoredWork.ts
+function collectSubtaskIds(subtasks, into) {
+  for (const s of subtasks ?? []) {
+    into.add(s.id);
+    collectSubtaskIds(s.subtasks, into);
+  }
+}
+function ignoredWork(tasks, lists, projects) {
+  const tree = buildProjectTree(projects);
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+  const listById = new Map(lists.map((l) => [l.id, l]));
+  const projectCache = /* @__PURE__ */ new Map();
+  const projectReason = (projectId) => {
+    if (!projectId) return void 0;
+    if (projectCache.has(projectId)) return projectCache.get(projectId);
+    const project = projectById.get(projectId);
+    let reason;
+    if (project) {
+      for (const p of [...tree.ancestorsOf(projectId), project]) {
+        if (p.ignored) {
+          reason = { kind: "project", project: p };
+          break;
+        }
+      }
+    }
+    projectCache.set(projectId, reason);
+    return reason;
+  };
+  const listReason = (listId) => {
+    if (!listId) return void 0;
+    const list = listById.get(listId);
+    if (!list) return void 0;
+    return projectReason(list.projectId) ?? (list.ignored ? { kind: "list", list } : void 0);
+  };
+  const ids = /* @__PURE__ */ new Set();
+  for (const task of tasks) {
+    if (task.parent) continue;
+    if (task.ignored || listReason(task.listId)) {
+      ids.add(task.id);
+      collectSubtaskIds(task.subtasks, ids);
+    }
+  }
+  const reasonOf = (task) => listReason(task.listId) ?? (ids.has(task.id) ? { kind: "task" } : void 0);
+  return {
+    ids,
+    has: (task) => ids.has(task.id) || !!listReason(task.listId),
+    reasonOf,
+    listReason,
+    projectReason
+  };
+}
+var cache = null;
+function ignoredWorkOf(tasks, lists, projects) {
+  if (cache && cache.tasks === tasks && cache.lists === lists && cache.projects === projects) {
+    return cache.value;
+  }
+  const value = ignoredWork(tasks, lists, projects);
+  cache = { tasks, lists, projects, value };
+  return value;
 }
 
 // src/store/useTrashStore.ts
@@ -1133,6 +1288,37 @@ function upgradeTaskRecurrence(tasks) {
     return upgraded;
   });
 }
+function hasNotesOrTags(task) {
+  return !!task && ("notes" in task || "tags" in task);
+}
+function upgradeTaskNotesAndTags(tasks) {
+  if (!Array.isArray(tasks)) return [];
+  if (!tasks.some(hasNotesOrTags)) return tasks;
+  return tasks.map((task) => {
+    if (!hasNotesOrTags(task)) return task;
+    const upgraded = { ...task };
+    const notes = typeof upgraded.notes === "string" ? upgraded.notes.trim() : "";
+    delete upgraded.notes;
+    delete upgraded.tags;
+    const description = upgraded.description?.trim() ?? "";
+    if (notes && !description.includes(notes)) {
+      upgraded.description = description ? `${description}
+
+${notes}` : notes;
+    }
+    return upgraded;
+  });
+}
+function upgradeFocusLogTags(entries) {
+  if (!Array.isArray(entries)) return [];
+  if (!entries.some((entry) => entry && "tags" in entry)) return entries;
+  return entries.map((entry) => {
+    if (!("tags" in entry)) return entry;
+    const upgraded = { ...entry };
+    delete upgraded.tags;
+    return upgraded;
+  });
+}
 var EMERGENCY_MAX = 5;
 var AVOIDED_MAX = 5;
 function upgradeTaskScoring(tasks) {
@@ -1212,7 +1398,9 @@ var FOCUS_LOG_LIMIT = 5e3;
 function mergeFocusLogs(a, b) {
   const byId = /* @__PURE__ */ new Map();
   for (const entry of [...Array.isArray(a) ? a : [], ...Array.isArray(b) ? b : []]) {
-    if (entry && typeof entry.id === "string") byId.set(entry.id, entry);
+    if (!entry || typeof entry.id !== "string") continue;
+    const prev = byId.get(entry.id);
+    byId.set(entry.id, prev ? { ...prev, ...entry } : entry);
   }
   const merged = [...byId.values()].sort((x, y) => x.startedAt - y.startedAt);
   return merged.length > FOCUS_LOG_LIMIT ? merged.slice(merged.length - FOCUS_LOG_LIMIT) : merged;
@@ -1269,6 +1457,13 @@ function applyTaskUpdate(state, existing, updates) {
       written = { ...written, completedAt: void 0 };
     }
   }
+  if (existing.eventId && "deadline" in updates && !("eventId" in updates) && updates.deadline !== existing.deadline) {
+    written = { ...written, eventId: void 0 };
+  }
+  const who = (t) => (t.assignee ?? "").trim();
+  if ("assignee" in updates && !("assignedAt" in updates) && who(updates) !== who(existing)) {
+    written = { ...written, assignedAt: who(updates) ? Date.now() : void 0 };
+  }
   const transition = planRecurrenceTransition(state, existing, after, {
     now: /* @__PURE__ */ new Date(),
     timeZone: resolveUserTimeZone(),
@@ -1283,7 +1478,10 @@ function applyTaskUpdate(state, existing, updates) {
   }
   let deadlines = null;
   if (affectsDeadlines(existing, written)) {
-    const plan = planDeadlineCascade(backlogTasks, { timeZone: resolveUserTimeZone() });
+    const plan = planDeadlineCascade(backlogTasks, {
+      timeZone: resolveUserTimeZone(),
+      ignored: ignoredWorkOf(backlogTasks, state.taskLists, state.projects).ids
+    });
     if (!isQuietPlan(plan)) {
       deadlines = plan;
       const byId = new Map(plan.patches.map((patch) => [patch.taskId, patch]));
@@ -1315,11 +1513,12 @@ var useStore = create4()(
       })),
       projects: [],
       addProject: (data) => {
+        const siblings = get().projects.filter((p) => (p.parentId ?? null) === (data.parentId ?? null));
         const project = {
           ...data,
           id: crypto.randomUUID(),
           createdAt: Date.now(),
-          order: get().projects.length
+          order: siblings.reduce((max, p) => Math.max(max, p.order), -1) + 1
         };
         set((state) => ({ projects: [...state.projects, project] }));
         return project;
@@ -1338,6 +1537,12 @@ var useStore = create4()(
         const leftovers = state.projects.filter((p) => !orderedIds.includes(p.id));
         return { projects: [...reordered, ...leftovers] };
       }),
+      moveProject: (id, parentId) => {
+        const next = planProjectMove(get().projects, id, parentId);
+        if (!next) return false;
+        set({ projects: next });
+        return true;
+      },
       taskLists: DEFAULT_LISTS,
       backlogTasks: [],
       addTaskList: (title, projectId) => {
@@ -1353,6 +1558,36 @@ var useStore = create4()(
       updateTaskList: (id, updates) => set((state) => ({
         taskLists: state.taskLists.map((l) => l.id === id ? { ...l, ...updates } : l)
       })),
+      setIgnored: (target, ignored) => set((state) => {
+        const flag = (record) => {
+          const { ignored: _was, ...rest } = record;
+          void _was;
+          return ignored ? { ...rest, ignored: true } : rest;
+        };
+        const projects = target.kind === "project" ? state.projects.map((p) => p.id === target.id ? flag(p) : p) : state.projects;
+        const taskLists = target.kind === "list" ? state.taskLists.map((l) => l.id === target.id ? flag(l) : l) : state.taskLists;
+        const backlogTasks = target.kind === "task" ? state.backlogTasks.map((t) => t.id === target.id ? flag(t) : t) : state.backlogTasks;
+        let tasks = state.tasks.map((t) => target.kind === "task" && t.id === target.id ? flag(t) : t);
+        if (ignored) {
+          const work = ignoredWorkOf(backlogTasks, taskLists, projects);
+          tasks = tasks.filter((t) => !work.has(t));
+        }
+        return { projects, taskLists, backlogTasks, tasks };
+      }),
+      /* Written straight onto the record, like `setIgnored`: a flag, not a
+         status, so it has no business in `updateBacklogTask`'s path. Only the
+         backlog's copy is read (`lib/workedTime.ts`), so the queue is left be. */
+      setNotWorked: (target, value) => set((state) => {
+        const flag = (record) => {
+          const { notWorked: _was, ...rest } = record;
+          void _was;
+          const v = target.kind === "task" ? value : value ? true : void 0;
+          return v === void 0 ? rest : { ...rest, notWorked: v };
+        };
+        if (target.kind === "project") return { projects: state.projects.map((p) => p.id === target.id ? flag(p) : p) };
+        if (target.kind === "list") return { taskLists: state.taskLists.map((l) => l.id === target.id ? flag(l) : l) };
+        return { backlogTasks: state.backlogTasks.map((t) => t.id === target.id ? flag(t) : t) };
+      }),
       renameTaskList: (id, title) => set((state) => ({
         taskLists: state.taskLists.map((l) => l.id === id ? { ...l, title } : l),
         // `listName` is only a display fallback (see `getListTitle`), but
@@ -1398,6 +1633,7 @@ var useStore = create4()(
         } else {
           set((state) => ({ backlogTasks: [newTask, ...state.backlogTasks] }));
         }
+        return newTask.id;
       },
       updateBacklogTask: (id, updates) => {
         let deadlines = null;
@@ -1504,7 +1740,6 @@ var useStore = create4()(
         const entry = { id: crypto.randomUUID(), ...draft };
         const projectId = draft.listId ? state.taskLists.find((l) => l.id === draft.listId)?.projectId : void 0;
         if (projectId) entry.projectId = projectId;
-        if (!entry.tags || entry.tags.length === 0) delete entry.tags;
         const next = [...state.focusLog, entry];
         return {
           focusLog: next.length > FOCUS_LOG_LIMIT ? next.slice(next.length - FOCUS_LOG_LIMIT) : next
@@ -1576,7 +1811,7 @@ var useStore = create4()(
     }),
     {
       name: "mutineer-os-storage",
-      version: 9,
+      version: 10,
       migrate: (persisted) => {
         const state = persisted;
         if (!state.taskLists || state.taskLists.length === 0) {
@@ -1593,6 +1828,9 @@ var useStore = create4()(
         state.tasks = upgradeTaskRecurrence(state.tasks);
         state.backlogTasks = upgradeTaskScoring(state.backlogTasks);
         state.tasks = upgradeTaskScoring(state.tasks);
+        state.backlogTasks = upgradeTaskNotesAndTags(state.backlogTasks);
+        state.tasks = upgradeTaskNotesAndTags(state.tasks);
+        state.focusLog = upgradeFocusLogTags(state.focusLog);
         return state;
       }
     }
@@ -1603,12 +1841,12 @@ var useStore = create4()(
 function hydrateFromPayload(data, localFocusLog) {
   return {
     taskLists: data.taskLists.length > 0 ? data.taskLists : DEFAULT_LISTS,
-    backlogTasks: upgradeTaskScoring(upgradeTaskRecurrence(data.backlogTasks)),
-    tasks: upgradeTaskScoring(upgradeTaskRecurrence(data.tasks ?? [])),
+    backlogTasks: upgradeTaskNotesAndTags(upgradeTaskScoring(upgradeTaskRecurrence(data.backlogTasks))),
+    tasks: upgradeTaskNotesAndTags(upgradeTaskScoring(upgradeTaskRecurrence(data.tasks ?? []))),
     sessionDuration: data.sessionDuration ?? 14400,
     taskTimeMemory: data.taskTimeMemory ?? {},
     projects: data.projects ?? [],
-    focusLog: mergeFocusLogs(localFocusLog, data.focusLog)
+    focusLog: upgradeFocusLogTags(mergeFocusLogs(localFocusLog, data.focusLog))
   };
 }
 
@@ -1680,7 +1918,182 @@ var DEFAULT_NOTIFICATION_SETTINGS = {
   defaultDeadlineOffsetMinutes: 30
 };
 
+// src/lib/covers/coverRef.ts
+var COVER_MIN_AGE_MS = 10 * 60 * 1e3;
+
+// src/lib/events/events.ts
+var DAY = /^\d{4}-\d{2}-\d{2}$/;
+var DAY_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+var HOUR_MS = 36e5;
+var DAY_MS = 864e5;
+function isEventDate(value) {
+  if (typeof value !== "string" || !(DAY.test(value) || DAY_TIME.test(value))) return false;
+  const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  const probe = new Date(Date.UTC(y, m - 1, d));
+  if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== m - 1 || probe.getUTCDate() !== d) return false;
+  if (value.length === 10) return true;
+  const [hh, mm] = value.slice(11).split(":").map(Number);
+  return hh <= 23 && mm <= 59;
+}
+var isAllDay = (event) => event.start.length === 10;
+function addDays2(day, n) {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+function daysBetween2(from, to) {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+}
+function startOfDay(day, timeZone) {
+  const [year, month, d] = day.split("-").map(Number);
+  return zonedTimeToInstant({ year, month, day: d, hour: 0, minute: 0, second: 0 }, timeZone);
+}
+var ALERT_CHOICES = [0, 10, 30, 60, 1440, 2880, 10080, 40320];
+var ALL_DAY_ALERT_CHOICES = ALERT_CHOICES.filter((m) => m % 1440 === 0);
+var MAX_ALERTS = 5;
+var DEFAULT_ALERT_TIME = "08:00";
+var CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+var isClock = (value) => typeof value === "string" && CLOCK.test(value);
+function cleanAlerts(raw, allDay) {
+  if (!Array.isArray(raw)) return [];
+  const allowed = allDay ? ALL_DAY_ALERT_CHOICES : ALERT_CHOICES;
+  const kept = [...new Set(raw.filter((m) => allowed.includes(m)))];
+  return kept.sort((a, b) => b - a).slice(0, MAX_ALERTS);
+}
+function alertClockMinutes(event) {
+  const [h, m] = (isClock(event.alertTime) ? event.alertTime : DEFAULT_ALERT_TIME).split(":").map(Number);
+  return h * 60 + m;
+}
+function isBaseEvent(value) {
+  if (!value || typeof value !== "object") return false;
+  const e = value;
+  return typeof e.id === "string" && typeof e.title === "string" && isEventDate(e.start) && Number.isFinite(e.createdAt);
+}
+function firstSpan(event, timeZone) {
+  if (isAllDay(event)) {
+    const last = event.end && event.end.length === 10 && event.end >= event.start ? event.end : event.start;
+    return { start: startOfDay(event.start, timeZone), end: startOfDay(addDays2(last, 1), timeZone) };
+  }
+  const start = parseStoredDate(event.start, timeZone);
+  if (!start) return null;
+  const end = event.end ? parseStoredDate(event.end, timeZone) : null;
+  return { start, end: end && end > start ? end : new Date(start.getTime() + HOUR_MS) };
+}
+function eventMoment(event, now, timeZone) {
+  const first = firstSpan(event, timeZone);
+  if (!first) return null;
+  const allDay = isAllDay(event);
+  const at = (start, end, occurrence, ended) => {
+    const kind = end.getTime() <= now.getTime() ? "passed" : start.getTime() <= now.getTime() ? "now" : "coming";
+    return { kind, start, end, day: toZonedDayString(start, timeZone), occurrence, ...ended ? { ended } : {} };
+  };
+  if (allDay) {
+    const days = daysBetween2(event.start, toZonedDayString(new Date(first.end.getTime() - 1), timeZone)) + 1;
+    const series2 = seriesOccurrenceAfter(event, event.start, new Date(now.getTime() - (days - 1) * DAY_MS), timeZone);
+    if (series2.kind === "none") return at(first.start, first.end, 1);
+    if (series2.kind === "ended") return { ...at(first.start, first.end, 1, true), kind: "passed" };
+    const day = toZonedDayString(series2.at, timeZone);
+    return at(startOfDay(day, timeZone), startOfDay(addDays2(day, days), timeZone), series2.occurrence);
+  }
+  const length = first.end.getTime() - first.start.getTime();
+  const series = seriesOccurrenceAfter(event, event.start, new Date(now.getTime() - length), timeZone);
+  if (series.kind === "none") return at(first.start, first.end, 1);
+  if (series.kind === "ended") return { ...at(first.start, first.end, 1, true), kind: "passed" };
+  return at(series.at, new Date(series.at.getTime() + length), series.occurrence);
+}
+function eventOccurrences(event, fromMs, toMs, timeZone, cap) {
+  const out = [];
+  let probe = fromMs - 1;
+  for (let i = 0; i < cap; i++) {
+    const moment = eventMoment(event, new Date(probe), timeZone);
+    if (!moment || moment.kind === "passed") break;
+    if (moment.start.getTime() >= toMs) break;
+    if (moment.end.getTime() > fromMs) out.push(moment);
+    probe = Math.max(moment.end.getTime(), probe + 1);
+  }
+  return out;
+}
+function describeWhen(moment, allDay, now, timeZone) {
+  const thisYear = zonedParts(now, timeZone).year;
+  const dayLabel = (instant) => {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", year: "numeric" }).formatToParts(instant);
+    const of = (type) => parts.find((p) => p.type === type)?.value ?? "";
+    const year = zonedParts(instant, timeZone).year;
+    return `${of("weekday")} ${of("day")} ${of("month")}${year !== thisYear ? ` ${year}` : ""}`;
+  };
+  const time = (instant) => new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(instant);
+  if (allDay) {
+    const lastDay = new Date(moment.end.getTime() - 1);
+    if (toZonedDayString(lastDay, timeZone) === moment.day) return dayLabel(moment.start);
+    return `${dayLabel(moment.start)} \u2013 ${dayLabel(lastDay)}`;
+  }
+  if (toZonedDayString(new Date(moment.end.getTime() - 1), timeZone) === moment.day) return `${dayLabel(moment.start)}, ${time(moment.start)}`;
+  return `${dayLabel(moment.start)}, ${time(moment.start)} \u2013 ${dayLabel(moment.end)}, ${time(moment.end)}`;
+}
+
+// src/lib/events/eventAlerts.ts
+var MINUTE_MS = 6e4;
+var DAY_MINUTES = 1440;
+var MAX_RINGS_PER_ALERT = 48;
+function eventLogSubject(eventId) {
+  return `event:${eventId}`;
+}
+function midnight(day, timeZone) {
+  const [year, month, d] = day.split("-").map(Number);
+  return zonedTimeToInstant({ year, month, day: d, hour: 0, minute: 0, second: 0 }, timeZone);
+}
+function occurrencesFrom(event, fromMs, beforeMs, timeZone) {
+  return eventOccurrences(event, fromMs, beforeMs, timeZone, MAX_RINGS_PER_ALERT).filter((m) => m.start.getTime() >= fromMs);
+}
+function eventAlertsToday(events, timeZone, now) {
+  const today = toZonedDayString(new Date(now), timeZone);
+  const dayStart = midnight(today, timeZone).getTime();
+  const dayEnd = midnight(addDays2(today, 1), timeZone).getTime();
+  const rows = [];
+  for (const event of events) {
+    const allDay = isAllDay(event);
+    const alerts = cleanAlerts(event.alerts, allDay);
+    if (alerts.length === 0) continue;
+    if (allDay) {
+      const clock = alertClockMinutes(event);
+      const [year, month, d] = today.split("-").map(Number);
+      const at = zonedTimeToInstant({ year, month, day: d, hour: Math.floor(clock / 60), minute: clock % 60, second: 0 }, timeZone).getTime();
+      for (const minutes of alerts) {
+        const day = addDays2(today, minutes / DAY_MINUTES);
+        const from = midnight(day, timeZone).getTime();
+        const to = midnight(addDays2(day, 1), timeZone).getTime();
+        for (const occurrence of occurrencesFrom(event, from, to, timeZone)) {
+          rows.push({ event, at, minutes, allDay, occurrence, state: "queued" });
+        }
+      }
+      continue;
+    }
+    for (const minutes of alerts) {
+      const back = minutes * MINUTE_MS;
+      for (const occurrence of occurrencesFrom(event, dayStart + back, dayEnd + back, timeZone)) {
+        rows.push({ event, at: occurrence.start.getTime() - back, minutes, allDay, occurrence, state: "queued" });
+      }
+    }
+  }
+  rows.sort((a, b) => a.at - b.at || a.event.id.localeCompare(b.event.id) || b.minutes - a.minutes);
+  for (const row of rows) if (row.at < now) row.state = "missed";
+  const next = rows.find((r) => r.state !== "missed");
+  if (next) next.state = "next";
+  return rows;
+}
+function eventAlertKey(row) {
+  return `${eventLogSubject(row.event.id)}@${row.at}`;
+}
+function alertWhenWords(minutes, allDay) {
+  if (minutes === 0) return allDay ? "Today" : "Now";
+  if (minutes === DAY_MINUTES) return "Tomorrow";
+  if (minutes < 60) return `In ${minutes} min`;
+  if (minutes < DAY_MINUTES) return `In ${minutes / 60} h`;
+  if (minutes % 10080 === 0) return `In ${minutes / 10080} week${minutes === 10080 ? "" : "s"}`;
+  return `In ${minutes / DAY_MINUTES} days`;
+}
+
 // src/lib/smartStart.ts
+var NOTHING_IGNORED2 = /* @__PURE__ */ new Set();
 function queueCopy(task, overridden) {
   return {
     ...task,
@@ -1688,7 +2101,7 @@ function queueCopy(task, overridden) {
     ...overridden ? { scheduledAnyway: true } : {}
   };
 }
-function prerequisiteChainOf(task, byId, excluded) {
+function prerequisiteChainOf(task, byId, excluded, ignored = NOTHING_IGNORED2) {
   const chain = [];
   const seen = /* @__PURE__ */ new Set([task.id]);
   let schedulable = true;
@@ -1697,7 +2110,7 @@ function prerequisiteChainOf(task, byId, excluded) {
       if (excluded.has(id) || seen.has(id)) continue;
       const dep = byId.get(id);
       if (!dep || dep.status === "completed") continue;
-      if (dep.parent) {
+      if (dep.parent || ignored.has(id)) {
         schedulable = false;
         continue;
       }
@@ -1710,7 +2123,7 @@ function prerequisiteChainOf(task, byId, excluded) {
   return { chain, schedulable };
 }
 var NOTHING_QUEUED = /* @__PURE__ */ new Set();
-function planStartNow(backlogTasks, taskId) {
+function planStartNow(backlogTasks, taskId, ignored = NOTHING_IGNORED2) {
   const byId = new Map(backlogTasks.map((t) => [t.id, t]));
   const task = byId.get(taskId);
   if (!task || task.status === "completed" || task.parent) return { kind: "unavailable" };
@@ -1719,7 +2132,7 @@ function planStartNow(backlogTasks, taskId) {
     return schedulable && chain.length === 0;
   };
   if (free(task)) return { kind: "start", queue: [queueCopy(task, false)] };
-  const startable = prerequisiteChainOf(task, byId, NOTHING_QUEUED).chain.filter(free);
+  const startable = prerequisiteChainOf(task, byId, NOTHING_QUEUED).chain.filter((t) => !ignored.has(t.id)).filter(free);
   return { kind: "blocked", blockers: getBlockingTasks(backlogTasks, task), startable };
 }
 
@@ -1803,6 +2216,18 @@ function summaryMessage(missedToday, now, timeZone) {
     timestamp: now
   };
 }
+function eventMessage(row, timeZone) {
+  const when = describeWhen(row.occurrence, row.allDay, new Date(row.at), timeZone);
+  return {
+    kind: "event",
+    title: `${alertWhenWords(row.minutes, row.allDay)} \u2014 ${row.event.title}`,
+    body: row.event.location ? `${when} \xB7 ${row.event.location}` : when,
+    tag: `base-event-${row.event.id}`,
+    url: `/dashboard?event=${encodeURIComponent(row.event.id)}`,
+    actions: [],
+    timestamp: row.at
+  };
+}
 function reconnectMessage(now) {
   return {
     kind: "reconnect",
@@ -1814,7 +2239,7 @@ function reconnectMessage(now) {
     timestamp: now
   };
 }
-function planPushes({ rows, backlog, log, now, timeZone }) {
+function planPushes({ rows, backlog, log, now, timeZone, events = [] }) {
   const entries = {};
   let changed = false;
   for (const [key, entry] of Object.entries(log.entries)) {
@@ -1861,9 +2286,38 @@ function planPushes({ rows, backlog, log, now, timeZone }) {
     newlyMissed = true;
     changed = true;
   }
+  const alertOf = (eventId, minutes) => `${eventId}|${minutes}`;
+  const sentEventAlertsToday = new Set(
+    Object.values(entries).filter((e) => e.eventId && e.outcome === "sent" && toZonedDayString(new Date(e.at), timeZone) === today).map((e) => alertOf(e.eventId, e.minutesBefore))
+  );
+  const orderedEvents = [...events].sort((a, b) => a.at - b.at || a.event.id.localeCompare(b.event.id));
+  for (const row of orderedEvents) {
+    const key = eventAlertKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (entries[key] || row.at > now) continue;
+    const base = {
+      taskId: eventLogSubject(row.event.id),
+      eventId: row.event.id,
+      minutesBefore: row.minutes,
+      at: row.at,
+      title: row.event.title,
+      estimateMinutes: 0
+    };
+    if (now - row.at <= LATE_LIMIT_MS) {
+      messages.push(eventMessage(row, timeZone));
+      entries[key] = { ...base, outcome: "sent", sentAt: now };
+      sentEventAlertsToday.add(alertOf(row.event.id, row.minutes));
+      changed = true;
+      continue;
+    }
+    if (sentEventAlertsToday.has(alertOf(row.event.id, row.minutes))) continue;
+    entries[key] = { ...base, outcome: "missed" };
+    changed = true;
+  }
   if (newlyMissed) {
     const missedToday = Object.values(entries).filter(
-      (e) => e.outcome === "missed" && toZonedDayString(new Date(e.at), timeZone) === today
+      (e) => !e.eventId && e.outcome === "missed" && toZonedDayString(new Date(e.at), timeZone) === today
     );
     if (missedToday.length > 0) messages.push(summaryMessage(missedToday, now, timeZone));
   }
@@ -1920,6 +2374,12 @@ function rowsFor(payload, settings, timeZone, now) {
   });
   return [...ask(now - LATE_LIMIT_MS), ...ask(now)];
 }
+function eventRowsFor(data, timeZone, now) {
+  const raw = data?.events;
+  const events = Array.isArray(raw) ? raw.filter(isBaseEvent) : [];
+  if (events.length === 0) return [];
+  return [...eventAlertsToday(events, timeZone, now - LATE_LIMIT_MS), ...eventAlertsToday(events, timeZone, now)];
+}
 function zoneOf(subs) {
   const zoned = subs.filter((s) => typeof s.timeZone === "string" && isValidTimeZone(s.timeZone)).sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
   return zoned[0]?.timeZone ?? null;
@@ -1974,10 +2434,12 @@ async function runPushes(opts) {
     }
     const rows = rowsFor(payload, settings, timeZone, now);
     const backlog = hydrateFromPayload(payload).backlogTasks;
+    const eventsSnap = await store.collection("users").doc(uid).collection("data").doc("events").get();
+    const events = eventRowsFor(eventsSnap.data(), timeZone, now);
     const ref = logRef(store, uid);
     const plan = await store.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      const next = planPushes({ rows, backlog, log: readLog(snap.data()), now, timeZone });
+      const next = planPushes({ rows, backlog, log: readLog(snap.data()), now, timeZone, events });
       if (next.changed && !opts.dryRun) tx.set(ref, { entries: next.log.entries, updatedAt: now });
       return next;
     });

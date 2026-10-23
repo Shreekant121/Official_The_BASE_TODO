@@ -114,6 +114,85 @@
 }
 
 /*
+ * Quick actions on hover (idea 161, 29-1P7c; `project/QuickActions.tsx`).
+ * A plate that grows out to the LEFT of the card's ⋯, which stays on top of
+ * it and is still the menu's trigger: the plate's right padding is the ⋯'s
+ * slot. Opaque glass, his rule. Laptop only — on a touch screen it never
+ * shows, whatever mounted it.
+ */
+.ag-quick-host { position: relative; }
+.ag-quick-host > :not(.ag-quick) { position: relative; z-index: 1; }
+.ag-quick {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  right: -4px;
+  z-index: 0;
+  /* Built on the first hover and kept; this is what shows and hides it. */
+  opacity: 0;
+  translate: 8px 0;
+  scale: 0.96;
+  transform-origin: right center;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-glass), translate var(--dur-base) var(--ease-springy), scale var(--dur-base) var(--ease-springy);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 42px 3px 3px;
+  border-radius: var(--r-sm);
+  background-image: var(--glass-fill-3);
+  box-shadow: var(--glass-rim-2), var(--glass-cast-1);
+  white-space: nowrap;
+}
+.ag-quick__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--fg-1);
+  font: var(--type-label);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-glass);
+}
+.ag-quick__btn:hover { background-color: oklch(1 0 0 / 0.08); }
+.ag-quick__btn--yes { background-color: var(--fg-1); color: var(--void-1); }
+.ag-quick__btn--yes:hover { background-color: var(--fg-1); filter: brightness(0.92); }
+.ag-quick__ask {
+  padding: 0 6px;
+  font: var(--type-caption);
+  color: var(--fg-2);
+}
+.ag-card:hover .ag-quick,
+.ag-quick:focus-within {
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
+  pointer-events: auto;
+}
+/* The ⋯'s own menu is open: the panel covers the card, and the bar goes. */
+.ag-card-actions[data-open='true'] .ag-quick { opacity: 0; pointer-events: none; }
+@media (hover: none), (pointer: coarse) {
+  .ag-quick { display: none; }
+}
+
+/*
+ * See what blocks what (idea 164, 29-1P7c; `project/BlockWires.tsx`). The
+ * card a drawn wire ends on lights with a white line inside its edge —
+ * white, his call, not the demo's gold. An outline, because the card's own
+ * box-shadow is inline and would win over any rule here; inset, because the
+ * list pane clips anything drawn outside a row.
+ */
+.ag-row[data-wire-lit='true'] {
+  outline: 1.5px solid oklch(1 0 0 / 0.72);
+  outline-offset: -1.5px;
+}
+
+/*
  * A drag grip, on exactly the same terms as `.ag-card-actions`: hidden at
  * rest so a stack of forty rows stays calm, revealed on hover, on focus, and
  * unconditionally on a touch screen where no hover exists.
@@ -270,6 +349,92 @@
 @media (min-width: 960px) {
   .ag-board-grid { grid-template-columns: repeat(auto-fit, minmax(408px, 1fr)); }
 }
+/* BIG-5: a board sharing the screen is half as wide, and a 408px column
+   would not fit a landscape tablet's half at all. Its columns may narrow to
+   the pane, and two still sit side by side on a laptop half. */
+@media (min-width: 960px) {
+  .ag-board-grid--pane { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+}
+
+/* 29-1P9a, idea 157 (Trello): a list folded into a spine. A board with one
+   folded is a wrapping row instead of a grid, so the spine can be thin and
+   the lists beside it share its room; every other list keeps the grid's
+   408px floor (320 in a pane) and the empty fillers at the end keep the last
+   line's lists as wide as those above. Below 960px the board is one column
+   and a spine lies flat, a one-line bar. Nothing here loops or blurs. */
+.ag-board-grid--folds { display: flex; flex-wrap: wrap; row-gap: 0; margin-bottom: calc(-1 * var(--gap-card)); }
+.ag-board-grid--folds > * { flex: 1 1 100%; min-width: 0; margin-bottom: var(--gap-card); }
+/* The fillers' lines must add nothing: the rows are spaced by each item's
+   margin, not by `row-gap`, which a line of empty fillers would still get. */
+.ag-board-grid--folds > .ag-board-fill { height: 0; margin-bottom: 0; }
+@media (min-width: 960px) {
+  .ag-board-grid--folds > * { flex-basis: 408px; }
+  .ag-board-grid--folds.ag-board-grid--pane > * { flex-basis: min(100%, 320px); }
+  .ag-board-grid--folds > :has(> [data-spine]) { flex: 0 0 auto; }
+}
+.ag-spine {
+  display: flex; align-items: center; gap: var(--sp-4);
+  width: 100%; min-height: 48px; padding: var(--sp-4) var(--sp-6);
+  border: 0; background: transparent; color: var(--fg-2); cursor: pointer;
+  font: var(--type-title); font-size: var(--text-sm); letter-spacing: var(--tracking-ui);
+  text-align: left;
+}
+.ag-spine:hover { color: var(--fg-1); }
+.ag-spine__arrow { flex: 0 0 auto; color: var(--fg-3); }
+.ag-spine__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-spine__count { flex: 0 0 auto; color: var(--fg-4); font-size: var(--text-xs); }
+.ag-spine__meter {
+  flex: 1 1 auto; height: 4px; border-radius: var(--r-pill); overflow: hidden;
+  background-color: oklch(1 0 0 / 0.07);
+}
+.ag-spine__meter > i {
+  display: block; width: var(--spine-pct, 0%); height: 100%;
+  border-radius: inherit; background-color: var(--job-lime);
+}
+@media (min-width: 960px) {
+  .ag-spine {
+    flex-direction: column; justify-content: flex-start;
+    width: 52px; min-height: 0; padding: var(--sp-5) 0 var(--sp-6);
+  }
+  /* Read from the bottom up, as the options page showed. */
+  .ag-spine__name, .ag-spine__count { writing-mode: vertical-rl; rotate: 180deg; }
+  .ag-spine__name { max-height: 260px; }
+  .ag-spine__meter { flex: 0 0 auto; width: 4px; height: 48px; display: flex; align-items: flex-end; }
+  .ag-spine__meter > i { width: 100%; height: var(--spine-pct, 0%); }
+}
+
+/* BIG-5: the line between two boards, which drags (2026-09-30). A 12px
+   target around a hairline; the hairline brightens and a grip appears while
+   it is hovered, focused or held. Nothing on it animates at rest. */
+.ag-split-divider {
+  position: relative;
+  touch-action: none;
+  outline: none;
+}
+.ag-split-divider[data-axis="x"] { width: 12px; cursor: col-resize; }
+.ag-split-divider[data-axis="y"] { height: 12px; cursor: row-resize; }
+.ag-split-divider::before,
+.ag-split-divider::after {
+  content: '';
+  position: absolute;
+  transition: background-color var(--dur-fast) var(--ease-glass), opacity var(--dur-fast) var(--ease-glass);
+}
+.ag-split-divider::before { background: var(--line-faint); }
+.ag-split-divider[data-axis="x"]::before { top: 0; bottom: 0; left: 50%; width: 1px; }
+.ag-split-divider[data-axis="y"]::before { left: 0; right: 0; top: 50%; height: 1px; }
+.ag-split-divider::after {
+  opacity: 0;
+  border-radius: var(--r-pill);
+  background: var(--fg-3);
+}
+.ag-split-divider[data-axis="x"]::after { top: 50%; left: 50%; width: 4px; height: 40px; margin: -20px 0 0 -2px; }
+.ag-split-divider[data-axis="y"]::after { left: 50%; top: 50%; height: 4px; width: 40px; margin: -2px 0 0 -20px; }
+.ag-split-divider:hover::before,
+.ag-split-divider:focus-visible::before,
+.ag-split-divider[data-dragging]::before { background: var(--line-strong); }
+.ag-split-divider:hover::after,
+.ag-split-divider:focus-visible::after,
+.ag-split-divider[data-dragging]::after { opacity: 1; }
 
 /*
  * Cover placeholder: fine diagonal hairlines behind the glass, never a
@@ -306,23 +471,15 @@
  *
  * `StatusPills` builds its three options out of `StatusPill` itself, so the
  * options keep the system's own hues and the system's own signalling — but
- * that means the "In Progress" option arrives carrying `running`'s ripple,
- * and `ag-ripple` is `infinite`. An unchosen option therefore pulsed forever,
- * which is wrong twice over: the ripple is this design system's one signal
- * that a state is genuinely LIVE, and a perpetual animation on a greyed-out
- * form control is noise on a screen whose whole job is deciding one thing.
+ * that means the "In Progress" option arrives carrying `running`'s live halo.
+ * The halo is this design system's one signal that a state is genuinely LIVE,
+ * and on a greyed-out form control it says something untrue.
  *
- * It was also unphotographable. A never-ending CSS animation is not on the
- * screenshot harness's fake clock — `clock.install` drives timers and
- * `requestAnimationFrame`, not the compositor — so every capture of the Score
- * screen landed on a different frame of the pulse and `scoring-recurrence`
- * failed its diff on every run, by a different amount each time.
- *
- * `!important` because the ripple's `animation` is an inline style written by
- * `StatusPill`, and no selector outranks one.
+ * It used to be an infinite ripple, and this rule stopped it; the halo has
+ * been still since 2026-09-28 (see `StatusPill.tsx`), so the rule hides it.
  */
-.ag-status-choice[aria-pressed='false'] * {
-  animation: none !important;
+.ag-status-choice[aria-pressed='false'] [data-live-halo] {
+  display: none;
 }
 
 /*
@@ -332,7 +489,8 @@
  * a visible track inside 40px of glass reads as a piece of browser
  * chrome sitting on the surface rather than part of the sheet. The
  * content still scrolls — only the track is gone, which is why this is
- * used on sheets and never on a page.
+ * used on sheets and never on a page — bar one: two boards side by side
+ * (BIG-5), where he asked for the tracks to go (2026-09-30).
  */
 .ag-scroll {
   scrollbar-width: none;
@@ -341,6 +499,78 @@
 .ag-scroll::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+/* The AI side panel is open (`AIPanelDock`): no track anywhere in the dock,
+   the page's own included. His ask, OPT-10. */
+.ag-dock-asking,
+.ag-dock-asking * {
+  scrollbar-width: none;
+}
+.ag-dock-asking::-webkit-scrollbar,
+.ag-dock-asking ::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/*
+ * NO ABRUPT EDGES (OPT-10, his BASE list 2026-10-06): *"there should be no
+ * abrupt cut through the software there will be fading away effect"*. The
+ * chat list was the one he saw — its last rows were sliced flat level with
+ * the model picker.
+ *
+ * `.ag-fade` goes on a panel's own scroller (a list, a menu, a sheet, a side
+ * panel) and fades an edge only while something is hidden past it: at rest
+ * at the top, the first row is whole and only the bottom fades; scrolled to
+ * the end, only the top does; a box with nothing to scroll has no fade at
+ * all, because its scroll timeline is inactive and both lengths stay 0. The
+ * fade is `--ag-fade-len`, 32px: at the transcript's 24px a 52px chat row
+ * still read as cut.
+ *
+ * **Each end switches, it does not grow** (`step-end` over the first and last
+ * pixel of scroll). Measured on the tablet stand-in, a fade that grew over
+ * the first 32px repainted the mask on every frame of a scroll and cost New
+ * Session's task pane ~3fps and a third more hitches; switched, it measured
+ * the same as no fade at all. The eye cannot tell: the switch happens while
+ * the rows are already moving.
+ *
+ * Panels only, his call: never on a page's own scroller. A mask makes its
+ * box the backdrop for every glass card inside it, so a masked page would
+ * change how every card on it looks. For the same reason the mask goes on
+ * a box with no glass of its own — on a glass panel it would fade the
+ * panel's own edges away, so such a panel scrolls an inner box instead
+ * (`MorphMenu`, the composer's skill menu, `TuningPopover`).
+ *
+ * Browsers without scroll timelines (Firefox) keep the old hard edge
+ * rather than a fade stuck at one end.
+ */
+@property --ag-fade-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --ag-fade-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes ag-fade-start {
+  from { --ag-fade-start: 0px; }
+  to   { --ag-fade-start: var(--ag-fade-len); }
+}
+@keyframes ag-fade-end {
+  from { --ag-fade-end: var(--ag-fade-len); }
+  to   { --ag-fade-end: 0px; }
+}
+@supports (animation-timeline: scroll()) {
+  .ag-fade {
+    --ag-fade-len: var(--sp-9);
+    animation: ag-fade-start step-end both, ag-fade-end step-end both;
+    animation-timeline: scroll(self block), scroll(self block);
+    animation-range: 0 1px, calc(100% - 1px) 100%;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ag-fade-start), #000 calc(100% - var(--ag-fade-end)), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ag-fade-start), #000 calc(100% - var(--ag-fade-end)), transparent 100%);
+  }
 }
 
 /*
@@ -504,6 +734,54 @@
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
 }
+
+/*
+ * A ticked title's line (29-1P4b, idea 1), drawn by `ui/forms/Strike.tsx`,
+ * which also slides it. Put it on an INLINE span holding just the text: an
+ * inline box's background runs along its line fragments as if they were laid
+ * end to end, so on a title that wraps the line crosses the first line and
+ * then the second, as a pen would. No transition here, deliberately — see
+ * `Strike.tsx` for why a transition never ran on a ticked board card.
+ * 58% is the middle of Inter's x-height inside its content box.
+ */
+.ag-strike {
+  background-image: linear-gradient(var(--fg-4), var(--fg-4));
+  background-repeat: no-repeat;
+  background-position: 0 58%;
+  background-size: 0% 1.5px;
+}
+.ag-strike[data-on] {
+  background-size: 100% 1.5px;
+}
+
+/* The gold +1 (29-1P4b, idea 41): printed where a tick box was pressed and
+   floated off by `lib/tickCheer.ts`, one Web Animation each. */
+.ag-plus-one {
+  position: absolute;
+  font: 600 20px / 1 var(--font-sans);
+  color: var(--job-gold);
+  text-shadow: 0 0 14px oklch(0.8 0.16 82 / 0.7);
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* Confetti for the big ones (29-1P14a, idea 2): `lib/confetti.ts` moves each
+   piece with a Web Animation and removes it when it lands. */
+.ag-confetti {
+  position: absolute;
+  width: 7px;
+  height: 11px;
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* A toast's Undo (29-1P4a): a word that lights a little under the pointer. */
+.ag-toast__action { transition: background-color var(--dur-fast) var(--ease-glass); }
+.ag-toast__action:hover { background-color: color-mix(in oklab, var(--fg-1) 9%, transparent); }
+.ag-toast__action:active { background-color: color-mix(in oklab, var(--fg-1) 14%, transparent); }
 
 /*
  * A FIELD'S CONTENTS MAY NEVER SET THE FIELD'S WIDTH.

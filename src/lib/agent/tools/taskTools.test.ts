@@ -16,7 +16,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { completeTask, fuzzyScore, listAllTasks, listProjects, searchTasks, SEARCH_SCORE_FLOOR, singleOutTwin, type CompactTaskRow } from './taskTools';
-import { drawerOf, DRAWERS, fallbackTools, mcpTools } from './index';
+import { drawerOf, DRAWERS, mcpTools } from './index';
 import { publishShareLink } from './shareTools';
 import type { AgentStore, AgentStoreState, ToolContext, ToolResult } from '../types';
 import type { Project, Task, TaskList } from '../../../store/useStore';
@@ -52,9 +52,9 @@ const TASKS: Array<[id: string, title: string, listId: string, deadline?: string
 function harness() {
   const state: AgentStoreState = {
     projects: [
-      { id: 'p-mutineer', name: 'Mutineer Work', color: '#8b5cf6', createdAt: 1, order: 0 } as Project,
-      { id: 'p-level', name: 'Level Ai', color: '#22d3ee', createdAt: 2, order: 1 } as Project,
-      { id: 'p-skills', name: 'Skills', color: '#f59e0b', createdAt: 3, order: 2 } as Project,
+      { id: 'p-mutineer', name: 'Mutineer Work', createdAt: 1, order: 0 } as Project,
+      { id: 'p-level', name: 'Level Ai', createdAt: 2, order: 1 } as Project,
+      { id: 'p-skills', name: 'Skills', createdAt: 3, order: 2 } as Project,
     ],
     taskLists: [
       { id: 'l-selfcare', title: 'Self Care', order: 0 } as TaskList,
@@ -99,7 +99,7 @@ function harness() {
     now: NOW,
     timezone: 'Asia/Kolkata',
     store,
-    snapshots: { captureTask: () => {}, captureList: () => {}, captureProject: () => {} },
+    snapshots: { captureTask: () => {}, captureList: () => {}, captureProject: () => {}, captureEvent: () => {} },
   };
 
   return { state, ctx };
@@ -356,7 +356,6 @@ describe('list_all_tasks — the read-everything companion', () => {
     // is asleep; a whole-board read is the cheapest tool on that path, not
     // the most expensive.
     expect(mcpTools.map((tool) => tool.name)).toContain('list_all_tasks');
-    expect(fallbackTools.map((tool) => tool.name)).toContain('list_all_tasks');
   });
 });
 
@@ -676,7 +675,6 @@ describe('list_projects — the only ids no other tool gives you', () => {
     // The fallback has no share tools at all, so an id it can never use is a
     // declaration it should not be paying for.
     expect(mcpTools.map((tool) => tool.name)).toContain('list_projects');
-    expect(fallbackTools.map((tool) => tool.name)).not.toContain('list_projects');
   });
 });
 
@@ -743,7 +741,7 @@ function lockHarness() {
     now: NOW,
     timezone: 'Asia/Kolkata',
     store,
-    snapshots: { captureTask: () => {}, captureList: () => {}, captureProject: () => {} },
+    snapshots: { captureTask: () => {}, captureList: () => {}, captureProject: () => {}, captureEvent: () => {} },
   };
 
   return { state, ctx, written };

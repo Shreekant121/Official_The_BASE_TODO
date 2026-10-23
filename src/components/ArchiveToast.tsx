@@ -6,15 +6,18 @@
  * a project's own header also navigates Home, and a toast owned by the page
  * that raised it would unmount on the same tap.
  *
- * **No Undo button, although `Archive.dc.html` draws one.** `Toast.tsx` is
- * explicit that a toast disappears and so may only ever confirm — a choice
- * goes somewhere that persists. The way back is Put back on `/archive`, which
- * the detail line names, and nothing is lost in the meantime: the archive
- * keeps it for good.
+ * **It has an Undo now (29-1P4a, idea 6), with a bar that drains.** It had
+ * none, because a toast may only confirm; his undo changed that — the same
+ * archive is on Ctrl+Z and the two-finger tap for his last 20 actions, so
+ * nothing is lost when the toast goes, and Put back on `/archive` still keeps
+ * it for good. The Undo shows only once `useUndoStore` has recorded this
+ * archive, a microtask after the notice — so a refusal ("The archive is
+ * full") never offers one.
  */
 import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useUIStore } from '../store/useUIStore';
+import { useUndoStore } from '../store/useUndoStore';
 import { Icon, Toast, useMotion } from '../ui';
 import { Z } from '../lib/zLayers';
 
@@ -24,6 +27,8 @@ const HOLD_MS = 4200;
 export default function ArchiveToast() {
   const notice = useUIStore((s) => s.archiveNotice);
   const clear = useUIStore((s) => s.clearArchiveNotice);
+  const latest = useUndoStore((s) => s.latest);
+  const undoable = notice && notice.tone !== 'overrun' && latest?.kind === 'archive' ? latest.id : null;
   const motionTokens = useMotion();
 
   useEffect(() => {
@@ -55,6 +60,8 @@ export default function ArchiveToast() {
               title={notice.title}
               detail={notice.detail}
               tone={notice.tone}
+              action={undoable !== null ? { label: 'Undo', onClick: () => { useUndoStore.getState().undo('toast', undoable); } } : undefined}
+              drainMs={undoable !== null ? HOLD_MS : undefined}
               onDismiss={clear}
             />
           </motion.span>

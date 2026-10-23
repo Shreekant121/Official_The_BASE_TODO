@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
-import { Button, Dialog, Icon, IconButton } from '../ui';
+import { Dialog, Icon, IconButton, SoftToggle } from '../ui';
 import { useOverlayDismiss } from '../lib/useOverlayDismiss';
 import { Z } from '../lib/zLayers';
 import { BUILT_IN_SHORTCUTS, builtInKey, keyCap, type BuiltInShortcutId } from '../lib/shortcutBindings';
@@ -275,7 +275,7 @@ function ShortcutsHelpOverlay({
       style={{ gap: 0, padding: 0, gridTemplateColumns: 'minmax(0, 1fr)' }}
     >
       <div
-        className="ag-scroll"
+        className="ag-scroll ag-fade"
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 1fr)',
@@ -305,11 +305,14 @@ function ShortcutsHelpOverlay({
           >
             Shortcuts
           </h2>
-          {editing ? (
-            <Button variant="ghost" onClick={() => { setEditing(false); onEdited(); }}>Done</Button>
-          ) : (
-            <Button variant="ghost" iconLeft={<Icon name="pencil" size={16} />} onClick={() => setEditing(true)}>Edit</Button>
-          )}
+          {/* The Dashboard's Edit (29-1P2): pressed in while editing. */}
+          <SoftToggle
+            pressed={editing}
+            onPressedChange={(next) => { setEditing(next); if (!next) onEdited(); }}
+            icon={<Icon name={editing ? 'check' : 'pencil'} size={15} />}
+          >
+            {editing ? 'Done' : 'Edit'}
+          </SoftToggle>
           <IconButton label="Close" variant="ghost" onClick={onClose}><Icon name="x" size={18} /></IconButton>
         </header>
 

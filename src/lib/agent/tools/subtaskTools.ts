@@ -12,7 +12,7 @@ import {
 } from '../toolKit';
 import type { AgentStoreState, JsonSchema, ToolArgs, ToolContext, ToolDef, ToolResult } from '../types';
 import { batchResult, missingIdReason, runBatch, titleList } from './batch';
-import { BATCH_CAP, findTaskAnywhere } from './taskTools';
+import { BATCH_CAP, EMERGENCY_SCHEMA, findTaskAnywhere, readEmergency } from './taskTools';
 
 /**
  * Subtasks, at any depth (item 9).
@@ -25,7 +25,7 @@ import { BATCH_CAP, findTaskAnywhere } from './taskTools';
  * WHY THESE ARE THEIR OWN TOOLS RATHER THAN A `subtasks` FIELD
  * -------------------------------------------------------------
  * The obvious shape is a `subtasks` array on `update_task`, replacing the tree
- * wholesale like `tags` does. It is the wrong shape here for a reason that
+ * wholesale like `links` does. It is the wrong shape here for a reason that
  * only shows up on a small model: replacing the tree means the model must
  * reproduce every existing subtask *and its id* in order to add one, and a
  * model that paraphrases one title while doing so has silently renamed the
@@ -51,7 +51,6 @@ import { BATCH_CAP, findTaskAnywhere } from './taskTools';
 /** How deep a tree may be built. A depth limit no user will reach and no loop can pass. */
 const MAX_SUBTASK_DEPTH = 10;
 
-const SUBTASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 const SUBTASK_STATUSES = ['needsAction', 'completed'] as const;
 
 /** Exactly the writable half of `Subtask`. `id` and `subtasks` are structural, not content. */
@@ -61,7 +60,7 @@ const SUBTASK_FIELD_SCHEMAS: Record<string, JsonSchema> = {
     type: 'string',
     description: 'When this step is due. Same formats as a task deadline; resolved in the user\'s timezone.',
   },
-  priority: { type: 'string', enum: [...SUBTASK_PRIORITIES], description: 'Only when the user expressed urgency about this step.' },
+  emergencyBoost: EMERGENCY_SCHEMA,
   allocatedTime: { type: 'integer', description: 'Time set aside for this step, in MINUTES.' },
   humanOverride: {
     type: 'integer',
@@ -145,8 +144,8 @@ function readSubtaskFields(args: ToolArgs, ctx: ToolContext): { updates: Partial
     if (!/\d{2}:\d{2}/.test(deadline)) notes.push(`deadline set to ${describeDate(resolved.value, ctx.timezone)}`);
   }
 
-  const priority = optionalEnum(args, 'priority', SUBTASK_PRIORITIES);
-  if (priority !== undefined) updates.priority = priority;
+  const emergencyBoost = readEmergency(args, notes);
+  if (emergencyBoost !== null) updates.emergencyBoost = emergencyBoost;
 
   const allocatedTime = optionalNumber(args, 'allocatedTime', { min: 1, max: 10_080, integer: true });
   if (allocatedTime !== undefined) updates.allocatedTime = allocatedTime;
@@ -242,6 +241,8 @@ export const addSubtask: ToolDef = defineTool({
           return { ok: false as const, reason: err instanceof Error ? err.message : String(err) };
         }
 
+        // An Emergency of 0 is "none", which on a new step is no key at all.
+        if (parsed.updates.emergencyBoost === undefined) delete parsed.updates.emergencyBoost;
         const child: Subtask = { id: crypto.randomUUID(), title, status: 'needsAction', subtasks: [], ...parsed.updates };
 
         /*
@@ -278,11 +279,11 @@ export const addSubtask: ToolDef = defineTool({
       { parentId, parentTitle, taskId: rootTask.id, subtasks: outcome.done.map((entry) => entry.value) },
     );
   },
-});
+}, { entryList: 'steps' });
 
 // ─── update_subtask ─────────────────────────────────────────────────────────
 
-const SUBTASK_CLEARABLE = ['description', 'deadline', 'priority', 'allocatedTime'] as const;
+const SUBTASK_CLEARABLE = ['description', 'deadline', 'emergencyBoost', 'allocatedTime'] as const;
 
 export const updateSubtask: ToolDef = defineTool({
   name: 'update_subtask',
@@ -290,7 +291,7 @@ export const updateSubtask: ToolDef = defineTool({
   description:
     'Change steps: rename one, give them a deadline, mark them done or not done. Takes a list of ids and applies THE ' +
     'SAME change to every one of them, so "tick off the first three steps" is one call. Only the fields you send ' +
-    'change. A step stores fewer fields than a task does — there are no notes, tags, links or estimates on one.',
+    'change. A step stores fewer fields than a task does — there are no links or estimates on one.',
   parametersSchema: {
     type: 'object',
     properties: {

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { useTrashStore } from './useTrashStore';
 import { restoreFromTrash } from '../lib/trash';
+import { useEventStore } from './useEventStore';
+import type { BaseEvent } from '../lib/events/events';
 import {
   SUBTASK_PROXY_FIELDS,
   findSubtaskWithRoot,
@@ -33,7 +35,12 @@ import {
  * would for a hand edit.
  */
 
-export type SnapshotKind = 'task' | 'list' | 'project';
+/**
+ * `event` is 29-2a's: an event lives in its own store and document, and goes
+ * to no Trash, so its undo is the whole record put back (`putEvent`) — or, for
+ * one the change made, taken away.
+ */
+export type SnapshotKind = 'task' | 'list' | 'project' | 'event';
 
 /**
  * Where a captured task lived, so the revert writes it back the same way it
@@ -49,7 +56,13 @@ export interface SnapshotEntry {
   label: string;
   location?: TaskLocation;
   /** Deep clone of the entity before the turn touched it. `null` = it did not exist yet. */
-  prior: Task | Subtask | TaskList | Project | null;
+  prior: Task | Subtask | TaskList | Project | BaseEvent | null;
+  /**
+   * A `focusQueue` row's place in today's queue before the change. Set when
+   * a press took the row OUT of the queue (29-1P6b: a swiped Today row, a
+   * delete), so putting it back puts it where it was.
+   */
+  queueIndex?: number;
 }
 
 export interface SnapshotTurn {
@@ -158,8 +171,10 @@ function restorePatch(
  */
 function readCurrent(entry: SnapshotEntry): Record<string, unknown> | null {
   const state = useStore.getState();
-  let found: Task | Subtask | TaskList | Project | undefined;
-  if (entry.kind === 'list') {
+  let found: Task | Subtask | TaskList | Project | BaseEvent | undefined;
+  if (entry.kind === 'event') {
+    found = useEventStore.getState().events.find((e) => e.id === entry.id);
+  } else if (entry.kind === 'list') {
     found = state.taskLists.find((l) => l.id === entry.id);
   } else if (entry.kind === 'project') {
     found = state.projects.find((p) => p.id === entry.id);
@@ -188,6 +203,7 @@ function locateTask(id: string): { location: TaskLocation; entity: Task | Subtas
 /** Whether a captured entity is in the store right now, wherever it lives. */
 function existsNow(entry: SnapshotEntry): boolean {
   const state = useStore.getState();
+  if (entry.kind === 'event') return useEventStore.getState().events.some((e) => e.id === entry.id);
   if (entry.kind === 'project') return state.projects.some((p) => p.id === entry.id);
   if (entry.kind === 'list') return state.taskLists.some((l) => l.id === entry.id);
   return locateTask(entry.id) !== null;
@@ -281,6 +297,13 @@ export function revertSnapshotEntries(
         continue;
       }
 
+      // An event made by the change is simply taken away: events have no Trash.
+      if (entry.kind === 'event') {
+        useEventStore.getState().removeEvent(entry.id);
+        outcomes.push({ ...base, status: 'restored' });
+        continue;
+      }
+
       // The store's own delete, not a filter: it is `applyDeletion`, which
       // cascades the subtree, records the Trash entry and clears the
       // cross-links. CLAUDE.md is explicit that hand-rolling any of that
@@ -303,6 +326,26 @@ export function revertSnapshotEntries(
 
     const prior = entry.prior as unknown as Record<string, unknown>;
     const current = readCurrent(entry);
+
+    /* An event is put back whole, deleted or edited alike: the record is all
+       there is of it, and the store's `putEvent` takes it either way. */
+    if (entry.kind === 'event') {
+      const same = current !== null && Object.keys(restorePatch(prior, current)).length === 0;
+      if (!same) useEventStore.getState().putEvent(structuredClone(entry.prior as BaseEvent));
+      outcomes.push({ ...base, status: same ? 'unchanged' : 'restored' });
+      continue;
+    }
+
+    /* A row that left today's queue goes back into it, where it was (29-1P6b).
+       The queue holds copies, so the captured copy is the row itself; the
+       backlog entry before it has already put the task's own fields back. */
+    if (!current && entry.location === 'focusQueue') {
+      const queue = useStore.getState().tasks;
+      const at = Math.max(0, Math.min(entry.queueIndex ?? queue.length, queue.length));
+      store.setTasks([...queue.slice(0, at), structuredClone(entry.prior as Task), ...queue.slice(at)]);
+      outcomes.push(base);
+      continue;
+    }
 
     if (!current) {
       /*
@@ -352,6 +395,9 @@ export function revertSnapshotEntries(
       store.updateTask(entry.id, patch as Partial<Task>);
       outcomes.push(base);
     } else {
+      /* 29-2d1: a date put back says its event link too, even unchanged, or
+         `applyTaskUpdate` reads it as a date set by hand and drops the link. */
+      if ('deadline' in patch && !('eventId' in patch)) patch.eventId = prior.eventId;
       store.updateBacklogTask(entry.id, patch as Partial<Task>);
       // An update addressed by subtask id only writes through the fields a
       // `Subtask` actually has. Report anything outside that set instead of
@@ -381,8 +427,19 @@ interface SnapshotState {
   captureTask: (handle: TurnHandle, taskId: string) => void;
   captureList: (handle: TurnHandle, listId: string) => void;
   captureProject: (handle: TurnHandle, projectId: string) => void;
+  captureEvent: (handle: TurnHandle, eventId: string) => void;
   /** Pushes onto the ring and evicts the oldest. Returns `null` if nothing was captured. */
   commitTurn: (handle: TurnHandle) => SnapshotTurn | null;
+  /**
+   * Closes a capture and hands it back **without** putting it on the ring.
+   *
+   * Atlas's undo (`lib/agent/toolServer/undo.ts`) runs the capture for one
+   * tool call and ships the entries to the action log; the ring is never the
+   * record there. Since BIG-12 that also happens in this browser, with the lid
+   * shut — and the ring here is the basic assistant's Revert history, which a
+   * commit-then-clear would wipe.
+   */
+  takeDraft: (handle: TurnHandle) => SnapshotTurn | null;
   revertTurn: (turnId: string) => RevertResult;
   listTurns: () => SnapshotTurn[];
   /**
@@ -451,6 +508,20 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
     });
   },
 
+  captureEvent: (handle, eventId) => {
+    const draft = drafts.get(handle.id);
+    if (!draft) return;
+    if (draft.entries.some((e) => e.kind === 'event' && e.id === eventId)) return;
+
+    const event = useEventStore.getState().events.find((e) => e.id === eventId);
+    draft.entries.push({
+      kind: 'event',
+      id: eventId,
+      label: event?.title ?? eventId,
+      prior: event ? clone(event) : null,
+    });
+  },
+
   commitTurn: (handle) => {
     const draft = drafts.get(handle.id);
     drafts.delete(handle.id);
@@ -460,6 +531,12 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
 
     set((state) => ({ turns: [draft, ...state.turns].slice(0, RING_CAPACITY) }));
     return draft;
+  },
+
+  takeDraft: (handle) => {
+    const draft = drafts.get(handle.id);
+    drafts.delete(handle.id);
+    return draft && draft.entries.length > 0 ? draft : null;
   },
 
   revertTurn: (turnId) => {

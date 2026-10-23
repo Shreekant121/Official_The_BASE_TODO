@@ -38,7 +38,7 @@
  *   the component the design system ships. `ScoreChip` is **deleted** since
  *   item 16 — every place it was still standing (`SharePage`, the two subtask
  *   trees) is a place that no longer shows a score at all.
- * - **Red Alert sits beside the chip** (item 16). The chip warms to amber and
+ * - **Red Alert sits beside the chip** (item 16). The chip warms to coral and
  *   the pill says which fact warmed it; a number changing colour on its own
  *   says something changed without saying what.
  * - **Blocked is neutral, not amber** — see `BlockedLine` in `parts.tsx`.
@@ -46,8 +46,6 @@
  *   retired `Meta`'s `prose` escape hatch and the separate series
  *   `StatusPill`: a repeat and its position are one fact, and
  *   `derive.repeatLabel` writes them as the one string the mockup shows.
- * - **Tags are chips on a well**, on their own row, not `#tag` in the meta
- *   line behind a tag glyph.
  * - **The whole card is the door.** The mockup's `pick` ignores presses that
  *   land on a control and opens the sheet from anywhere else — ours only
  *   opened from the middle column, so the padding around the title did
@@ -115,7 +113,7 @@
  * -----------------------------------------------------------------
  * FIX-9 built this card on 2026-09-22 and its design landed the next day.
  * The design is one compact row in five states; this card carries far more
- * (score, Red Alert, facts, tags, cover, Ask), and V3 changes no features, so
+ * (score, Red Alert, facts, cover, Ask), and V3 changes no features, so
  * the card kept its anatomy and took the design's STATES:
  *   - **Hovered: the fill brightens one step, the cast lifts, it moves 2px
  *     right, the actions arrive.** It did nothing on hover before but reveal
@@ -137,28 +135,41 @@
  * pill** — the design swaps the pill for an orbiting dot and a clock, and
  * Shreekant chose on 2026-09-23 to keep the pill.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  CoverImage, Icon, IconButton, MorphMenu, ScoreDial, StatusPill, useMotion, type MorphMenuItem,
+  askInk, BadgeFold, CoverImage, Icon, IconButton, MorphMenu, ScoreDial, StatusPill, StepTrack, Strike, useMotion,
+  withStepWash, STEP_WASH_TRANSITION, type MorphMenuItem,
 } from '../../ui';
 import SubtaskPreviewTree from './SubtaskPreviewTree';
-import { BlockedLine, Fact, Meter, RepeatCount, Tag, Tick } from './parts';
+import { BlockedLine, Fact, Fold, Meter, MilestoneMark, RepeatCount, Tick } from './parts';
+import { pressTick } from './pressTick';
+import { QuickActions } from './QuickActions';
+import { useDensity } from './density';
+import { useWireStore } from '../../lib/blockWires';
 import {
-  deadlineLabel, doneLabel, elapsedMinutes, minutesLabel, repeatLabel, subtaskCount,
+  doneLabel, elapsedMinutes, minutesLabel, repeatLabel, subtaskCount,
 } from './derive';
 import { pressedAControl } from './cardPress';
 import { Z } from '../../lib/zLayers';
 import { useStore, getBlockingTasks, taskLockReason, type Task } from '../../store/useStore';
 import { usePriorityScores } from '../../store/usePriorityScores';
 import { RedAlertBadge } from '../task-fields/RedAlertBadge';
-import { AvoidedMark, EmergencyMark } from '../task-fields/TaskMarks';
+import { DueDate } from '../task-fields/DueDate';
+import { AvoidedMark, EmergencyMark, IgnoredMark } from '../task-fields/TaskMarks';
+import { useIgnoreItems } from '../task-fields/ignoreMenu';
+import { useWorkedItems } from '../task-fields/workedMenu';
+import { ignoreSentence } from '../../lib/ignoredWork';
 import { emergencyMenuItems } from '../task-fields/emergencyMenu';
 import { useStartNowItems } from '../task-fields/startNowMenu';
 import { resolveUserTimeZone } from '../../lib/agent/dates';
 import { useAuth } from '../../contexts/AuthContext';
 import { archiveTask } from '../../lib/archive';
+import { dustAttr } from '../../lib/dust';
 import { AI_SUBJECT_RIM } from '../../ui/overlay/AIPanel';
+import { SwipeRow } from '../../ui/core/SwipeRow';
+import { doneSide, tomorrowSide } from '../task-fields/swipeSides';
+import { startTaskTomorrow } from '../../lib/startTomorrow';
 
 export interface TaskRowProps {
   task: Task;
@@ -205,7 +216,7 @@ export interface TaskRowProps {
  *  Fill stays neutral. No glow."* Inset, because FIX-9 found the list card
  *  clipping anything drawn outside a row; the design's own outer ring is a
  *  10% hairline that clipping would only make uneven. `ListTable` shares it. */
-export const SELECTED_RIM = 'var(--glass-rim-2), inset 0 0 0 1px var(--accent-hairline)';
+export const SELECTED_RIM = 'var(--glass-rim-2), inset 0 0 0 1px var(--job-lime-line)';
 
 /** Blocked (state 05): *"No rim light, no cast, no hover."* The design's own
  *  fill, a shade under `--glass-fill-1`, and one faint line for an edge. */
@@ -223,6 +234,8 @@ export default function TaskRow({
   /* Framer's hover, which already ignores a finger — the tablet has no hover
      and a tap must not leave a card lifted. */
   const [hovered, setHovered] = useState(false);
+  /* 29-1P7c (161): the quick actions are built on the first hover and kept. */
+  const [quickBuilt, setQuickBuilt] = useState(false);
   const backlogTasks = useStore((s) => s.backlogTasks);
   /* A number, so the selector is `Object.is`-stable and a row only re-renders
      when its own logged time actually moves. */
@@ -233,6 +246,12 @@ export default function TaskRow({
   const scores = usePriorityScores();
   const reading = scores.read(task);
   const score = reading.score;
+  /* BIG-3. Only the task's own switch is marked on the row: a list or project
+     that ignores everything in it says so once, on its own head, rather than
+     on every card under it. */
+  const ignoreReason = scores.ignored.reasonOf(task);
+  const ignoreItems = useIgnoreItems({ kind: 'task', id: task.id }, task.title, task.listId);
+  const workedItems = useWorkedItems({ kind: 'task', id: task.id });
   const subCount = subtaskCount(task);
   /* The stored level against what the engine scored it at: a flag whose anchor
      date has gone by is still on the task and is no longer counting, and the
@@ -242,7 +261,6 @@ export default function TaskRow({
   // A2 — a finished task can't be late, so no deadline countdown / "Overdue" flag once it's completed.
   const done = task.status === 'completed';
   const live = task.status === 'in-progress';
-  const deadlineInfo = task.deadline && !done ? deadlineLabel(task.deadline) : null;
   const isAssignedToMe = task.assignee && task.assignee === user?.uid;
   /* D2 — prerequisites still incomplete, and since item 19 that is a LOCK
      rather than a warning: the row greys, the Tick refuses, and the blocker
@@ -256,16 +274,24 @@ export default function TaskRow({
   const locked = lockReason !== undefined;
   const repeat = repeatLabel(task, new Date(), resolveUserTimeZone());
   const alloc = task.estimatedTime ?? 0;
+  /* 29-1P7c (idea 159): how much this card shows — `density.ts`. */
+  const density = useDensity();
+  const comfy = density === 'comfortable';
+
+  /* 29-1P7c (idea 164): a card pointed at draws its wires — to what it waits
+     on, or out to what waits on it. It only reports itself; `BlockWires`
+     works out the graph. Never while carrying a row or picking rows. */
+  const wiring = hovered && !isAnyDragging && !selectMode;
+  useEffect(() => {
+    if (!wiring) return;
+    const { point, leave } = useWireStore.getState();
+    point(task.id);
+    return () => leave(task.id);
+  }, [wiring, task.id]);
 
   const startNow = useStartNowItems(task.id);
   const menuItems: MorphMenuItem[] = [
-    {
-      value: 'open',
-      label: 'Open task',
-      icon: <Icon name="panel-right-open" size={18} />,
-      meta: <Icon name="chevron-right" size={16} />,
-      onSelect: () => onOpen(task),
-    },
+    /* No "Open task" (his BASE list, 2026-10-06): tapping the row opens it. */
     /* BUILD-2. Empty for a finished task; a blocked one offers what it waits on. */
     ...startNow,
     ...(subCount.total > 0
@@ -280,12 +306,16 @@ export default function TaskRow({
     /* The flag, in the two places item 17 puts it. A finished task is not an
        emergency and cannot become one — the same reason its Red Alert badge
        and its deadline countdown are suppressed. */
-    ...(done ? [] : emergencyMenuItems({
+    ...(done ? [] : [{ divider: true }, ...emergencyMenuItems({
       level: emergency,
-      count: scores.emergencyCount,
       lapsed: emergencyLapsed,
       onSet: (level) => setEmergencyBoost(task.id, level),
-    })),
+    })]),
+    /* BIG-3, in a group of its own: placed anywhere above it sat under the
+       Emergency or the "Blocked · start first" heading and read as part of it. */
+    { divider: true },
+    ...ignoreItems,
+    ...workedItems,
     { divider: true },
     /* BUILD-11 — above Delete, never red. Straight to `lib/archive.ts` rather
        than up through the board: nothing above the row has anything to add. */
@@ -335,459 +365,515 @@ export default function TaskRow({
   const unlit = locked && !hovered;
 
   return (
-    <motion.div
-      className="ag-card ag-row"
-      data-ai-subject={isAskSubject ? 'true' : undefined}
-      data-done={done ? 'true' : 'false'}
-      /* `screens.css` carries the pair, resting and hover — see the rule. */
-      data-locked={locked ? 'true' : 'false'}
-      layout={!isAnyDragging}
-      onClick={pick}
-      onHoverStart={() => setHovered(true)}
-      onHoverEnd={() => setHovered(false)}
-      initial={{ opacity: 0, scale: 0.96 }}
-      /* BOTH row dims are HERE and not on `screens.css`'s
-         `.ag-row[data-done]` / `.ag-row[data-locked]`, and they have to be:
-         `animate` writes `style.opacity` inline and an inline opacity beats
-         any class. Same numbers as those rules — that is where the treatment
-         is written down, and both attributes stay on the wrapper so the two
-         agree and so the state is inspectable. `whileHover` is the other half
-         of each pair.
-
-         **`data-done` was inert on this card from the day it was ported** —
-         a completed task measured `opacity: 1` here and `0.48` two feet away
-         in `ListTable`, which is a plain `div` and does read the rule. Item 19
-         found it while restating the locked numbers for the same reason and
-         left it; this is that job.
-
-         The two states rest at different depths and return to different
-         places, deliberately. A done row is over: 0.48, back to 0.74, enough
-         to read if you go looking. A locked row is the one thing on the board
-         you may have to act on — opening it is how you fix the dependency —
-         so it rests lighter and comes back all the way.
-
-         `locked` is tested first to match the CSS, where `[data-locked]` is
-         written second and wins on equal specificity. The branch is unreachable
-         either way: `isTaskLocked` returns false for a completed task, so the
-         two are never both true. */
-      animate={{
-        opacity: isBeingDragged ? 0.3 : locked ? 0.62 : done ? 0.48 : 1,
-        scale: isBeingDragged ? 0.98 : 1,
-      }}
-      whileHover={
-        isBeingDragged ? undefined
-          : locked ? { opacity: 1 }
-            : isAnyDragging ? (done ? { opacity: 0.74 } : undefined)
-              : done ? { opacity: 0.74, x: 2 }
-                : { x: 2 }
-      }
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{
-        layout: { type: 'spring', stiffness: 520, damping: 42, mass: 0.6 },
-        opacity: { duration: motionTokens.dur.fast, ease: motionTokens.ease.glass },
-        scale: { duration: motionTokens.dur.fast, ease: motionTokens.ease.glass },
-        x: { duration: motionTokens.dur.fast, ease: motionTokens.ease.glass },
-      }}
-      style={{
-        overflow: 'hidden',
-        /* `--r-xs`, not the mockup's `--r-md` (FIX-9). Shreekant: "instead of
-           no edges rectangle, make it very less rounded, so that the task can
-           be seen better". At 20px a short card read as a pill. */
-        borderRadius: 'var(--r-xs)',
-        /* Level 1, because the row sits INSIDE the list card's level-2 pane —
-           the same step-down `TaskDetailPanel` takes for the groups inside a
-           sheet. No backdrop-filter of its own: there is already one behind it,
-           and a second costs a full-size blur per row for nothing.
-
-           RUNNING AND SELECTED ARE NO LONGER ONE LOOK (FIX-9). Both used to be
-           the mockup's emerald tint plus glow, so a running task was
-           pixel-identical to a tapped one, and Shreekant filed it three times.
-           Neither fills the card now. **Running is motion**: the rippling
-           `running` StatusPill in the body below, and no background change.
-           **Selected is a rim**: a hairline of emerald inside the edge (inset,
-           because the list card clips anything outside the row). His words on
-           the old fill: it "looks super bad and not part of the software".
-           A drop target stays on the neutral step up, and so does a hovered
-           card (V3-3) — the design's "fill brightens one step". */
-        backgroundImage: isReceivingDrop || isAskSubject || lifted ? 'var(--glass-fill-2)'
-          : unlit ? BLOCKED_FILL
-            : 'var(--glass-fill-1)',
-        /* The AI panel's subject is marked by rim alone (BUILD-4), and only
-           when the row is not selected: selection is the louder fact. A
-           hovered card's cast lifts with its fill; a blocked one has no rim
-           light at all, one faint line for an edge. */
-        boxShadow: selected ? SELECTED_RIM
-          : isAskSubject ? AI_SUBJECT_RIM
-            : lifted ? 'var(--glass-rim-2), var(--glass-cast-2)'
-              : unlit ? 'inset 0 0 0 1px var(--line-faint)'
-                : 'var(--glass-rim-1)',
-        cursor: isBeingDragged ? 'grabbing' : 'grab',
-        transition: 'background-image var(--dur-fast) var(--ease-glass), box-shadow var(--dur-fast) var(--ease-glass)',
-      }}
+    /* 29-1P6b (17): a finger swiping the card right ticks it, left starts it
+       tomorrow. Never in select mode, where a tap picks and nothing else. */
+    <SwipeRow
+      radius="var(--r-xs)"
+      right={selectMode ? null : doneSide(done, locked, (row) => pressTick(row.querySelector('.ag-check__box'), done, () => onToggleDone(task)))}
+      left={selectMode ? null : tomorrowSide(done, () => startTaskTomorrow(task.id, task.title))}
     >
-      {/* Cover image — full colour behind the glass, contained by its own box.
-          Desaturated until FIX-3, and it goes with the project covers rather
-          than apart from them: a board draws project covers and task covers at
-          the same time, so two strengths on one screen would read as two
-          different photographs. See `ProjectCard.tsx` for the decision. */}
-      {task.imageUrl && (
-        <div
-          className="ag-cover"
-          style={{ position: 'relative', height: 144, overflow: 'hidden', boxShadow: 'inset 0 -1px 0 0 var(--line-faint)' }}
-        >
-          <CoverImage src={task.imageUrl} />
-        </div>
-      )}
+      <motion.div
+        className="ag-card ag-row"
+        /* 29-1P4c: what turns to dust when it is deleted (`lib/dust.ts`). */
+        {...dustAttr('task', task.id)}
+        data-ai-subject={isAskSubject ? 'true' : undefined}
+        data-done={done ? 'true' : 'false'}
+        /* `screens.css` carries the pair, resting and hover — see the rule. */
+        data-locked={locked ? 'true' : 'false'}
+        layout={!isAnyDragging}
+        onClick={pick}
+        onHoverStart={() => { setHovered(true); setQuickBuilt(true); }}
+        onHoverEnd={() => setHovered(false)}
+        initial={{ opacity: 0, scale: 0.96 }}
+        /* BOTH row dims are HERE and not on `screens.css`'s
+           `.ag-row[data-done]` / `.ag-row[data-locked]`, and they have to be:
+           `animate` writes `style.opacity` inline and an inline opacity beats
+           any class. Same numbers as those rules — that is where the treatment
+           is written down, and both attributes stay on the wrapper so the two
+           agree and so the state is inspectable. `whileHover` is the other half
+           of each pair.
 
-      <div
+           **`data-done` was inert on this card from the day it was ported** —
+           a completed task measured `opacity: 1` here and `0.48` two feet away
+           in `ListTable`, which is a plain `div` and does read the rule. Item 19
+           found it while restating the locked numbers for the same reason and
+           left it; this is that job.
+
+           The two states rest at different depths and return to different
+           places, deliberately. A done row is over: 0.48, back to 0.74, enough
+           to read if you go looking. A locked row is the one thing on the board
+           you may have to act on — opening it is how you fix the dependency —
+           so it rests lighter and comes back all the way.
+
+           `locked` is tested first to match the CSS, where `[data-locked]` is
+           written second and wins on equal specificity. The branch is unreachable
+           either way: `isTaskLocked` returns false for a completed task, so the
+           two are never both true. */
+        animate={{
+          opacity: isBeingDragged ? 0.3 : locked ? 0.62 : done ? 0.48 : 1,
+          scale: isBeingDragged ? 0.98 : 1,
+        }}
+        whileHover={
+          isBeingDragged ? undefined
+            : locked ? { opacity: 1 }
+              : isAnyDragging ? (done ? { opacity: 0.74 } : undefined)
+                : done ? { opacity: 0.74, x: 2 }
+                  : { x: 2 }
+        }
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{
+          layout: { type: 'spring', stiffness: 520, damping: 42, mass: 0.6 },
+          opacity: { duration: motionTokens.dur.fast, ease: motionTokens.ease.glass },
+          scale: { duration: motionTokens.dur.fast, ease: motionTokens.ease.glass },
+          x: { duration: motionTokens.dur.fast, ease: motionTokens.ease.glass },
+        }}
         style={{
-          display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)',
-          columnGap: 'var(--sp-5)', rowGap: 'var(--sp-4)',
-          /* One step more vertical room than the mockup's (FIX-9). */
-          padding: 'var(--sp-6) var(--sp-6)',
+          overflow: 'hidden',
+          /* `--r-xs`, not the mockup's `--r-md` (FIX-9). Shreekant: "instead of
+             no edges rectangle, make it very less rounded, so that the task can
+             be seen better". At 20px a short card read as a pill. */
+          borderRadius: 'var(--r-xs)',
+          /* Level 1, because the row sits INSIDE the list card's level-2 pane —
+             the same step-down `TaskDetailPanel` takes for the groups inside a
+             sheet. No backdrop-filter of its own: there is already one behind it,
+             and a second costs a full-size blur per row for nothing.
+
+             RUNNING AND SELECTED ARE NO LONGER ONE LOOK (FIX-9). Both used to be
+             the mockup's emerald tint plus glow, so a running task was
+             pixel-identical to a tapped one, and Shreekant filed it three times.
+             Neither fills the card now. **Running is motion**: the rippling
+             `running` StatusPill in the body below, and no background change.
+             **Selected is a rim**: a hairline of emerald inside the edge (inset,
+             because the list card clips anything outside the row). His words on
+             the old fill: it "looks super bad and not part of the software".
+             A drop target stays on the neutral step up, and so does a hovered
+             card (V3-3) — the design's "fill brightens one step". */
+          /* 29-1P7b (idea 160): a card with steps wears the lime wash over
+             whichever fill it has, as the first background layer. */
+          ...withStepWash(
+            isReceivingDrop || isAskSubject || lifted ? 'var(--glass-fill-2)'
+              : unlit ? BLOCKED_FILL
+                : 'var(--glass-fill-1)',
+            subCount.done, subCount.total,
+          ),
+          /* The AI panel's subject is marked by rim alone (BUILD-4), and only
+             when the row is not selected: selection is the louder fact. A
+             hovered card's cast lifts with its fill; a blocked one has no rim
+             light at all, one faint line for an edge. */
+          boxShadow: selected ? SELECTED_RIM
+            : isAskSubject ? AI_SUBJECT_RIM
+              : lifted ? 'var(--glass-rim-2), var(--glass-cast-2)'
+                : unlit ? 'inset 0 0 0 1px var(--line-faint)'
+                  : 'var(--glass-rim-1)',
+          cursor: isBeingDragged ? 'grabbing' : 'grab',
+          transition: `background-image var(--dur-fast) var(--ease-glass), box-shadow var(--dur-fast) var(--ease-glass), ${STEP_WASH_TRANSITION}`,
         }}
       >
-        {selectMode ? (
-          /* The mockup selects by pressing the card and shows it with the
-             emerald tint alone. A tint is not reachable from a keyboard and
-             not announced by a screen reader, so the box stays — in the same
-             24px slot the Tick occupies, so nothing shifts when select mode
-             turns on. */
-          <button
-            type="button"
-            aria-pressed={selected}
-            aria-label={selected ? `Deselect ${task.title}` : `Select ${task.title}`}
-            onClick={(e) => { e.stopPropagation(); onSelect(task.id); }}
-            style={{
-              flex: '0 0 auto', width: 42, height: 42, margin: -9, padding: 0, border: 0,
-              display: 'grid', placeItems: 'center', background: 'transparent', cursor: 'pointer',
-            }}
-          >
-            <span
-              style={{
-                display: 'grid', placeItems: 'center', width: 24, height: 24,
-                borderRadius: 'var(--r-xs)',
-                backgroundImage: selected ? 'var(--glass-tint-accent)' : 'var(--glass-well)',
-                boxShadow: selected
-                  ? 'var(--glass-rim-2), var(--glow-accent-sm)'
-                  : 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
-                color: 'var(--fg-1)',
-              }}
+        {/* Cover image — full colour behind the glass, contained by its own box.
+            Desaturated until FIX-3, and it goes with the project covers rather
+            than apart from them: a board draws project covers and task covers at
+            the same time, so two strengths on one screen would read as two
+            different photographs. See `ProjectCard.tsx` for the decision. */}
+        {task.imageUrl && (
+          /* 29-1P7c: the cover folds away in the two denser looks. */
+          <Fold open={comfy} gap="0px">
+            <div
+              className="ag-cover"
+              style={{ position: 'relative', height: 144, overflow: 'hidden', boxShadow: 'inset 0 -1px 0 0 var(--line-faint)' }}
             >
-              {selected && <Icon name="check" size={14} />}
-            </span>
-          </button>
-        ) : (
-          <Tick
-            done={done}
-            locked={locked}
-            /* A disabled control that still said "Mark done" would be lying
-               about what pressing it does, so a locked tick names what it is
-               waiting for instead. The app's one sentence for that — see
-               `taskLockReason` — and it is what the `title` shows on hover. */
-            label={
-              lockReason ?? (done ? `Mark ${task.title} not done` : `Mark ${task.title} done`)
-            }
-            onToggle={() => onToggleDone(task)}
-          />
+              <CoverImage src={task.imageUrl} />
+            </div>
+          </Fold>
         )}
 
-        {/* `minmax(0, 1fr)`, not the implicit `auto` track (FIX-9). An auto
-            track grows to its widest child's min-content, and the badge
-            cluster's is wider than a board column — so the description, the
-            facts and the tags were laid out past the card's right edge and
-            clipped mid-word ("one c"). Same trap `ListColumn` notes. */}
-        <div style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-3)' }}>
-          {/* FIX-9: the title used to share one unwrapping line with up to
-              six things — the shared chip, Red Alert, the Emergency mark, the
-              dial, Ask and ⋯ — so in a narrow column it was squeezed to one
-              word a line. The line wraps now: the title asks for 9em before it
-              gives way, and when it cannot have that the cluster drops below
-              it rather than the title breaking. The title itself is clamped to
-              two lines, and its full text is its tooltip. */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: 'var(--sp-4)', rowGap: 'var(--sp-3)' }}>
-            <h3
-              className="ag-clamp-2"
-              title={task.title}
+        <div
+          style={{
+            display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)',
+            columnGap: 'var(--sp-5)', rowGap: 'var(--sp-4)',
+            /* One step more vertical room than the mockup's (FIX-9); less in
+               the denser looks (29-1P7c), where a card is one line. */
+            padding: comfy ? 'var(--sp-6) var(--sp-6)'
+              : density === 'compact' ? 'var(--sp-4) var(--sp-6)'
+                : 'var(--sp-3) var(--sp-6)',
+            transition: 'padding var(--dur-base) var(--ease-glide)',
+          }}
+        >
+          {selectMode ? (
+            /* The mockup selects by pressing the card and shows it with the
+               emerald tint alone. A tint is not reachable from a keyboard and
+               not announced by a screen reader, so the box stays — in the same
+               24px slot the Tick occupies, so nothing shifts when select mode
+               turns on. */
+            <button
+              type="button"
+              aria-pressed={selected}
+              aria-label={selected ? `Deselect ${task.title}` : `Select ${task.title}`}
+              onClick={(e) => { e.stopPropagation(); onSelect(task.id); }}
               style={{
-                flex: '1 1 9em', minWidth: 0,
-                font: 'var(--type-body)', letterSpacing: 'var(--tracking-ui)',
-                overflowWrap: 'anywhere',
-                color: done ? 'var(--fg-3)' : 'var(--fg-1)',
-                textDecorationLine: done ? 'line-through' : 'none',
-                textDecorationColor: 'var(--fg-4)',
+                flex: '0 0 auto', width: 42, height: 42, margin: -9, padding: 0, border: 0,
+                display: 'grid', placeItems: 'center', background: 'transparent', cursor: 'pointer',
               }}
             >
-              {task.title}
-              {/* An atomic inline box, so the title's line-through does not
-                  reach it — the count is a record, not part of what is done. */}
-              {repeatCount > 1 && (
-                <span style={{ display: 'inline-flex', marginLeft: 'var(--sp-3)' }}>
-                  <RepeatCount count={repeatCount} />
-                </span>
-              )}
-            </h3>
-
-            <span
-              style={{
-                display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end',
-                alignItems: 'flex-start', gap: 'var(--sp-4)',
-                marginLeft: 'auto', minWidth: 0, maxWidth: '100%',
-              }}
-            >
-
-            {/* Red Alert reads beside the score, not in place of it: the chip
-                says how much and the pill says why it is amber. A finished
-                task cannot be late, so neither shows on one. */}
-            {!done && <RedAlertBadge redAlert={reading.redAlert} style={{ marginTop: 1 }} />}
-
-            {/* Beside it, not instead of it, and never rippling — the pill is
-                what the engine concluded, this is what you declared. See
-                `TaskMarks.tsx` for why they share a hue. */}
-            {!done && <EmergencyMark level={emergency} lapsed={emergencyLapsed} style={{ marginTop: 1 }} />}
-
-            {score > 0 && (
-              <ScoreDial
-                value={score}
-                max={scores.peak}
-                alert={!done && reading.redAlert}
-                size="sm"
-                style={{ marginTop: 1 }}
-              />
-            )}
-
-            {/*
-              `.ag-card-actions`, not `group-hover`: there is no hover on the
-              tablet and no `:focus-within` in a hover utility, so these were
-              invisible on half of what this app runs on and the keyboard's
-              focus ring landed on controls nobody could see. `screens.css`
-              covers both cases, and `data-open` keeps the trigger lit while
-              its own panel is up — the pointer is over the panel then, not
-              over the row.
-            */}
-            {/* BUILD-4. Outside `.ag-card-actions` on purpose: that class
-                hides at rest, and this is the one control on the row he asked
-                to always see. Hidden in select mode, where a press on the
-                card means "pick this". */}
-            {onAsk && !selectMode && (
-              <span style={{ display: 'flex', flex: '0 0 auto', marginTop: -4 }}>
-                <IconButton
-                  size="sm"
-                  variant="ghost"
-                  label={`Ask AI about ${task.title}`}
-                  aria-pressed={isAskSubject ? true : undefined}
-                  onClick={(e) => { e.stopPropagation(); onAsk(task); }}
-                  style={{ color: isAskSubject ? 'var(--fg-1)' : 'var(--fg-3)' }}
-                >
-                  <Icon name="sparkles" size={16} />
-                </IconButton>
-              </span>
-            )}
-
-            <span
-              className="ag-card-actions"
-              data-open={menuOpen ? 'true' : 'false'}
-              style={{ display: 'flex', flex: '0 0 auto', marginTop: -4 }}
-            >
-              <MorphMenu
-                align="end"
-                width={244}
-                open={menuOpen}
-                onOpenChange={setMenuOpen}
-                /* A list card is `overflow: hidden` — that is what rounds it —
-                   so an in-flow panel is cut off by the column this row sits
-                   in. MorphMenu's port note 4. */
-                portal
-                zIndex={Z.dropdown}
-                trigger={
-                  <IconButton size="sm" variant="ghost" label={`Actions for ${task.title}`}>
-                    <Icon name="ellipsis" size={16} />
-                  </IconButton>
-                }
-                /* The panel covers the row it acts on, so the row is restated
-                   inside it — otherwise "Delete" is offered against nothing. */
-                header={{
-                  title: task.title,
-                  meta: [
-                    primaryListTitle,
-                    score > 0 ? `score ${score.toFixed(1)}` : null,
-                    subCount.total > 0 ? `${subCount.done}/${subCount.total} subtasks` : null,
-                  ].filter(Boolean).join('  ·  '),
-                }}
-                items={menuItems}
-              />
-            </span>
-            </span>
-          </div>
-
-          {isSharedHere && (
-            /* Not a StatusPill: being linked in from another list is not one
-               of the seven states, it is a fact about where the task lives.
-               It takes the glass-fill-1 chip the rest of the app spends on a
-               list's name.
-
-               Its own line, under the title, and not in the badge cluster
-               above, where it lived until 2026-09-24: one more chip there
-               wrapped the cluster in a board column, and the ⋯ trigger —
-               invisible at rest but still laid out — was left alone on a
-               second line, a blank band through the card that only a
-               shared-in task had. */
-            <span
-              title={primaryListTitle ? `Shared here from "${primaryListTitle}"` : 'This task is shared here from another list'}
-              className="ag-kicker"
-              style={{
-                justifySelf: 'start', minWidth: 0, maxWidth: '100%',
-                display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-2)',
-                padding: '2px var(--sp-4)', borderRadius: 'var(--r-pill)',
-                backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
-                color: 'var(--fg-3)',
-              }}
-            >
-              <Icon name="link-2" size={11} style={{ color: 'inherit' }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {primaryListTitle || 'Shared'}
-              </span>
-            </span>
-          )}
-
-          {task.description && (
-            <p
-              className="ag-clamp-2"
-              /* `anywhere`, as the title does: a pasted link is one word, and
-                 without it the line ran past the card's edge and was cut. */
-              style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', lineHeight: 'var(--leading-normal)', overflowWrap: 'anywhere' }}
-            >
-              {task.description}
-            </p>
-          )}
-
-          {/* Running: the pill, the reading and the meter, as one block. The
-              elapsed figure is the focus log's, summed — see `derive.ts`. */}
-          {live && (
-            <div style={{ display: 'grid', gap: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--sp-4)' }}>
-                <StatusPill status="running" size="sm">Running</StatusPill>
-                <span
-                  className="ag-tnum"
-                  style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--accent)' }}
-                >
-                  {alloc > 0 ? `${elapsed} / ${alloc} min` : minutesLabel(elapsed)}
-                </span>
-              </div>
-              {alloc > 0 && <Meter pct={(elapsed / alloc) * 100} height={4} />}
-            </div>
-          )}
-
-          {blockingTasks.length > 0 && (
-            <span style={{ display: 'flex', minWidth: 0 }}>
-              <BlockedLine
-                on={blockingTasks[0].title}
-                extra={blockingTasks.length - 1}
-                title={`Blocked by: ${blockingTasks.map((t) => t.title).join(', ')}`}
-              />
-            </span>
-          )}
-
-          {/* Measured facts, always in this order: when · how long · how far · how often.
-              The avatar is NOT one of them any more (FIX-9): it rode the end
-              of this wrapping line, so it landed wherever the last fact
-              happened to end and was clipped at the card's edge when the line
-              was full. It has its own column now, anchored bottom-right. */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-4)', minWidth: 0 }}>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap', minWidth: 0 }}>
-            {done && task.completedAt && (
-              /* FIX-9: stamped on every completion since 19A, never shown. */
-              <Fact icon="check" tone="var(--fg-3)" title={new Date(task.completedAt).toLocaleString()}>
-                {doneLabel(task.completedAt, new Date())}
-              </Fact>
-            )}
-            {deadlineInfo && (
-              deadlineInfo.urgent
-                ? <StatusPill status="review" size="sm">{deadlineInfo.text}</StatusPill>
-                : <Fact icon="calendar">{deadlineInfo.text}</Fact>
-            )}
-            {!live && alloc > 0 && (
-              <Fact icon="clock" tone={done ? 'var(--fg-4)' : 'var(--fg-3)'}>{minutesLabel(alloc)}</Fact>
-            )}
-            {subCount.total > 0 && (
-              <Fact icon="corner-down-right">{subCount.done}/{subCount.total}</Fact>
-            )}
-            {repeat && <Fact icon="repeat" title={repeat}>{repeat}</Fact>}
-            {/* How often you have pushed this away — a measured fact about the
-                task, in the same face as the four beside it. */}
-            <AvoidedMark count={task.avoidedCount} tone={done ? 'var(--fg-4)' : undefined} />
-          </div>
-
-            {task.assignee && (
-              /* No counterpart in the mockup — the prototype keeps the
-                 assignee for the sheet. */
               <span
-                title={isAssignedToMe ? 'Assigned to you' : 'Assigned'}
-                style={{ flex: '0 0 auto', display: 'flex' }}
+                style={{
+                  display: 'grid', placeItems: 'center', width: 24, height: 24,
+                  borderRadius: 'var(--r-xs)',
+                  backgroundImage: selected ? 'var(--glass-tint-lime)' : 'var(--glass-well)',
+                  boxShadow: selected
+                    ? 'var(--glass-rim-2), var(--job-lime-shine)'
+                    : 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
+                  color: 'var(--fg-1)',
+                }}
               >
-                {isAssignedToMe && user?.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt=""
-                    style={{
-                      width: 20, height: 20, borderRadius: 'var(--r-circle)',
-                      boxShadow: 'var(--glass-rim-1)', display: 'block',
-                    }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      display: 'grid', placeItems: 'center', width: 20, height: 20,
-                      borderRadius: 'var(--r-circle)',
-                      backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
-                      color: 'var(--fg-3)',
-                    }}
-                  >
-                    <Icon name="user-circle" size={12} />
+                {selected && <Icon name="check" size={14} />}
+              </span>
+            </button>
+          ) : (
+            <Tick
+              done={done}
+              locked={locked}
+              /* A disabled control that still said "Mark done" would be lying
+                 about what pressing it does, so a locked tick names what it is
+                 waiting for instead. The app's one sentence for that — see
+                 `taskLockReason` — and it is what the `title` shows on hover. */
+              label={
+                lockReason ?? (done ? `Mark ${task.title} not done` : `Mark ${task.title} done`)
+              }
+              onToggle={() => onToggleDone(task)}
+            />
+          )}
+
+          {/* `minmax(0, 1fr)`, not the implicit `auto` track (FIX-9). An auto
+              track grows to its widest child's min-content, and the badge
+              cluster's is wider than a board column — so the description, the
+              facts and the tags were laid out past the card's right edge and
+              clipped mid-word ("one c"). Same trap `ListColumn` notes. */}
+          {/* No `gap` here since 29-1P7c: everything under the title is in a
+              `Fold`, which carries its own space above it, so a folded part
+              leaves no gap behind. */}
+          <div style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)' }}>
+            {/* FIX-9: the title used to share one unwrapping line with up to
+                six things — the shared chip, Red Alert, the Emergency mark, the
+                dial, Ask and ⋯ — so in a narrow column it was squeezed to one
+                word a line. The line wraps now: the title asks for 9em before it
+                gives way, and when it cannot have that the cluster drops below
+                it rather than the title breaking. The title itself is clamped to
+                two lines, and its full text is its tooltip. */}
+            {/* 29-1P7c: one line in the denser looks — the title clamps to a
+                line and the badges stay beside it instead of wrapping under. */}
+            <div style={{ display: 'flex', flexWrap: comfy ? 'wrap' : 'nowrap', alignItems: 'flex-start', columnGap: 'var(--sp-4)', rowGap: 'var(--sp-3)' }}>
+              <h3
+                className={comfy ? 'ag-clamp-2' : 'ag-clamp-1'}
+                title={task.title}
+                style={{
+                  flex: '1 1 9em', minWidth: 0,
+                  font: 'var(--type-body)', letterSpacing: 'var(--tracking-ui)',
+                  overflowWrap: 'anywhere',
+                  color: done ? 'var(--fg-3)' : 'var(--fg-1)',
+                  transition: 'color var(--dur-base) var(--ease-glass)',
+                }}
+              >
+                {/* 29-1P4b: the line slides through on a tick (`.ag-strike`),
+                    across both lines of a title that wraps. */}
+                {task.milestone && <MilestoneMark />}
+                <Strike on={done}>{task.title}</Strike>
+                {/* Outside the struck span — the count is a record, not part of
+                    what is done. */}
+                {repeatCount > 1 && (
+                  <span style={{ display: 'inline-flex', marginLeft: 'var(--sp-3)' }}>
+                    <RepeatCount count={repeatCount} />
                   </span>
                 )}
+              </h3>
+
+              <span
+                style={{
+                  /* One line in the denser looks (29-1P7c), and it keeps its
+                     width: wrapping, the invisible ⋯ dropped to a line of its
+                     own and every one-line card was two lines tall. */
+                  display: 'flex', flexWrap: comfy ? 'wrap' : 'nowrap', justifyContent: 'flex-end',
+                  alignItems: 'flex-start', gap: 'var(--sp-4)',
+                  marginLeft: 'auto', minWidth: 0, maxWidth: '100%',
+                  flexShrink: comfy ? undefined : 0,
+                }}
+              >
+
+              {/* 29-1P7a (idea 162): one badge at a time. The most pressing
+                  shows and the rest fold into "+N" — his order, 2026-10-13:
+                  Red Alert (what the engine concluded), then an Emergency
+                  (what you declared; `TaskMarks.tsx` for why they share a
+                  hue), then the score, which an ignored task has in place of
+                  a number. A finished task cannot be late, so neither of the
+                  first two shows on one. */}
+              {/* Minimal (29-1P7c) is the title alone: the badges fold too. */}
+              <BadgeFold
+                style={{ marginTop: 1 }}
+                items={density === 'minimal' ? [] : [
+                  !done && reading.redAlert && { key: 'alert', node: <RedAlertBadge redAlert /> },
+                  !done && emergency > 0 && { key: 'emergency', node: <EmergencyMark level={emergency} lapsed={emergencyLapsed} /> },
+                  ignoreReason?.kind === 'task' && !done && {
+                    key: 'ignored',
+                    node: <IgnoredMark title={ignoreSentence(ignoreReason, { kind: 'task', id: task.id })} />,
+                  },
+                  score > 0 && {
+                    key: 'score',
+                    node: <ScoreDial value={score} max={scores.peak} alert={!done && reading.redAlert} warm={!done} size="sm" />,
+                  },
+                ]}
+              />
+
+              {/*
+                `.ag-card-actions`, not `group-hover`: there is no hover on the
+                tablet and no `:focus-within` in a hover utility, so these were
+                invisible on half of what this app runs on and the keyboard's
+                focus ring landed on controls nobody could see. `screens.css`
+                covers both cases, and `data-open` keeps the trigger lit while
+                its own panel is up — the pointer is over the panel then, not
+                over the row.
+              */}
+              {/* BUILD-4. Outside `.ag-card-actions` on purpose: that class
+                  hides at rest, and this is the one control on the row he asked
+                  to always see. Hidden in select mode, where a press on the
+                  card means "pick this". */}
+              {onAsk && !selectMode && (
+                <span style={{ display: 'flex', flex: '0 0 auto', marginTop: -4 }}>
+                  <IconButton
+                    size="sm"
+                    variant="plain"
+                    label={`Ask AI about ${task.title}`}
+                    aria-pressed={isAskSubject ? true : undefined}
+                    onClick={(e) => { e.stopPropagation(); onAsk(task); }}
+                    style={askInk(isAskSubject)}
+                  >
+                    <Icon name="sparkles" size={16} />
+                  </IconButton>
+                </span>
+              )}
+
+              <span
+                className="ag-card-actions ag-quick-host"
+                data-open={menuOpen ? 'true' : 'false'}
+                style={{ display: 'flex', flex: '0 0 auto', marginTop: -4 }}
+              >
+                {/* 29-1P7c (idea 161): Start · Tomorrow · Done, slid in to the
+                    left of the ⋯ while the mouse is on the card. Built on the
+                    first hover (Framer's, which ignores a finger) and shown by
+                    `screens.css` from then on. */}
+                {quickBuilt && !done && !selectMode && !isAnyDragging && (
+                  <QuickActions task={task} locked={locked} active={hovered} onToggleDone={onToggleDone} />
+                )}
+                <MorphMenu
+                  align="end"
+                  width={244}
+                  open={menuOpen}
+                  onOpenChange={setMenuOpen}
+                  /* A list card is `overflow: hidden` — that is what rounds it —
+                     so an in-flow panel is cut off by the column this row sits
+                     in. MorphMenu's port note 4. */
+                  portal
+                  zIndex={Z.dropdown}
+                  trigger={
+                    <IconButton size="sm" variant="ghost" label={`Actions for ${task.title}`}>
+                      <Icon name="ellipsis" size={16} />
+                    </IconButton>
+                  }
+                  /* The panel covers the row it acts on, so the row is restated
+                     inside it — otherwise "Delete" is offered against nothing. */
+                  header={{
+                    title: task.title,
+                    meta: [
+                      primaryListTitle,
+                      score > 0 ? `score ${score.toFixed(1)}` : null,
+                      subCount.total > 0 ? `${subCount.done}/${subCount.total} subtasks` : null,
+                    ].filter(Boolean).join('  ·  '),
+                  }}
+                  items={menuItems}
+                />
+              </span>
+              </span>
+            </div>
+
+            {/* 29-1P7c: where it is shared from and its description fold
+                away in the denser looks. */}
+            {(isSharedHere || task.description) && (<Fold open={comfy}>
+            {isSharedHere && (
+              /* Not a StatusPill: being linked in from another list is not one
+                 of the seven states, it is a fact about where the task lives.
+                 It takes the glass-fill-1 chip the rest of the app spends on a
+                 list's name.
+
+                 Its own line, under the title, and not in the badge cluster
+                 above, where it lived until 2026-09-24: one more chip there
+                 wrapped the cluster in a board column, and the ⋯ trigger —
+                 invisible at rest but still laid out — was left alone on a
+                 second line, a blank band through the card that only a
+                 shared-in task had. */
+              <span
+                title={primaryListTitle ? `Shared here from "${primaryListTitle}"` : 'This task is shared here from another list'}
+                className="ag-kicker"
+                style={{
+                  justifySelf: 'start', minWidth: 0, maxWidth: '100%',
+                  display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-2)',
+                  padding: '2px var(--sp-4)', borderRadius: 'var(--r-pill)',
+                  backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                  color: 'var(--fg-3)',
+                }}
+              >
+                <Icon name="link-2" size={11} style={{ color: 'inherit' }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {primaryListTitle || 'Shared'}
+                </span>
               </span>
             )}
+
+            {task.description && (
+              <p
+                className="ag-clamp-2"
+                /* `anywhere`, as the title does: a pasted link is one word, and
+                   without it the line ran past the card's edge and was cut. */
+                style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', lineHeight: 'var(--leading-normal)', overflowWrap: 'anywhere' }}
+              >
+                {task.description}
+              </p>
+            )}
+            </Fold>)}
+
+            {/* Running: the pill, the reading and the meter, as one block. The
+                elapsed figure is the focus log's, summed — see `derive.ts`. */}
+            {/* It stays in Compact (29-1P7c): the one live fact on a board. */}
+            {live && (<Fold open={density !== 'minimal'}>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--sp-4)' }}>
+                  <StatusPill status="running" size="sm">Running</StatusPill>
+                  <span
+                    className="ag-tnum"
+                    style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--accent)' }}
+                  >
+                    {alloc > 0 ? `${elapsed} / ${alloc} min` : minutesLabel(elapsed)}
+                  </span>
+                </div>
+                {alloc > 0 && <Meter pct={(elapsed / alloc) * 100} height={4} tone="var(--accent)" />}
+              </div>
+            </Fold>)}
+
+            {/* The "Waiting on" line and the facts fold away in the denser
+                looks (29-1P7c); the lock in the tick's box still says it. */}
+            <Fold open={comfy}>
+            {blockingTasks.length > 0 && (
+              <span style={{ display: 'flex', minWidth: 0 }}>
+                <BlockedLine
+                  on={blockingTasks[0].title}
+                  extra={blockingTasks.length - 1}
+                  title={`Blocked by: ${blockingTasks.map((t) => t.title).join(', ')}`}
+                  /* 29-1P7c (164): a press draws the wire to it — the tablet's way. */
+                  onPress={() => useWireStore.getState().pin(task.id)}
+                />
+              </span>
+            )}
+
+            {/* Measured facts, always in this order: when · how long · how far · how often.
+                The avatar is NOT one of them any more (FIX-9): it rode the end
+                of this wrapping line, so it landed wherever the last fact
+                happened to end and was clipped at the card's edge when the line
+                was full. It has its own column now, anchored bottom-right. */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-4)', minWidth: 0 }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap', minWidth: 0 }}>
+              {done && task.completedAt && (
+                /* FIX-9: stamped on every completion since 19A, never shown. */
+                <Fact icon="check" tone="var(--fg-3)" title={new Date(task.completedAt).toLocaleString()}>
+                  {doneLabel(task.completedAt, new Date())}
+                </Fact>
+              )}
+              {/* 29-1P7a (ideas 165, 66): a tiny calendar page that warms as
+                  the day nears, and flips when the date moves. */}
+              {!done && <DueDate deadline={task.deadline} />}
+              {!live && alloc > 0 && (
+                <Fact icon="clock" tone={done ? 'var(--fg-4)' : 'var(--fg-3)'}>{minutesLabel(alloc)}</Fact>
+              )}
+              {/* 29-1P7b (ideas 12, 163): dots on a line for six steps or
+                  fewer, "2/5" past that, and either one unfolds the steps
+                  below to tick. */}
+              {subCount.total > 0 && (
+                <StepTrack
+                  done={subCount.done}
+                  total={subCount.total}
+                  open={expanded}
+                  onToggle={() => setExpanded((v) => !v)}
+                  title={task.title}
+                />
+              )}
+              {repeat && <Fact icon="repeat" title={repeat}>{repeat}</Fact>}
+              {/* How often you have pushed this away — a measured fact about the
+                  task, in the same face as the four beside it. */}
+              <AvoidedMark count={task.avoidedCount} tone={done ? 'var(--fg-4)' : undefined} />
+            </div>
+
+              {task.assignee && (
+                /* No counterpart in the mockup — the prototype keeps the
+                   assignee for the sheet. */
+                <span
+                  title={isAssignedToMe ? 'Assigned to you' : 'Assigned'}
+                  style={{ flex: '0 0 auto', display: 'flex' }}
+                >
+                  {isAssignedToMe && user?.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt=""
+                      style={{
+                        width: 20, height: 20, borderRadius: 'var(--r-circle)',
+                        boxShadow: 'var(--glass-rim-1)', display: 'block',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        display: 'grid', placeItems: 'center', width: 20, height: 20,
+                        borderRadius: 'var(--r-circle)',
+                        backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                        color: 'var(--fg-3)',
+                      }}
+                    >
+                      <Icon name="user-circle" size={12} />
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+
+            </Fold>
+
+            {/* The grey hairline that ran here is gone (29-1P7b, his call):
+                the card's own lime wash says how far its steps have got. */}
           </div>
-
-          {subCount.total > 0 && !live && (
-            <Meter pct={(subCount.done / subCount.total) * 100} tone="var(--fg-3)" />
-          )}
-
-          {task.tags && task.tags.length > 0 && (
-            <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-              {task.tags.map((tag) => <Tag key={tag}>#{tag}</Tag>)}
-            </div>
-          )}
         </div>
-      </div>
 
-      <AnimatePresence>
-        {expanded && subCount.total > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            style={{ overflow: 'hidden' }}
-          >
-            {/* `minmax(0, 1fr)` for the reason the body's grid above has it:
-                an implicit track grew to the longest unbroken word in a
-                subtask's title, and every row in the tree ran past the card's
-                right edge instead of ellipsizing. */}
-            <div
-              style={{
-                display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-2)',
-                margin: '0 var(--sp-6) var(--sp-5) var(--sp-11)',
-                paddingTop: 'var(--sp-3)',
-                borderTop: '1px solid var(--line-faint)',
-              }}
+        <AnimatePresence>
+          {expanded && comfy && subCount.total > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              style={{ overflow: 'hidden' }}
             >
-              <SubtaskPreviewTree subtasks={task.subtasks ?? []} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+              {/* `minmax(0, 1fr)` for the reason the body's grid above has it:
+                  an implicit track grew to the longest unbroken word in a
+                  subtask's title, and every row in the tree ran past the card's
+                  right edge instead of ellipsizing. */}
+              <div
+                style={{
+                  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-2)',
+                  margin: '0 var(--sp-6) var(--sp-5) var(--sp-11)',
+                  paddingTop: 'var(--sp-3)',
+                  borderTop: '1px solid var(--line-faint)',
+                }}
+              >
+                <SubtaskPreviewTree subtasks={task.subtasks ?? []} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </SwipeRow>
   );
 }
 

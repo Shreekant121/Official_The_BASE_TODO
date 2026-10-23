@@ -16,7 +16,15 @@ import { OLLAMA_DEFAULT_MODEL, TEXT_MODEL } from './constants';
  * the `fetch`, the Firebase token and the Zustand store that cannot be.
  */
 
-export type ModelProvider = 'gemini' | 'ollama';
+/**
+ * `anthropic` and `openai` since BIG-1: Claude and ChatGPT, on his own keys,
+ * answered only through Atlas. Their lists come from the laptop too
+ * (`POST /models/hosted`), so they appear exactly when the laptop does.
+ */
+export type ModelProvider = 'gemini' | 'ollama' | 'anthropic' | 'openai';
+
+/** Every provider that runs in someone else's datacentre and is paid for. */
+export type CloudProvider = 'anthropic' | 'openai';
 
 export interface ModelOption {
   /** `gemini:gemini-flash-latest`. Unique across providers, and what gets stored. */
@@ -33,6 +41,14 @@ export interface ModelOption {
 export interface ModelCatalogue {
   hosted: ModelOption[];
   local: ModelOption[];
+  /**
+   * Claude and ChatGPT (BIG-1), asked of Atlas with his keys. Empty whenever
+   * the laptop is asleep or no such key is in the sheet — which is the rule
+   * (laptop only, his call), not a failure.
+   */
+  cloud: ModelOption[];
+  /** Why a key he has produced no list, one sentence per provider that failed. */
+  cloudError: string | null;
   /**
    * Models Google returned that cannot hold a conversation — embeddings,
    * Imagen, the TTS voices. Counted rather than discarded silently, so an
@@ -57,6 +73,8 @@ export interface ModelCatalogue {
 export const EMPTY_CATALOGUE: ModelCatalogue = {
   hosted: [],
   local: [],
+  cloud: [],
+  cloudError: null,
   hostedWithoutChat: 0,
   localWithoutTools: 0,
   hostedError: null,
@@ -212,10 +230,36 @@ export function parseOllamaModels(payload: unknown): { models: ModelOption[]; wi
   return { models, withoutTools };
 }
 
+// ─── Atlas's /models/hosted (BIG-1) ─────────────────────────────────────────
+
+/**
+ * Claude's or ChatGPT's list, as Atlas relays it: `{ models: [{id, label}] }`.
+ * Atlas has already filtered it (`routes/hostedModels.ts` says how, and why
+ * OpenAI's is the one list in either project filtered by name).
+ */
+export function parseCloudModels(provider: CloudProvider, payload: unknown): ModelOption[] {
+  const rows = (payload as { models?: unknown })?.models;
+  if (!Array.isArray(rows)) return [];
+  const vendor = provider === 'anthropic' ? 'Claude' : 'ChatGPT';
+  return (rows as Array<{ id?: unknown; label?: unknown }>)
+    .filter((row) => typeof row?.id === 'string' && row.id !== '')
+    .map((row) => {
+      const id = row.id as string;
+      const label = typeof row.label === 'string' && row.label !== '' ? row.label : id;
+      return {
+        key: modelKey(provider, id),
+        provider,
+        id,
+        label,
+        detail: sameName(label, id) ? vendor : `${vendor} · ${id}`,
+      };
+    });
+}
+
 // ─── Which one answers ──────────────────────────────────────────────────────
 
 export function allModels(catalogue: ModelCatalogue): ModelOption[] {
-  return [...catalogue.hosted, ...catalogue.local];
+  return [...catalogue.hosted, ...catalogue.cloud, ...catalogue.local];
 }
 
 /**
@@ -226,23 +270,105 @@ export function allModels(catalogue: ModelCatalogue): ModelOption[] {
  * that has been `ollama rm`'d or retired by Google would otherwise fail every
  * turn with a 404 and no way to see why.
  *
- * With nothing chosen it prefers `OLLAMA_DEFAULT_MODEL`, which means an
- * awake laptop answers locally and for free out of the box, on **every**
- * device — item 8's whole point is that the tablet gets the same list. And a
- * sleeping laptop returns no local list at all, so this falls straight
- * through to Gemini and the conversation keeps working. **That fall-through
- * is the fallback**: `ChatPage` labels it, but the routing is this function,
- * unchanged since item 6, doing what it already did for a tablet that had no
- * Ollama.
+ * **With nothing chosen it prefers Gemini (BIG-1)**, reversing item 8's
+ * local-first default: *"cloud is prime, local is the sub-model"* (Shreekant,
+ * 2026-09-22, and again 2026-09-24 when asked which answers by default).
+ * A stored choice of gemma still wins, as any stored choice does.
+ *
+ * A stored Claude or ChatGPT choice is found only while the laptop has listed
+ * it, so a sleeping laptop falls through to Gemini here on its own — **that
+ * fall-through is the fallback**, as it has been for local models since
+ * item 6, and `ChatPage` labels it.
  */
 export function resolveSelection(catalogue: ModelCatalogue, selectedKey: string | null): ModelOption {
   const options = allModels(catalogue);
   return (
     options.find((option) => option.key === selectedKey) ??
-    catalogue.local.find((option) => option.id === OLLAMA_DEFAULT_MODEL) ??
     catalogue.hosted.find((option) => option.id === TEXT_MODEL) ??
     catalogue.hosted[0] ??
+    catalogue.local.find((option) => option.id === OLLAMA_DEFAULT_MODEL) ??
     catalogue.local[0] ??
+    FALLBACK_MODEL
+  );
+}
+
+// ─── Local | Cloud (OPT-8) ──────────────────────────────────────────────────
+
+/**
+ * Which half of the catalogue answers: the laptop's models, or someone else's
+ * datacentre (Gemini, Claude, ChatGPT).
+ */
+export type ModelSide = 'local' | 'cloud';
+
+/**
+ * What he chose, OPT-8's shape: *"in settings allow me to select a default
+ * local Ai model and a Default Cloud Ai model so instead of a model selector
+ * button, there can be 2 buttons side by side, local and cloud."* The two
+ * defaults are picked in Settings; the composer only flips `side`.
+ */
+export interface ModelChoice {
+  side: ModelSide;
+  /** A `local` key, or `null` for "the default local model". */
+  local: string | null;
+  /** A `hosted` or `cloud` key, or `null` for "the default cloud model". */
+  cloud: string | null;
+}
+
+export function sideOf(provider: ModelProvider): ModelSide {
+  return provider === 'ollama' ? 'local' : 'cloud';
+}
+
+/**
+ * The one model picker's stored key, read into the two defaults — what a device
+ * that chose a model before OPT-8 wakes up with. Nothing chosen is the cloud
+ * side, BIG-1's "cloud is prime".
+ */
+export function choiceFromLegacy(key: string | null): ModelChoice {
+  if (key === null) return { side: 'cloud', local: null, cloud: null };
+  return key.startsWith('ollama:')
+    ? { side: 'local', local: key, cloud: null }
+    : { side: 'cloud', local: null, cloud: key };
+}
+
+/**
+ * One side's default as it stands: his pick while it is listed, else the app's
+ * own preference, else the first listed. `null` when that side listed nothing —
+ * a sleeping laptop for `local`; no key and no network for `cloud`.
+ *
+ * Cloud prefers Gemini over Claude and ChatGPT with nothing picked, as
+ * `resolveSelection` always has (BIG-1).
+ */
+export function defaultOf(catalogue: ModelCatalogue, choice: ModelChoice, side: ModelSide): ModelOption | null {
+  if (side === 'local') {
+    return (
+      catalogue.local.find((option) => option.key === choice.local) ??
+      catalogue.local.find((option) => option.id === OLLAMA_DEFAULT_MODEL) ??
+      catalogue.local[0] ??
+      null
+    );
+  }
+  return (
+    [...catalogue.hosted, ...catalogue.cloud].find((option) => option.key === choice.cloud) ??
+    catalogue.hosted.find((option) => option.id === TEXT_MODEL) ??
+    catalogue.hosted[0] ??
+    catalogue.cloud[0] ??
+    null
+  );
+}
+
+/**
+ * The model a turn runs on, from the switch and the two defaults.
+ *
+ * The switch's side, through `defaultOf`. **With nothing listed on that side it
+ * answers on the other** — Local with the laptop asleep runs on the cloud
+ * default, the fall-through a stored local pick has always had, and
+ * `ModelSideSwitch` says so beside the switch. With neither list in, it is
+ * `FALLBACK_MODEL`, as before.
+ */
+export function resolveChoice(catalogue: ModelCatalogue, choice: ModelChoice): ModelOption {
+  return (
+    defaultOf(catalogue, choice, choice.side) ??
+    defaultOf(catalogue, choice, choice.side === 'local' ? 'cloud' : 'local') ??
     FALLBACK_MODEL
   );
 }

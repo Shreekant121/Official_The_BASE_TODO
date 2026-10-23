@@ -40,6 +40,8 @@ import { Icon, type MorphMenuItem } from '../../ui';
 import { useStore, taskFocusSeconds, type Task } from '../../store/useStore';
 import { useFocusRun, subjectOf } from '../../store/useFocusRun';
 import { planStartNow } from '../../lib/smartStart';
+import { ignoredWorkOf } from '../../lib/ignoredWork';
+import { cue } from '../../lib/sound';
 
 /** How many startable prerequisites a blocked row lists. A menu is not a report. */
 const MAX_OFFERED = 3;
@@ -66,7 +68,9 @@ export function startQueue(queue: Task[], navigate: (to: string) => void) {
        the clock it paints is the one started here. */
     run.attach(subjectOf(head), taskFocusSeconds(head), app.sessionDuration);
   }
-  useFocusRun.getState().resume();
+  /* `start`, not `resume`: a session made here begins with its one breath
+     (29-1P10a, idea 95); the same task carried on just carries on. */
+  useFocusRun.getState().start();
   navigate('/focus');
 }
 
@@ -103,13 +107,18 @@ export function useStartNowItems(taskId: string): MorphMenuItem[] {
   const runId = useFocusRun((s) => s.task?.id ?? null);
   const runTitle = useFocusRun((s) => s.task?.title ?? null);
 
-  const plan = useMemo(() => planStartNow(backlogTasks, taskId), [backlogTasks, taskId]);
+  const lists = useStore((s) => s.taskLists);
+  const projects = useStore((s) => s.projects);
+  const plan = useMemo(
+    () => planStartNow(backlogTasks, taskId, ignoredWorkOf(backlogTasks, lists, projects).ids),
+    [backlogTasks, taskId, lists, projects],
+  );
 
   const item = (value: string, label: string, target: Task): MorphMenuItem => {
     const go = () => {
       /* Re-planned at press time, for the reason `startQueue` reads the stores. */
       const fresh = planStartNow(useStore.getState().backlogTasks, target.id);
-      if (fresh.kind === 'start') startQueue(fresh.queue, navigate);
+      if (fresh.kind === 'start') { cue('start'); startQueue(fresh.queue, navigate); }
     };
     const aside = setAside(target.id, runTitle, runId, queue);
     return {

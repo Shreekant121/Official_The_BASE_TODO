@@ -37,7 +37,7 @@
  */
 import { forwardRef, useState } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
-import { Icon } from '../ui';
+import { Icon, LitLine } from '../ui';
 
 export interface PickerButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Whether the popover this button opens is showing — lights the rim, spins the chevron. */
@@ -80,7 +80,7 @@ export const PickerButton = forwardRef<HTMLButtonElement, PickerButtonProps>(
           borderRadius: 'var(--r-control)',
           backgroundImage: 'var(--glass-well)',
           boxShadow: open
-            ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline)'
+            ? 'var(--glass-well-shadow), 0 0 0 1px var(--job-lime-line)'
             : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
           font: 'var(--type-body)',
           fontSize: md ? 'var(--text-md)' : 'var(--text-sm)',
@@ -143,7 +143,7 @@ export const PickerButton = forwardRef<HTMLButtonElement, PickerButtonProps>(
 export function PickerList({ maxHeight, children }: { maxHeight: string; children: ReactNode }) {
   return (
     <div
-      className="ag-scroll"
+      className="ag-scroll ag-fade"
       style={{
         maxHeight,
         overflowY: 'auto',
@@ -214,6 +214,8 @@ export function PickerHeading({
 }
 
 export interface PickerOptionProps {
+  /** How far down a tree the row sits — a project inside a project (BIG-2). */
+  depth?: number;
   /**
    * Whether this row is the value currently in force. **Omit it entirely for
    * a row that ADDS something** rather than choosing among alternatives —
@@ -236,7 +238,7 @@ export interface PickerOptionProps {
  * One option. `--hit-min` tall, because half of this product is a tablet and
  * these rows used to be 38px of padding-derived height.
  */
-export function PickerOption({ selected, glyph, meta, onClick, children }: PickerOptionProps) {
+export function PickerOption({ selected, glyph, meta, onClick, depth = 0, children }: PickerOptionProps) {
   const [hover, setHover] = useState(false);
 
   return (
@@ -252,7 +254,7 @@ export function PickerOption({ selected, glyph, meta, onClick, children }: Picke
         gap: 'var(--sp-4)',
         width: '100%',
         minHeight: 'var(--hit-min)',
-        padding: '0 var(--sp-4)',
+        padding: depth > 0 ? `0 var(--sp-4) 0 calc(var(--sp-4) + ${depth * 16}px)` : '0 var(--sp-4)',
         border: 0,
         borderRadius: 'var(--r-sm)',
         textAlign: 'left',
@@ -286,8 +288,8 @@ export function PickerOption({ selected, glyph, meta, onClick, children }: Picke
           {meta}
         </span>
       )}
-      {/* The accent as an interaction mark, not a status: this is which row
-          you picked, the same job it does on a focus ring. It is reserved even
+      {/* Lime as an interaction mark, not a status: this is which row you
+          picked, the same job it does on the focus ring (29-1P2c1). It is reserved even
           when nothing is chosen, so the rows of one list stay aligned — but a
           list where nothing CAN be chosen (`selected` undefined) has no mark
           to reserve room for. */}
@@ -295,26 +297,24 @@ export function PickerOption({ selected, glyph, meta, onClick, children }: Picke
         <Icon
           name="check"
           size={14}
-          style={{ color: 'var(--accent)', opacity: selected ? 1 : 0, transition: 'opacity var(--dur-fast) var(--ease-glass)' }}
+          style={{ color: 'var(--job-lime)', opacity: selected ? 1 : 0, transition: 'opacity var(--dur-fast) var(--ease-glass)' }}
         />
       )}
     </button>
   );
 }
 
-/** What a picker says when there is nothing to pick. */
+/** What a picker says when there is nothing to pick. A string is a lit
+ *  sentence (`**` lights words, 29-1P14c); anything else is drawn as it is. */
 export function PickerEmpty({ children }: { children: ReactNode }) {
-  return (
-    <p
-      style={{
-        padding: 'var(--sp-6) var(--sp-5)',
-        textAlign: 'center',
-        font: 'var(--type-caption)',
-        color: 'var(--fg-4)',
-        textWrap: 'pretty',
-      }}
-    >
-      {children}
-    </p>
-  );
+  const style = {
+    padding: 'var(--sp-6) var(--sp-5)',
+    textAlign: 'center',
+    font: 'var(--type-caption)',
+    color: 'var(--fg-4)',
+    textWrap: 'pretty',
+  } as const;
+  return typeof children === 'string'
+    ? <LitLine as="p" text={children} style={style} />
+    : <p style={style}>{children}</p>;
 }

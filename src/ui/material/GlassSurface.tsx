@@ -22,7 +22,7 @@ const TINT = {
   cyan:   'var(--glass-tint-cyan)',
   violet: 'var(--glass-tint-violet)',
   amber:  'var(--glass-tint-amber)',
-  rose:   'var(--glass-tint-rose)',
+  rose:   'var(--glass-tint-coral)', /* an error's tone: coral since 29-1P2c2 */
   frost:  'var(--glass-frost)',
 } as const;
 
@@ -31,7 +31,7 @@ const GLOW = {
   cyan:   'var(--glow-cyan-md)',
   violet: 'var(--glow-violet-md)',
   amber:  'var(--glow-amber-md)',
-  rose:   'var(--glow-rose-md)',
+  rose:   'var(--job-coral-shine-md)',
   white:  'var(--glow-white-sm)',
 } as const;
 

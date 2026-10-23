@@ -24,6 +24,27 @@ export const Z = {
    */
   chrome: 40,
 
+  /**
+   * A deleted row's dust (idea 48, `lib/dust.ts`). Over the page it was on and
+   * under everything opened over it: deleted from a sheet, the dust drifts out
+   * from behind the sheet as it closes rather than across its face.
+   */
+  dust: 39,
+
+  /**
+   * The dotted line from a blocked task to what it waits on (idea 164,
+   * `project/BlockWires.tsx`). Over the cards it joins, under the dust and
+   * everything opened over the board.
+   */
+  wires: 38,
+
+  /**
+   * The chat page's edge light while Atlas works (idea 67, `ui/feedback/
+   * EdgeLight.tsx`). Over the page and its chrome, under the nav and
+   * everything opened over the page; it cannot be pressed.
+   */
+  edgeLight: 45,
+
   /** The floating bottom nav. Sits above page chrome, below anything opened. */
   nav: 50,
 
@@ -71,4 +92,11 @@ export const Z = {
    * of them, including a drag ghost.
    */
   dropdown: 99999,
+
+  /**
+   * The keyboard focus ring that glides between controls (idea 70, 29-1P1,
+   * `ui/core/FocusGlide.tsx`). Above everything, dropdowns included, because it
+   * marks whatever is focused wherever it sits; it takes no pointer events.
+   */
+  focusRing: 100000,
 } as const;

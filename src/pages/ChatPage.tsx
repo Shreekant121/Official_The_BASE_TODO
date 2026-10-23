@@ -86,21 +86,19 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavModel } from '../components/navModel';
-import { Icon, Toast, useMedia, V3Scope, WIDE } from '../ui';
+import { EdgeLight, Icon, Toast, useMedia, V3Scope, WIDE } from '../ui';
+import { Z } from '../lib/zLayers';
 import { CHAT_ID_KEY, LIST_DOCKED_KEY, readDeviceValue, writeDeviceValue } from '../lib/atlas/devicePrefs';
 import { useFooterReserve } from '../lib/useFooterReserve';
 import { useAuth } from '../contexts/AuthContext';
-import { useApiKeyStore, getActiveApiKey } from '../lib/agent/apiKeys';
-import { createLiveSession } from '../lib/agent/liveContext';
+import { useApiKeyStore, atlasApiKey } from '../lib/agent/apiKeys';
+import { atlasKeyOf } from '../lib/agent/keyRing';
 import { resolveUserTimeZone } from '../lib/agent/dates';
 import { selectEffectiveModel, useModelStore } from '../lib/agent/modelStore';
-import { AgentTransportError } from '../lib/agent/transports/errors';
-import { createGeminiTransport } from '../lib/agent/transports/geminiTransport';
 import {
   deleteConversation as deleteAtlasConversation,
   fetchConversation,
   patchConversation,
-  AtlasMonthlyCeilingReached,
   type AtlasMode,
 } from '../lib/atlas/client';
 import { turnsFromHistory } from '../lib/atlas/transcript';
@@ -117,7 +115,6 @@ import { whoIsAnswering } from '../components/chat/whoIsAnswering';
 import { runChatTurn } from '../components/chat/runChatTurn';
 import { useApprovalTray } from '../components/chat/useApprovalTray';
 import { useAtlasSkills } from '../components/chat/useAtlasSkills';
-import { useCeilings } from '../components/chat/useCeilings';
 import { useConversationList } from '../components/chat/useConversationList';
 import { usePinToBottom } from '../components/chat/usePinToBottom';
 import { useResumable } from '../components/chat/useResumable';
@@ -130,19 +127,20 @@ import { COLUMN_PX, type ChatTurn } from '../components/chat/chatShared';
    were built only after the tablet was measured rather than reasoned about;
    `lib/voice/recognition.ts` carries what that measurement found. */
 import { MicButton } from '../components/chat/MicButton';
-import { VoiceDial } from '../components/chat/VoiceDial';
+import { ModelSideSwitch } from '../components/chat/ModelSideSwitch';
 import { DockMode } from '../components/chat/DockMode';
 import { devDockFixture } from '../lib/devDockFixture';
 import { useDictation, useVoiceChoice } from '../lib/voice/useVoice';
 import { useAtlasStore } from '../lib/atlas/atlasStore';
-import { atlasModelId, downshiftOn, routesToAtlas } from '../lib/atlas/routing';
+import { loadConversation, useMemorySource } from '../lib/atlas/memorySource';
+import { atlasModelId, cloudRoutingOf, routesToAtlas } from '../lib/atlas/routing';
 import { copyHandoff } from '../lib/atlas/handoff';
 import type { AgentMessage } from '../lib/agent/types';
 import { parseAnswerMessage } from '../lib/askCard';
 import { devChatFixture } from '../lib/devChatFixture';
-import { useSnapshotStore } from '../store/useSnapshotStore';
 import { useStore } from '../store/useStore';
 import { useUIStore } from '../store/useUIStore';
+import { cue } from '../lib/sound';
 
 
 /*
@@ -282,7 +280,7 @@ function ChatScreen() {
     }, []),
   );
 
-  const { speakReplies, chooseSpeakReplies, lastReply } = useSpokenReplies(turns, busy, docked, voice);
+  const { lastReply } = useSpokenReplies(turns, busy, docked, voice);
 
   const wide = useMedia(WIDE);
   /** Room for the rail, the 268px chat list and the 880px column together. */
@@ -335,44 +333,52 @@ function ChatScreen() {
   const setAtlasPanelOpen = useUIStore((s) => s.setAtlasPanelOpen);
   useEffect(() => () => setAtlasPanelOpen(false), [setAtlasPanelOpen]);
 
-  const snapshotTurns = useSnapshotStore((s) => s.turns);
-  const revertTurn = useSnapshotStore((s) => s.revertTurn);
   const activeKeyId = useApiKeyStore((s) => s.activeId);
 
   const timezone = useMemo(() => resolveUserTimeZone(), []);
-  const session = useMemo(() => createLiveSession({ timezone }), [timezone]);
-  // Read per request, so swapping a key in the panel takes effect on the very
-  // next turn without rebuilding the transport.
-  const geminiTransport = useMemo(() => createGeminiTransport({ getApiKey: getActiveApiKey }), []);
 
   /* Which model answers, and therefore **where the loop runs** (item 8). This
      is the one branch in the app on where an answer comes from, and item 8
      widened what it decides: it used to pick between two transports handed to
      the same in-browser loop, and it now picks between two *machines*.
 
-     - a local model  → Atlas, on the laptop, over Tailscale;
-     - a Gemini model → this browser, `runAgentTurn`, exactly as before.
+     - the laptop, whenever it can take the pick (`lib/atlas/routing.ts`);
+     - otherwise Atlas in this page (BIG-12), for any cloud pick.
 
-     The second is the fallback DESIGN.md §9 keeps deliberately: laptop shut,
-     tablet on a train, the app still adds a task. It is not a degraded copy of
-     Atlas — it is the working agent this app has had since item 5, with all
-     eight of its tools, and it stays.
-
-     BUILD-12 adds one clause: with Downshift on and the laptop awake, a
-     Gemini pick goes to the laptop too, which runs it locally and says so
-     (`lib/atlas/routing.ts`). */
+     The basic assistant that used to be the second branch is retired, his
+     call on 2026-09-29 — "Retire it, Atlas for all". With no key of his own a
+     Gemini turn here answers on the owner's key through `api/chat`, which is
+     what the basic assistant used. */
   const model = useModelStore(selectEffectiveModel);
   const refreshModels = useModelStore((s) => s.refresh);
 
   const atlasStatus = useAtlasStore((s) => s.status);
   const atlasBase = useAtlasStore((s) => s.baseUrl);
   const probeAtlasHost = useAtlasStore((s) => s.probe);
-  const downshift = useAtlasStore((s) => downshiftOn(s.health));
-  const onAtlas = routesToAtlas(model, atlasStatus, atlasBase, downshift);
+  /* BIG-1: a cloud pick runs on the laptop too, when the laptop takes cloud
+     turns and there is a key for it — `lib/atlas/routing.ts` says why. */
+  const atlasHealth = useAtlasStore((s) => s.health);
+  const geminiKeyInSheet = useApiKeyStore((s) => atlasKeyOf(s, 'gemini') !== null);
+  const cloud = useMemo(() => cloudRoutingOf(atlasHealth, geminiKeyInSheet), [atlasHealth, geminiKeyInSheet]);
+  const onAtlas = routesToAtlas(model, atlasStatus, atlasBase, cloud);
+  /* BIG-12: a cloud pick the laptop does not take — it is shut, or has no key
+     for this provider — runs on Atlas in this page, with every tool, the
+     catalog, skills and the action log. Any signed-in account: with no key of
+     his own a Gemini turn answers on the owner's key through `api/chat`, as the
+     retired basic assistant did (27A-5, "Retire it, Atlas for all"). */
+  const uid = user?.uid ?? null;
+  const onTablet = !onAtlas && uid !== null && model.provider !== 'ollama';
+  /** Atlas is answering, on either machine. */
+  const atlasAnswering = onAtlas || onTablet;
+  /* BIG-4: with the lid shut, the chats are read from the cloud copy. Keyed on
+     where the memory is read, not on who answers: Atlas may be running here
+     while the laptop is awake, and then the laptop's list is the list. */
+  const memorySource = useMemorySource();
+  const lidShut = memorySource?.kind === 'cloud' ? memorySource : null;
 
   const { skillList, activeSkill, setActiveSkill, pendingSkillRef, chooseSkill } = useAtlasSkills(
-    onAtlas,
-    atlasBase,
+    atlasAnswering,
+    memorySource,
   );
 
   /*
@@ -385,7 +391,7 @@ function ChatScreen() {
    * back with a 404 about an unknown model, which points at the wrong machine
    * entirely and would cost an hour to read correctly.
    */
-  const strandedLocally = model.provider === 'ollama' && !onAtlas;
+  const strandedLocally = model.provider !== 'gemini' && !onAtlas && !onTablet;
 
   /*
    * Whether Atlas can actually act, as Atlas itself reports it (item 9).
@@ -396,17 +402,15 @@ function ChatScreen() {
    * number, which is the whole reason that field exists.
    */
   const atlasHasTools = useAtlasStore((s) => s.health?.stage.tools ?? false);
-  const atlasCanAct = onAtlas && atlasHasTools;
-  const answering = whoIsAnswering(onAtlas, atlasStatus, atlasHasTools, busy);
-
-  const { ceilings, chooseCeiling } = useCeilings(onAtlas, atlasBase);
+  const atlasCanAct = (onAtlas && atlasHasTools) || onTablet;
+  const answering = whoIsAnswering(onAtlas, atlasStatus, atlasHasTools, busy, onTablet, uid !== null);
 
   useEffect(() => {
     sessionTurns = turns;
   }, [turns]);
 
-  const { conversations, setConversations, chatQuery, setChatQuery, listProblem, setListProblem, reloadConversations } =
-    useConversationList(onAtlas, atlasBase, atlasStatus);
+  const { conversations, setConversations, chatQuery, setChatQuery, listProblem, listWaiting, setListProblem, reloadConversations } =
+    useConversationList(memorySource?.kind === 'laptop', atlasBase, atlasStatus, lidShut);
 
   /*
    * Reopen what was open (item 10's "Done when").
@@ -421,7 +425,7 @@ function ChatScreen() {
    */
   const restoredRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!onAtlas || atlasBase === null || conversationId === null) return;
+    if (memorySource?.kind !== 'laptop' || atlasBase === null || conversationId === null) return;
     if (restoredRef.current === conversationId) return;
     restoredRef.current = conversationId;
 
@@ -443,7 +447,6 @@ function ChatScreen() {
           turnsFromHistory(conversation.history).map((rebuilt) => ({
             ...rebuilt,
             status: 'done' as const,
-            snapshotTurnId: null,
             ranOnAtlas: true,
           })),
         );
@@ -461,7 +464,57 @@ function ChatScreen() {
     return () => {
       live = false;
     };
-  }, [atlasBase, conversationId, onAtlas, pendingSkillRef, setActiveSkill]);
+  }, [atlasBase, conversationId, memorySource?.kind, pendingSkillRef, setActiveSkill]);
+
+  /*
+   * BIG-4 — the same reopening with the lid shut, from the cloud copy.
+   *
+   * To read: `viewingCloudRef` makes the next message start a new chat (see
+   * `send`). The laptop waking with this chat still open takes it from here
+   * without a second read — `restoredRef` already names it, and what is on
+   * screen is exactly what the laptop holds.
+   */
+  const viewingCloudRef = useRef(false);
+  useEffect(() => {
+    if (lidShut === null || conversationId === null) return;
+    if (restoredRef.current === conversationId) return;
+    restoredRef.current = conversationId;
+
+    let live = true;
+    setRestoring(true);
+    void (async () => {
+      try {
+        const conversation = await loadConversation(lidShut, conversationId);
+        if (!live) return;
+        historyRef.current = conversation.history;
+        sessionHistory = conversation.history;
+        viewingCloudRef.current = true;
+        /* BIG-12: with the lid shut this chat can be carried on here, so the
+           skill it was left running goes back on the chip — as the laptop's
+           own reopening does, and for the same reason not echoed back. */
+        setActiveSkill(conversation.activeSkill ?? null);
+        pendingSkillRef.current = undefined;
+        setTurns(
+          turnsFromHistory(conversation.history).map((rebuilt) => ({
+            ...rebuilt,
+            status: 'done' as const,
+            ranOnAtlas: true,
+          })),
+        );
+      } catch {
+        // Not in the cloud copy (never synced, or deleted). Start clean, as
+        // the laptop's own reopening does.
+        if (!live) return;
+        setConversationId(null);
+        writeDeviceValue(CHAT_ID_KEY, null);
+      } finally {
+        if (live) setRestoring(false);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [conversationId, lidShut, pendingSkillRef, setActiveSkill]);
 
   useModelLists(activeKeyId);
 
@@ -478,7 +531,6 @@ function ChatScreen() {
     if (!import.meta.env.DEV) return;
     const fixture = devChatFixture(window.location.search);
     if (!fixture) return;
-    useSnapshotStore.setState({ turns: fixture.snapshots });
     setTurns(fixture.turns as ChatTurn[]);
     /* Item 10 — the third blocked fetch. The chats are on the laptop and the
        harness cannot reach it, so without this the sidebar's only
@@ -513,9 +565,9 @@ function ChatScreen() {
 
   const { toast, setToast, showToast } = useToast();
 
-  const { trayOpen, setTrayOpen, deciding, waiting, trayItems, failureOf, approvalStateOf, refreshTray, decide } = useApprovalTray(
-    atlasBase,
+  const { trayOpen, setTrayOpen, deciding, waiting, trayItems, failureOf, approvalStateOf, refreshTray, decide, throwAway } = useApprovalTray(
     showToast,
+    memorySource,
   );
 
   const patchTurn = useCallback((id: string, update: (turn: ChatTurn) => ChatTurn) => {
@@ -524,7 +576,7 @@ function ChatScreen() {
 
   const [resumable, setResumable] = useResumable(onAtlas, atlasBase, conversationId, busy);
 
-  const { mode, chooseMode, effort, chooseEffort, effectiveContextK, chooseContextK } = useTurnDials(
+  const { mode, chooseMode, effectiveContextK, chooseContextK } = useTurnDials(
     model.provider === 'ollama' ? model.id : null,
   );
 
@@ -540,7 +592,7 @@ function ChatScreen() {
      * here overrides the dial for one request and does not touch it, which is
      * the difference between approving a plan and switching off planning.
      */
-    async (raw: string, runFor?: AtlasMode, carryOn?: { resumeTurnId?: string; overMonthlyCeiling?: boolean }) => {
+    async (raw: string, runFor?: AtlasMode, carryOn?: { resumeTurnId?: string }) => {
       const message = raw.trim();
       /*
        * ITEM 13A: A CARRY-ON HAS NO MESSAGE OF ITS OWN (§5.5).
@@ -552,15 +604,38 @@ function ChatScreen() {
        */
       if ((message === '' && carryOn?.resumeTurnId === undefined) || busy) return;
 
+      /*
+       * BIG-4: a chat read from the cloud copy is not continued by the basic
+       * assistant. It keeps no conversation, and sending the laptop's history
+       * to it would fork the chat into a copy the laptop never sees. So the
+       * message starts a new one, and says so.
+       *
+       * BIG-12: Atlas running here does keep it — it reads the chat from the
+       * cloud copy and writes the turn back — so with Atlas here it goes on.
+       */
+      if (viewingCloudRef.current) {
+        viewingCloudRef.current = false;
+        if (!onAtlas && !onTablet) {
+          sessionHistory = [];
+          historyRef.current = [];
+          restoredRef.current = null;
+          setConversationId(null);
+          writeDeviceValue(CHAT_ID_KEY, null);
+          setTurns([]);
+          showToast('This starts a new chat. The one you were reading is unchanged.');
+        }
+      }
+
       const id = crypto.randomUUID();
       setTurns((prev) => [
         ...prev,
         {
           id, userText: message, assistantText: '', toolCalls: [],
-          status: 'running', snapshotTurnId: null,
+          status: 'running',
+          startedAt: Date.now(),
           // Pinned at send, because the answer to "who is running this" can
           // change before it comes back. See `ChatTurn.ranOnAtlas`.
-          ranOnAtlas: onAtlas,
+          ranOnAtlas: atlasAnswering,
         },
       ]);
       setInput('');
@@ -575,16 +650,16 @@ function ChatScreen() {
 
       const controller = new AbortController();
       abortRef.current = controller;
-      // A turn that throws still commits its snapshot (see `core.ts`) but
-      // cannot return the id, so remember where the ring was and read back
-      // whatever landed on top of it.
-      const ringTopBefore = useSnapshotStore.getState().turns[0]?.id ?? null;
 
       if (strandedLocally) {
+        cue('error');
         patchTurn(id, (turn) => ({
           ...turn,
           status: 'error',
-          error: `${model.id} runs on your laptop, and Atlas is not answering. Wake the laptop, or pick a Gemini model.`,
+          error:
+            model.provider === 'ollama'
+              ? `${model.id} runs on your laptop, and Atlas is not answering. Wake the laptop, or pick a Gemini model.`
+              : `${model.label} answers through your laptop, and Atlas is not answering. Wake the laptop, or pick a Gemini model.`,
         }));
         void probeAtlasHost().then(() => refreshModels());
         abortRef.current = null;
@@ -595,17 +670,23 @@ function ChatScreen() {
       try {
         const result = await runChatTurn({
           atlasBase: onAtlas ? atlasBase : null,
+          /* BIG-12. The laptop is shut and Atlas runs in this page. */
+          tablet: onTablet && uid !== null ? { uid } : null,
           message,
           history: historyRef.current,
-          /* `gemini:<id>` when Downshift sent a Gemini pick here; the
-             laptop reads that spelling and runs it locally. */
-          model: { id: onAtlas ? atlasModelId(model) : model.id, label: model.label },
+          /* `gemini:<id>` for a cloud pick; the laptop reads that spelling
+             as a cloud turn. */
+          model: { id: atlasAnswering ? atlasModelId(model) : model.id, label: model.label },
+          /* BIG-1: the key for a cloud pick, from the key sheet. Atlas uses it
+             for this turn and keeps it nowhere. */
+          apiKey: atlasAnswering && model.provider !== 'ollama' ? atlasApiKey(model.provider) : null,
           timezone,
           conversationId,
           contextK: effectiveContextK,
           mode,
           runFor,
-          effort,
+          /* OPT-8 — thinking is always Max, his call: the dial is gone. */
+          effort: 'hard',
           carryOn,
           takeSkill: () => {
             const asked = pendingSkillRef.current;
@@ -613,8 +694,6 @@ function ChatScreen() {
             return asked;
           },
           signal: controller.signal,
-          geminiTransport,
-          session,
           patch: (update) => patchTurn(id, update),
           onConversation: (id) => {
             /*
@@ -653,11 +732,8 @@ function ChatScreen() {
           // opening if it were overwritten.
           assistantText: turn.assistantText.trim() === '' ? result.text : turn.assistantText,
           status: 'done',
-          snapshotTurnId: result.turnId,
           usage: result.usage,
           model: result.model,
-          cost: result.cost,
-          ceilingStop: result.ceilingStop,
           elapsedMs: performance.now() - startedAt,
         }));
 
@@ -666,28 +742,9 @@ function ChatScreen() {
         // beat stale and this is the only moment that is known.
         if (result.conversationTitle !== null) void reloadConversations(chatQuery);
       } catch (err) {
-        /*
-         * ITEM 13A: THE MONTHLY CEILING IS NOT A FAILURE (§3.4).
-         *
-         * It reaches here as a throw only because the stream ended without a
-         * `done` — which on the wire is the same shape as a laptop dying, and
-         * is emphatically not the same event. `onMonthlyCeiling` has already
-         * recorded the card on the turn, so this marks it finished and stops:
-         * an error message beside a working button would tell him Atlas broke
-         * when Atlas did exactly what he set it to do.
-         */
-        if (err instanceof AtlasMonthlyCeilingReached) {
-          patchTurn(id, (turn) => ({ ...turn, status: 'done', elapsedMs: performance.now() - startedAt }));
-          abortRef.current = null;
-          setBusy(false);
-          inputRef.current?.focus();
-          return;
-        }
-
-        const ringTop = useSnapshotStore.getState().turns[0];
-        const snapshotTurnId = ringTop && ringTop.id !== ringTopBefore ? ringTop.id : null;
         const aborted = err instanceof DOMException && err.name === 'AbortError';
-        const quota = err instanceof AgentTransportError && err.status === 429;
+        /* 29-1P3: a turn that failed sounds; one he stopped himself does not. */
+        if (!aborted) cue('error');
 
         patchTurn(id, (turn) => ({
           ...turn,
@@ -697,10 +754,6 @@ function ChatScreen() {
             : err instanceof Error
               ? err.message
               : String(err),
-          // A local model spends no quota and reads no key, so the "add a key"
-          // offer would be advice that cannot help — see `TurnBlock`.
-          keysWouldHelp: !aborted && !onAtlas && model.provider === 'gemini' && (quota || activeKeyId === null),
-          snapshotTurnId,
         }));
 
         /* A turn that died on the Atlas path usually means the lid closed
@@ -716,11 +769,12 @@ function ChatScreen() {
     [
       busy,
       patchTurn,
-      session,
-      geminiTransport,
+      showToast,
       model,
-      activeKeyId,
       onAtlas,
+      onTablet,
+      atlasAnswering,
+      uid,
       strandedLocally,
       atlasBase,
       timezone,
@@ -731,7 +785,6 @@ function ChatScreen() {
       chatQuery,
       reloadConversations,
       mode,
-      effort,
       refreshTray,
       pendingSkillRef,
     ],
@@ -772,12 +825,6 @@ function ChatScreen() {
     inputRef.current?.focus();
   }, []);
 
-  const handleRevert = useCallback(
-    (snapshotTurnId: string) => {
-      showToast(revertTurn(snapshotTurnId).summary);
-    },
-    [revertTurn, showToast],
-  );
 
   /**
    * Start a fresh conversation.
@@ -834,6 +881,19 @@ function ChatScreen() {
     setPaletteHandoff(null);
     void send(taken.text);
   }, [asked, atlasStatus, modelsListed, conversationId, turns.length, busy, restoring, newConversation, send, setPaletteHandoff]);
+
+  /* OPT-9 — the chat search's "Ask Atlas", for a search that found no chat.
+     The palette's own road in (above): a new chat, sent once the probe and
+     the models have landed. The search is cleared so the list is whole again
+     when he comes back to it, and the drawer shuts to show the answer. */
+  const askFromSearch = useCallback(
+    (text: string) => {
+      setChatQuery('');
+      setListOpen(false);
+      setPaletteHandoff({ kind: 'ask', text });
+    },
+    [setChatQuery, setPaletteHandoff],
+  );
 
   const openConversation = useCallback((id: string) => {
     abortRef.current?.abort();
@@ -937,10 +997,12 @@ function ChatScreen() {
         chatQuery={chatQuery}
         setChatQuery={setChatQuery}
         listProblem={listProblem}
+        listWaiting={listWaiting}
         openConversation={openConversation}
         newConversation={newConversation}
         renameConversation={renameConversation}
         removeConversation={removeConversation}
+        askFromSearch={askFromSearch}
       />
 
       <div
@@ -951,6 +1013,11 @@ function ChatScreen() {
           flexDirection: 'column',
           boxSizing: 'border-box',
           padding: wide ? `0 var(--gutter-page)` : `0 var(--gutter-page-sm)`,
+          /* 29-1P15b: the empty chat's horizon is as wide as this column
+             (`100cqw`), not the narrower message column inside it. Nothing
+             in here is `position: fixed` (dock mode, the tray and the edge
+             light sit outside it), so the containment moves nothing else. */
+          containerType: 'inline-size',
         }}
       >
         <ChatHeader
@@ -998,33 +1065,32 @@ function ChatScreen() {
             }}
           >
             {isEmpty ? (
-              <EmptyState onPick={send} onAtlas={onAtlas} atlasCanAct={atlasCanAct} openCount={openCount} docked={docked} />
+              <EmptyState onPick={send} onAtlas={atlasAnswering} atlasCanAct={atlasCanAct} openCount={openCount} docked={docked} />
             ) : (
               /* `--sp-11` between turns, `--sp-7` inside one, `--sp-6` inside
                  an Atlas turn: the redrawn mockup's three gaps, and the
                  differences between them are what stop a long conversation
                  reading as one column of paragraphs. The outer gap grew from
                  `--sp-10` because the turns themselves got taller — a tool
-                 result is six rows now, not a chip. */
-              <div style={{ display: 'grid', gap: 'var(--sp-11)' }}>
+                 result is six rows now, not a chip.
+                 One fixed column (OPT-1): with none, the grid's `auto` column
+                 is as wide as the widest thing in ANY turn, so one long link
+                 pushed every turn on the page off the right edge. */
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-11)' }}>
                 {turns.map((turn, index) => (
                   <TurnBlock
                     key={turn.id}
                     turn={turn}
                     timezone={timezone}
-                    snapshot={snapshotTurns.find((s) => s.id === turn.snapshotTurnId)}
                     isLast={index === turns.length - 1}
                     answeredBelow={parseAnswerMessage(turns[index + 1]?.userText ?? '') !== null}
                     busy={busy}
-                    onRevert={handleRevert}
                     onSend={(text, runFor) => void send(text, runFor)}
                     onEdit={editAndResend}
                     approvalStateOf={approvalStateOf}
                     failureOf={failureOf}
                     deciding={deciding}
                     onDecide={decide}
-                    onCarryOn={(logTurnId, ask) => void send(ask, undefined, { resumeTurnId: logTurnId })}
-                    onRunAnyway={(ask) => void send(ask, undefined, { overMonthlyCeiling: true })}
                   />
                 ))}
               </div>
@@ -1130,8 +1196,6 @@ function ChatScreen() {
             busy={busy}
             mode={mode}
             onMode={chooseMode}
-            effort={effort}
-            onEffort={chooseEffort}
             narrow={!wide}
             /* ITEM 24 — THE MICROPHONE, and it is drawn on both paths rather
                than only Atlas's. Dictation is the browser's, not the
@@ -1145,6 +1209,8 @@ function ChatScreen() {
                   listening={dictation.listening}
                   heard={dictation.heard}
                   error={dictation.error}
+                  startedAt={dictation.startedAt}
+                  landedAt={dictation.landedAt}
                   disabled={busy}
                   onToggle={() => {
                     if (dictation.error !== null) dictation.dismiss();
@@ -1156,59 +1222,47 @@ function ChatScreen() {
             }
             /* `/` is Atlas's too — the in-browser fallback has no skills
                folder, and an empty list is what disables the picker. */
-            skills={onAtlas ? skillList : []}
+            skills={atlasAnswering ? skillList : []}
             activeSkill={activeSkill}
             onSkill={chooseSkill}
-            /* Mode and thinking effort are Atlas's. The in-browser fallback
-               has neither, and two dials that quietly change nothing would be
-               worse than none — so it gets the sentence instead. */
-            dials={onAtlas}
+            /* Mode is Atlas's. With nothing able to answer — no account, or a
+               local pick with the laptop away (the basic assistant is retired,
+               BIG-12) — a dial that changes nothing would be worse than none,
+               so the composer says what fixes it. */
+            dials={atlasAnswering}
             fallbackNote={
-              atlasCanAct
-                ? 'It writes to your real backlog. Deleting goes to the Trash for 30 days.'
-                : 'It writes to your real backlog and never deletes. This conversation ends with the tab.'
+              uid === null
+                ? 'Sign in to talk to Atlas.'
+                : 'Wake the laptop for a local model, or switch to Cloud.'
             }
           >
+            {/* OPT-8 — Local | Cloud, which replaced the model picker at the
+                foot of the chat list; which model each side means is picked
+                in Settings → Atlas. Drawn whenever there is an account, even
+                with the dials off, because it is how a stranded local pick
+                is moved to the cloud. */}
+            {uid !== null && <ModelSideSwitch />}
+
             {/* ITEM 13G, second pass — **Customize moved here**, his call. It
                 was a sliders button on the header's instrument bar, two hundred
-                pixels above the words it applies to; the two things inside it
-                (the context window and the per-turn ceiling) decide how the
-                next turn runs, which is exactly what this row is for. It draws
-                itself as a `DialPill` and opens upward, beside Mode and
-                Thinking.
+                pixels above the words it applies to; the context window inside
+                it decides how the next turn runs, which is exactly what this
+                row is for. It draws
+                itself as a `DialPill` and opens upward, beside Mode.
 
-                Only on the Atlas path, and only where there is something to
-                set: a context slider needs a local model's declared maximum
-                and a ceiling needs Atlas to have one. */}
+                Only on the Atlas path: a context slider needs a local model's
+                declared maximum. */}
             {onAtlas && (
               <TuningPopover
                 model={model.provider === 'ollama' ? model.id : null}
                 contextK={effectiveContextK}
                 onContextK={chooseContextK}
-                /* Item 13A — `null` leaves the whole block out rather than
-                   drawing it inert at an invented number. */
-                ceilingRupees={ceilings?.ceilings.perTurnRupees ?? null}
-                onCeilingRupees={chooseCeiling}
-                ceilingBounds={ceilings?.bounds.perTurn ?? { min: 1, max: 20 }}
               />
             )}
 
-            {/* ITEM 25 — THE VOICE, and the way into dock mode. On the dial
-                row through `children`, which that prop is documented for, so
-                the composer needed no change to carry it.
-
-                Like the microphone and unlike Mode and Thinking, it is drawn
-                on both paths: reading an answer aloud is the browser's job and
-                works whoever wrote the answer. */}
-            <VoiceDial
-              supported={voice.supported}
-              all={voice.all}
-              chosen={voice.chosen}
-              onChoose={voice.choose}
-              speaking={speakReplies}
-              onSpeaking={chooseSpeakReplies}
-              onDock={() => setDocked(true)}
-            />
+            {/* OPT-8 — the Voice pill that sat here (read answers aloud,
+                which voice, and the way into dock mode) moved to Settings →
+                Atlas, his call. The microphone beside Send stays. */}
           </Composer>
         </div>
       </div>
@@ -1225,6 +1279,7 @@ function ChatScreen() {
         failureOf={failureOf}
         onClose={() => setTrayOpen(false)}
         onDecide={decide}
+        onThrow={throwAway}
       />
 
       {/* ITEMS 24 + 25 — DOCK MODE. Mounted only while it is on, which is the
@@ -1237,6 +1292,11 @@ function ChatScreen() {
 
           It reads `lastReply` rather than being pushed an answer, so a turn
           that finished while he was reading the screen is still spoken. */}
+      {/* 29-1P15a, idea 67: the window's edges glow while Atlas works on a
+          turn, and fade when it has answered. A turn the page did not send
+          (the "working" fixture, a resumed one) still counts as working. */}
+      <EdgeLight on={busy || turns[turns.length - 1]?.status === 'running'} fixed zIndex={Z.edgeLight} />
+
       {docked && (
         <DockMode
           onAsk={(text) => void send(text)}
@@ -1247,7 +1307,7 @@ function ChatScreen() {
              actually operated from. */
           voices={voice.all}
           onChooseVoice={voice.choose}
-          assistant={onAtlas ? 'Atlas' : 'the basic assistant'}
+          assistant="Atlas"
           fixture={dockFixture}
           onExit={() => setDocked(false)}
         />

@@ -88,8 +88,9 @@
  * was invented: our old hue-named set (`cyan`/`violet`/`amber`/`rose`) is
  * retired in favour of the source's semantic names.
  */
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { CSSProperties, HTMLAttributes, MouseEvent, ReactNode } from 'react';
+import { useFling } from '../core/useFling';
 
 /* Tone names are status names, and the hue comes from the status token —
    there is no second colour table in this component. */
@@ -97,7 +98,7 @@ const TONE = {
   neutral: 'var(--fg-3)',
   accent:  'var(--accent)',
   queued:  'var(--status-queued)',
-  review:  'var(--status-review)',
+  review:  'var(--status-warn)', /* 29-1P2c2: warnings quiet */
   done:    'var(--status-done)',
   overrun: 'var(--status-overrun)',
 } as const;
@@ -132,6 +133,12 @@ export interface NotificationCardProps extends Omit<HTMLAttributes<HTMLDivElemen
   open?: boolean;
   defaultOpen?: boolean;
   onToggle?: (open: boolean) => void;
+  /**
+   * 29-1P6b (idea 126): the card can be flicked away, and this runs once it
+   * has flown — the same thing as the card's own Dismiss or Hide, never a new
+   * verb. Only a card that already has one passes it.
+   */
+  onThrow?: () => void;
 }
 
 export function NotificationCard({
@@ -146,6 +153,7 @@ export function NotificationCard({
   open,
   defaultOpen = false,
   onToggle,
+  onThrow,
   className = '',
   style,
   ...rest
@@ -155,6 +163,8 @@ export function NotificationCard({
   const isOpen = open !== undefined ? open : internal;
   const bodyId = useId();
   const hue = TONE[tone] ?? TONE.neutral;
+  const shellRef = useRef<HTMLDivElement>(null);
+  useFling(shellRef, { onThrow });
 
   /* Note 1 — a body counts, because un-clamping it IS the expansion. */
   const expandable = body != null || children != null || actions != null;
@@ -297,6 +307,7 @@ export function NotificationCard({
 
   return (
     <div
+      ref={shellRef}
       role="group"
       className={className}
       style={shell}

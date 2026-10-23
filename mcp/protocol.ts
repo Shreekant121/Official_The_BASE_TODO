@@ -72,45 +72,11 @@ export const RPC = {
 
 // ─── MCP shapes ─────────────────────────────────────────────────────────────
 
-/** One tool as `tools/list` returns it. `inputSchema` is JSON Schema, MCP's own spelling. */
-export interface McpTool {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  /**
-   * Out-of-band metadata. MCP reserves the `_meta` key for exactly this, and
-   * it is where the drawer a tool belongs to travels — a client that does not
-   * know the word ignores it and gets a flat tool list, which is the correct
-   * degradation.
-   */
-  _meta?: Record<string, unknown>;
-}
+/* `McpTool` and `McpToolResult` moved to `src/lib/agent/toolServer` at BIG-12, where the
+   tablet's in-page tool source shares them. Re-exported so every importer is unchanged. */
+import type { McpTool, McpToolResult } from '../src/lib/agent/toolServer/index';
 
-/**
- * What `tools/call` returns.
- *
- * `content` is what a model reads; `isError` is a *tool* failure rather than a
- * protocol one — the call was well-formed and the tool said no. The
- * distinction is load-bearing: a protocol error aborts the turn, while a tool
- * error is a sentence the model reads and recovers from, which is the whole
- * design of `ToolResult.summary`.
- */
-export interface McpToolResult {
-  content: { type: 'text'; text: string }[];
-  isError?: boolean;
-  /** The tool's own structured payload, echoed for a client that wants it unparsed. */
-  structuredContent?: unknown;
-  /**
-   * Out-of-band data, the same `_meta` key `McpTool` uses (item 13).
-   *
-   * This is where an **undo token** rides home: a complete copy of every
-   * entity the call touched, which Atlas files in its action log and hands
-   * back here when Shreekant taps Revert. It is deliberately not
-   * `structuredContent` — that field is the tool's own payload and goes to the
-   * model, and this must never cost a model a single token.
-   */
-  _meta?: Record<string, unknown>;
-}
+export type { McpTool, McpToolResult };
 
 export interface McpServerHandlers {
   /** Name and version, as the client displays them. */

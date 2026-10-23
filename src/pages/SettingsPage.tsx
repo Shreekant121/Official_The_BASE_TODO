@@ -61,7 +61,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Button, Card, FieldLabel, Icon, IconButton, Input, MiniNav, Tabs, Toast, Well,
+  BlurAcross, Bone, Card, FieldLabel, Icon, IconButton, Input, MiniNav, SoftButton, SoftIconButton, Tabs, Toast, Well, WhiteButton,
   useMedia, WIDE, type IconName,
 } from '../ui';
 import { RailMark } from '../components/BrandMark';
@@ -70,7 +70,15 @@ import { useTrashStore } from '../store/useTrashStore';
 import { useArchiveStore } from '../store/useArchiveStore';
 import StorageUsageSection from '../components/StorageUsageSection';
 import AppInfoSection from '../components/AppInfoSection';
+import SpeedSection from '../components/SpeedSection';
+import SoundSection from '../components/SoundSection';
+import AppearanceSection from '../components/AppearanceSection';
+import BirthdaySection from '../components/BirthdaySection';
+import LandingSection from '../components/LandingSection';
+import ShortcutsSection from '../components/ShortcutsSection';
 import ApiKeysCard from '../components/ApiKeysCard';
+import AtlasSettingsSection from '../components/AtlasSettingsSection';
+import GoogleDiagnosticsCard from '../components/GoogleDiagnosticsCard';
 import { useAccountAccess } from '../lib/accountAccess';
 import BrownNoiseSection from '../components/BrownNoiseSection';
 import { useAuth } from '../contexts/AuthContext';
@@ -88,14 +96,20 @@ export interface ToastPayload {
 
 /* `trash` is a door rather than a panel — picking it navigates. See the note
    at the top of this file. */
-type TabId = 'connections' | 'noise' | 'storage' | 'app' | 'archive' | 'trash' | 'admin';
+type TabId = 'connections' | 'atlas' | 'noise' | 'storage' | 'app' | 'archive' | 'trash' | 'admin';
+/** The sections in their tabs' order, for which way a switch slides. */
+const SECTION_ORDER: TabId[] = ['connections', 'atlas', 'noise', 'storage', 'app'];
 type TestState = 'idle' | 'testing' | 'ok' | 'fail';
 
-/** Maps a diagnostic step's status onto a glyph and the token that carries it. */
+/**
+ * Maps a diagnostic step's status onto a glyph and the token that carries it.
+ * 29-1P2c2: a passed check is lime (done, ticked), a failed one coral, a
+ * warning grey with its triangle; emerald is only for what is running now.
+ */
 const STEP_LOOK: Record<DiagnosticStep['status'], { icon: IconName; color: string }> = {
-  ok:   { icon: 'check',          color: 'var(--accent)' },
+  ok:   { icon: 'check',          color: 'var(--job-lime)' },
   fail: { icon: 'x',              color: 'var(--status-overrun)' },
-  warn: { icon: 'triangle-alert', color: 'var(--status-review)' },
+  warn: { icon: 'triangle-alert', color: 'var(--status-warn)' },
   skip: { icon: 'circle-dot',     color: 'var(--fg-4)' },
 };
 
@@ -172,7 +186,9 @@ function ConnectionsPanel({ onToast }: { onToast: (t: ToastPayload) => void }) {
   };
 
   const live = test === 'ok';
-  const dot = live ? 'var(--accent)' : test === 'fail' ? 'var(--status-overrun)' : 'var(--status-review)';
+  /* Live stays emerald (the header tile says why); not connected is a quiet
+     warning, grey, and rejected is coral (29-1P2c2). */
+  const dot = live ? 'var(--accent)' : test === 'fail' ? 'var(--status-overrun)' : 'var(--status-warn)';
   const status = live ? 'Key verified' : test === 'fail' ? 'Key rejected' : 'Not connected';
   const dirty = apiKey !== baseline.apiKey || domain !== baseline.domain;
 
@@ -209,8 +225,8 @@ function ConnectionsPanel({ onToast }: { onToast: (t: ToastPayload) => void }) {
             <span
               style={{
                 width: 7, height: 7, borderRadius: '50%', background: dot,
+                /* Steady, not pulsing — see StatusPill.tsx for why no status dot loops. */
                 boxShadow: live ? 'var(--glow-accent-sm)' : 'none',
-                animation: live ? 'var(--kf-pulse) 2.4s var(--ease-glass) infinite' : 'none',
               }}
             />
             <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>{status}</span>
@@ -218,11 +234,14 @@ function ConnectionsPanel({ onToast }: { onToast: (t: ToastPayload) => void }) {
         </div>
 
         {!loaded ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--fg-3)', font: 'var(--type-caption)' }}>
-            <span style={{ display: 'flex', animation: 'ag-spin 900ms linear infinite' }}>
-              <Icon name="loader-2" size={14} />
-            </span>
-            Loading…
+          /* 29-1P14d2, idea 116: the two fields on their way, not a spinner. */
+          <div role="status" aria-busy="true" aria-label="Loading the SimpleURL settings" style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+            {[0, 1].map((i) => (
+              <div key={i} style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                <Bone width={i === 0 ? 64 : 96} height={10} delay={i * 90} />
+                <Bone height={40} radius="var(--r-md)" delay={i * 90} />
+              </div>
+            ))}
           </div>
         ) : (
           <>
@@ -268,15 +287,14 @@ function ConnectionsPanel({ onToast }: { onToast: (t: ToastPayload) => void }) {
                     </IconButton>
                   </span>
                 </span>
-                <Button
-                  variant="glass"
-                  loading={test === 'testing'}
-                  disabled={!apiKey.trim()}
+                <SoftButton
+                  disabled={!apiKey.trim() || test === 'testing'}
+                  aria-busy={test === 'testing' || undefined}
                   onClick={handleTest}
                   style={{ flex: '0 0 auto' }}
                 >
-                  Test
-                </Button>
+                  {test === 'testing' ? 'Testing…' : 'Test'}
+                </SoftButton>
               </div>
 
               {/*
@@ -290,7 +308,7 @@ function ConnectionsPanel({ onToast }: { onToast: (t: ToastPayload) => void }) {
                   <span
                     style={{
                       font: 'var(--type-label)',
-                      color: test === 'ok' ? 'var(--accent)' : 'var(--status-overrun)',
+                      color: test === 'ok' ? 'var(--job-lime-text)' : 'var(--status-overrun)',
                     }}
                   >
                     {test === 'ok' ? 'All checks passed — you’re connected.' : 'Something went wrong — see below.'}
@@ -346,15 +364,16 @@ function ConnectionsPanel({ onToast }: { onToast: (t: ToastPayload) => void }) {
                     ? 'Unsaved changes — press Save.'
                     : 'Nothing to save yet.'}
               </span>
-              <Button
-                variant="gel"
-                loading={saving}
-                disabled={!dirty || saved}
-                iconLeft={<Icon name="check" size={16} />}
+              {/* The card's confirm: solid white (29-1P2), not gel — gel is
+                  a screen's one main action, never a form's Save. */}
+              <WhiteButton
+                disabled={!dirty || saved || saving}
+                aria-busy={saving || undefined}
+                icon={<Icon name="check" size={16} />}
                 onClick={handleSave}
               >
-                {saved ? 'Saved' : 'Save'}
-              </Button>
+                {saved ? 'Saved' : saving ? 'Saving…' : 'Save'}
+              </WhiteButton>
             </div>
           </>
         )}
@@ -387,6 +406,7 @@ export default function SettingsPage() {
 
   const subtitle: Record<TabId, string> = {
     connections: 'Integrations and connected services',
+    atlas: 'Which models answer, and how Atlas sounds',
     storage: 'What the account record holds',
     noise: 'The sound that plays while you work',
     app: 'This copy of BASE, and how it reaches you',
@@ -411,7 +431,7 @@ export default function SettingsPage() {
               padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
             }}
           >
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -426,9 +446,9 @@ export default function SettingsPage() {
           <div style={{ width: '100%', maxWidth: 880, margin: '0 auto', display: 'grid', gap: 'var(--sp-8)' }}>
 
             <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
-              <IconButton label="Back" onClick={() => navigate(-1)}>
+              <SoftIconButton label="Back" onClick={() => navigate(-1)}>
                 <Icon name="arrow-left" size={18} />
-              </IconButton>
+              </SoftIconButton>
               <span
                 aria-hidden="true"
                 style={{
@@ -441,6 +461,8 @@ export default function SettingsPage() {
               </span>
               <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
                 <h1
+                  /* 29-1P5c, idea 57: shrinks and fades as the page scrolls. */
+                  className="ag-tuck-title"
                   style={{
                     font: 'var(--type-title)', fontSize: 'var(--text-xl)',
                     letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)',
@@ -465,6 +487,8 @@ export default function SettingsPage() {
               }}
               tabs={[
                 { value: 'connections', label: 'Connections' },
+                /* OPT-8 — the model defaults and the voice, moved off the chat. */
+                { value: 'atlas', label: 'Atlas' },
                 { value: 'noise', label: 'Brown noise' },
                 { value: 'storage', label: 'Storage' },
                 { value: 'app', label: 'App' },
@@ -478,19 +502,26 @@ export default function SettingsPage() {
               ]}
             />
 
-            {/* Keyed so a tab switch replays the panes' condense entrance. */}
-            <div key={tab}>
+            {/* 29-1P5c, idea 60: a tab switch blurs the old section away and the
+                new one into focus, sliding the way you went. */}
+            <BlurAcross value={tab} index={SECTION_ORDER.indexOf(tab)}>
               {tab === 'connections' && (
                 <>
                   <ConnectionsPanel onToast={setToast} />
-                  {/* ITEM 13G, second pass — the Gemini keys, moved off
-                      `/chat`'s header at Shreekant's request. Under SimpleURL
-                      because that is where he asked for it and because the two
-                      are the same kind of thing: a credential this app spends
-                      on your behalf. */}
+                  {/* ITEM 13G, second pass — the AI keys, moved off `/chat`'s
+                      header at Shreekant's request; Gemini, Claude and ChatGPT
+                      since BIG-1. Under SimpleURL because that is where he
+                      asked for it and because the two are the same kind of
+                      thing: a credential this app spends on your behalf. */}
                   <ApiKeysCard />
+                  {/* OPT-8 — moved from the foot of Notifications, his words:
+                      *"Take diagnostics in the notification page and put it
+                      into settings page."* It is the Google connection's log,
+                      so it sits with the connections. */}
+                  <div style={{ marginTop: 'var(--sp-7)' }}><GoogleDiagnosticsCard /></div>
                 </>
               )}
+              {tab === 'atlas' && <AtlasSettingsSection />}
               {/* Its own section rather than rows under App, because every
                   control in it is an audition: you pick a cutoff by dragging
                   until it sounds right, which needs the sound running. */}
@@ -501,7 +532,18 @@ export default function SettingsPage() {
                   can be pushed to. Kept apart from Connections because none of
                   it is a third party: it is the app describing itself. */}
               {tab === 'app' && <AppInfoSection onToast={setToast} />}
-            </div>
+              {/* BIG-6 — which screen BASE opens on, until BIG-9 redraws Settings. */}
+              {tab === 'app' && <div style={{ marginTop: 'var(--sp-7)' }}><LandingSection /></div>}
+              {/* 29-1P1 — the dark tint (idea 63), above Speed: it follows him to
+                  the other device, and Speed's switches do not. */}
+              {tab === 'app' && <div style={{ marginTop: 'var(--sp-7)' }}><AppearanceSection /></div>}
+              {/* 29-1P14b — his birthday, for the Dashboard's greeting (idea 109); both devices, like the tint. */}
+              {tab === 'app' && <div style={{ marginTop: 'var(--sp-7)' }}><BirthdaySection /></div>}
+              {/* OPT-11 — the keyboard button that was on Home's header. */}
+              {tab === 'app' && <div style={{ marginTop: 'var(--sp-7)' }}><SoundSection /></div>}
+              {tab === 'app' && <div style={{ marginTop: 'var(--sp-7)' }}><ShortcutsSection /></div>}
+              {tab === 'app' && <div style={{ marginTop: 'var(--sp-7)' }}><SpeedSection /></div>}
+            </BlurAcross>
           </div>
         </div>
       </div>
@@ -536,7 +578,7 @@ export default function SettingsPage() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}

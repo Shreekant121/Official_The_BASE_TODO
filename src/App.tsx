@@ -1,11 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useMatch, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, Suspense, Activity, type ReactNode } from 'react';
+import { preloadable, type Preloadable } from './lib/preloadable';
+import ScreenTransitions from './components/ScreenTransitions';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ShortcutsProvider, useShortcuts } from './contexts/ShortcutsContext';
+import { GO_KEYS } from './lib/shortcutBindings';
 import { useFirestoreSync } from './lib/firestoreSync';
 import { useShareLiveRun } from './lib/useShareLiveRun';
 import { useTrashSync } from './lib/trashSync';
 import { useArchiveSync } from './lib/archiveSync';
+import { useStorySync } from './lib/taskStorySync';
+import { useDashboardSync } from './lib/dashboardSync';
+import { useDarkTintSync } from './lib/darkTintSync';
+import { useBreakIdeaSync } from './lib/breakIdeaSync';
+import { useBirthdaySync } from './lib/birthdaySync';
+import { useEventSync } from './lib/eventSync';
+import { useCoverSync } from './lib/covers/useCoverSync';
+import { useTodayHoursMirror } from './lib/dashboard/todayHours';
+import { useScreenLight } from './lib/useScreenLight';
+import { readLanding } from './lib/landingPref';
 import { useDeletionCleanup } from './lib/deletionCleanup';
 import { isDevBypassUid } from './lib/devAuth';
 import { scheduleReconcile } from './lib/notificationSync';
@@ -13,38 +26,118 @@ import { useCalendarSyncQueue } from './lib/calendarSyncQueue';
 import { useStore } from './store/useStore';
 import { UNBUILT_ENTRIES } from './components/navModel';
 import Home from './components/Home';
-import TaskSelection from './components/TaskSelection';
-import SetDeadlines from './components/SetDeadlines';
-import FocusMode from './components/FocusMode';
-import LoginPage from './pages/LoginPage';
-import ChatPage from './pages/ChatPage';
-import ProjectView from './pages/ProjectView';
-import NeedsAttention from './pages/NeedsAttention';
-import NotificationsPage from './pages/NotificationsPage';
-import SettingsPage from './pages/SettingsPage';
-import OAuthCallbackPage from './pages/OAuthCallbackPage';
-import SharePage from './pages/SharePage';
-import ComingSoon from './pages/ComingSoon';
-import AtlasHostPage from './pages/AtlasHostPage';
-import TrashPage from './pages/TrashPage';
-import ArchivePage from './pages/ArchivePage';
-import CatalogPage from './pages/CatalogPage';
-import SkillsPage from './pages/SkillsPage';
-import LogPage from './pages/LogPage';
-import AdminPage from './pages/AdminPage';
-import StartFromPushPage from './pages/StartFromPushPage';
 import { refreshPushSubscription } from './lib/push';
 import FloatingNav from './components/FloatingNav';
 import FocusRunHost from './components/FocusRunHost';
 import FocusRunPill from './components/FocusRunPill';
+import { FocusAwayHost } from './components/FocusMoments';
+import { FocusBreakHost } from './components/FocusBreak';
 import CommandPaletteHost from './components/CommandPaletteHost';
+import UndoHost from './components/UndoHost';
+import PeekHost from './components/PeekHost';
+import TickCheerHost from './components/TickCheerHost';
+import MomentsHost from './components/MomentsHost';
+import EventSheetHost from './components/events/EventSheetHost';
 import SyncStatusBanner from './components/SyncStatusBanner';
 import ReminderSyncBanner from './components/ReminderSyncBanner';
 import DeadlineShiftBanner from './components/DeadlineShiftBanner';
 import ArchiveToast from './components/ArchiveToast';
 import UpdateBanner from './components/UpdateBanner';
-import { GlassLens, TravellingTrack, V3Scope } from './ui';
+import OfflinePill from './components/OfflinePill';
+import SpeedMeter from './components/SpeedMeter';
+import { FocusGlide, NoticeStack, TravellingTrack, V3Scope } from './ui';
 import { Z } from './lib/zLayers';
+
+/*
+ * Every screen but Home arrives when it is first opened, not before (2026-09-28).
+ * The app used to be one 2.2 MB script, Atlas's whole agent included, all of it
+ * parsed before the first frame of Home on a phone that may never open the chat.
+ * Home stays eager because it is where every cold start lands. After the first
+ * visit the service worker has every chunk on disk (`scripts/build-sw.mjs` walks
+ * `dist/`), so a later open is a read from the device, not the network.
+ */
+const TaskSelection = preloadable(() => import('./components/TaskSelection'));
+const SetDeadlines = preloadable(() => import('./components/SetDeadlines'));
+const FocusMode = preloadable(() => import('./components/FocusMode'));
+const LoginPage = preloadable(() => import('./pages/LoginPage'));
+const ChatPage = preloadable(() => import('./pages/ChatPage'));
+const ProjectView = preloadable(() => import('./pages/ProjectView'));
+const NeedsAttention = preloadable(() => import('./pages/NeedsAttention'));
+const NotificationsPage = preloadable(() => import('./pages/NotificationsPage'));
+const SettingsPage = preloadable(() => import('./pages/SettingsPage'));
+const OAuthCallbackPage = preloadable(() => import('./pages/OAuthCallbackPage'));
+const SharePage = preloadable(() => import('./pages/SharePage'));
+const ComingSoon = preloadable(() => import('./pages/ComingSoon'));
+const AtlasHostPage = preloadable(() => import('./pages/AtlasHostPage'));
+const TrashPage = preloadable(() => import('./pages/TrashPage'));
+const ArchivePage = preloadable(() => import('./pages/ArchivePage'));
+const CatalogPage = preloadable(() => import('./pages/CatalogPage'));
+const SkillsPage = preloadable(() => import('./pages/SkillsPage'));
+const LogPage = preloadable(() => import('./pages/LogPage'));
+const AdminPage = preloadable(() => import('./pages/AdminPage'));
+const StartFromPushPage = preloadable(() => import('./pages/StartFromPushPage'));
+const DashboardPage = preloadable(() => import('./pages/DashboardPage'));
+const CalendarPage = preloadable(() => import('./pages/CalendarPage'));
+const DesignSystemPage = preloadable(() => import('./pages/DesignSystemPage'));
+
+/*
+ * Fetching a screen's code before it opens (2026-10-07, his ask: a screen
+ * "loads first"). `ScreenTransitions` waits for this before it moves to a
+ * screen, so the old screen stays up instead of an empty one; and once BASE is
+ * idle the nav's screens are fetched quietly, so a first visit is usually
+ * instant. Fetching is all it does: nothing is drawn until it is opened, so a
+ * screen still costs nothing at startup (CLAUDE.md "Performance", rule 7).
+ */
+const ROUTE_SCREENS: Array<[string, Pick<Preloadable<object>, 'preload'>]> = [
+  ['/dashboard', DashboardPage],
+  ['/calendar', CalendarPage],
+  ['/chat', ChatPage],
+  ['/select', TaskSelection],
+  ['/deadlines', SetDeadlines],
+  ['/focus', FocusMode],
+  ['/scoring', NeedsAttention],
+  ['/notifications', NotificationsPage],
+  ['/settings', SettingsPage],
+  ['/project/', ProjectView],
+  ['/start/', StartFromPushPage],
+  ['/trash', TrashPage],
+  ['/archive', ArchivePage],
+  ['/catalog', CatalogPage],
+  ['/skills', SkillsPage],
+  ['/log', LogPage],
+  ['/admin', AdminPage],
+  ['/atlas-host', AtlasHostPage],
+  ['/design', DesignSystemPage],
+  ['/login', LoginPage],
+  ['/oauth/callback', OAuthCallbackPage],
+  ['/s/', SharePage],
+  ['/inbox', ComingSoon],
+  ['/contacts', ComingSoon],
+];
+
+function preloadRoute(pathname: string): Promise<unknown> {
+  const hit = ROUTE_SCREENS.find(([path]) => (path.endsWith('/') ? pathname.startsWith(path) : pathname === path));
+  return hit ? hit[1].preload() : Promise.resolve();
+}
+
+/* The seven nav screens and a project board: what a tap is most likely to open next. */
+const WARM_SCREENS = [DashboardPage, ChatPage, TaskSelection, NeedsAttention, NotificationsPage, SettingsPage, ProjectView];
+
+function useWarmScreens(): void {
+  useEffect(() => {
+    let cancelled = false;
+    const idle = (fn: () => void) =>
+      typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(fn, { timeout: 4000 }) : window.setTimeout(fn, 1500);
+    /* One at a time, each in its own idle moment, so a slow device is never
+       made to parse seven screens in one go. */
+    const next = (i: number) => {
+      if (cancelled || i >= WARM_SCREENS.length) return;
+      idle(() => { void WARM_SCREENS[i].preload().finally(() => next(i + 1)); });
+    };
+    const timer = window.setTimeout(() => next(0), 2500);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, []);
+}
 
 /**
  * The boot screen, shown on every route while auth resolves — and the last
@@ -87,7 +180,7 @@ import { Z } from './lib/zLayers';
 function SplashScreen() {
   return (
     <div
-      className="ag-page ag-page--focal flex items-center justify-center min-h-screen"
+      className="ag-page ag-page--focal ag-page--brand flex items-center justify-center min-h-screen"
       role="status"
       aria-busy="true"
     >
@@ -143,6 +236,53 @@ function AppScope({ children }: { children: React.ReactNode }) {
   return <V3Scope>{children}</V3Scope>;
 }
 
+/*
+ * THE NAV SCREENS ARE KEPT, NOT REBUILT (2026-09-28, his call: "keep it ready").
+ * Switching tabs used to tear the old screen down and build the new one from
+ * nothing, which on a phone-speed CPU froze for 0.5-1.2s per tap (New Session,
+ * Scoring, and the way back to Home). Each of these six is built the first time
+ * it is visited and after that only hidden and shown, through React's
+ * `<Activity>`: a hidden screen keeps its DOM and its state, runs no effects
+ * (so no listeners, shortcuts or timers of its own), and re-runs them when it
+ * is shown — the same double-mount every effect here already survives under
+ * StrictMode.
+ *
+ * What a kept screen remembers is only its own local state: a search typed,
+ * a filter, an open form. Everything that matters — the queue, the backlog —
+ * is in the store, so a kept screen can never show stale data. Their routes
+ * stay in `<Routes>` below with an empty element, so the login redirect and
+ * the catch-all behave exactly as before.
+ */
+const KEPT_SCREENS: { path: string; render: () => ReactNode }[] = [
+  /* BIG-6 — the Dashboard is a nav screen, so it is kept like the rest. */
+  { path: '/dashboard', render: () => <DashboardPage /> },
+  { path: '/', render: () => <Home /> },
+  /* 29-2e1 — the Calendar, a nav screen (his call, 2026-10-21). */
+  { path: '/calendar', render: () => <CalendarPage /> },
+  { path: '/chat', render: () => <ChatPage /> },
+  { path: '/select', render: () => <TaskSelection /> },
+  { path: '/scoring', render: () => <NeedsAttention /> },
+  { path: '/notifications', render: () => <NotificationsPage /> },
+  { path: '/settings', render: () => <SettingsPage /> },
+];
+const KEPT_PATHS = new Set(KEPT_SCREENS.map((k) => k.path));
+
+function KeptScreens() {
+  const { pathname } = useLocation();
+  const [visited, setVisited] = useState<string[]>([]);
+  /* Derived during render, React's own pattern for "remember what props were". */
+  if (KEPT_PATHS.has(pathname) && !visited.includes(pathname)) setVisited([...visited, pathname]);
+  return (
+    <>
+      {KEPT_SCREENS.filter((k) => visited.includes(k.path)).map((k) => (
+        <Activity key={k.path} mode={k.path === pathname ? 'visible' : 'hidden'}>
+          <Suspense fallback={<div className="ag-page min-h-screen" />}>{k.render()}</Suspense>
+        </Activity>
+      ))}
+    </>
+  );
+}
+
 function AppRoutes() {
   const { user, loading, getCalendarAccessToken, hasCalendarAccess } = useAuth();
   const onShare = useMatch('/s/:shareId') !== null;
@@ -164,6 +304,28 @@ function AppRoutes() {
   useTrashSync(syncUid);
   // BUILD-11 — the Archive, in its own document too, and never swept.
   useArchiveSync(syncUid);
+  // 29-1P9c — each task's story, one small document per task (lib/taskStorySync.ts).
+  useStorySync(syncUid);
+  // BIG-6 — the Dashboard's layout, in its own document for the same reason.
+  useDashboardSync(syncUid);
+  // 29-1P1 — the dark tint (idea 63) is the same on both devices, in its own
+  // small document too (lib/darkTintSync.ts says why not data/main).
+  useDarkTintSync(syncUid);
+  useBreakIdeaSync(syncUid);
+  // 29-1P14b — his birthday, for the Dashboard's greeting (idea 109), the same way.
+  useBirthdaySync(syncUid);
+  // 29-2a — events and their countdowns, in their own document (lib/eventSync.ts).
+  useEventSync(syncUid, getCalendarAccessToken);
+  // Cover pictures in their own documents, out of `data/main`'s 1 MB, and the
+  // ones nothing uses any more deleted at once (lib/covers/).
+  useCoverSync(syncUid);
+  // BIG-6, 29-1b — today's hours and the work session are one number; this
+  // keeps `sessionDuration` on today's answer (lib/dashboard/todayHours.ts).
+  useTodayHoursMirror();
+  // 29-1P5a — each screen's light, and the Dashboard's hour sky, on <html>.
+  useScreenLight();
+  // Screen code fetched ahead of a tap, once BASE is idle (ScreenTransitions).
+  useWarmScreens();
   // Registers the outside-the-store half of a delete: cancelling the public
   // share document and the Google Calendar deadline reminder.
   useDeletionCleanup(syncUid, getCalendarAccessToken);
@@ -190,10 +352,12 @@ function AppRoutes() {
   // press `g` then a letter. Kept separate from page-scoped bare-key
   // shortcuts (e.g. `n`/`l`) via the `leader: 'g'` flag so they never collide.
   useShortcuts('global-nav', user ? [
-    { key: 'h', leader: 'g', label: 'Go to Home', handler: () => navigate('/') },
-    { key: 'c', leader: 'g', label: 'Go to Atlas', handler: () => navigate('/chat') },
-    { key: 's', leader: 'g', label: 'Go to Needs Attention', handler: () => navigate('/scoring') },
-    { key: 'n', leader: 'g', label: 'Go to Notifications', handler: () => navigate('/notifications') },
+    { key: GO_KEYS.dashboard, leader: 'g', label: 'Go to Dashboard', handler: () => navigate('/dashboard') },
+    { key: GO_KEYS.home, leader: 'g', label: 'Go to Home', handler: () => navigate('/') },
+    { key: GO_KEYS.calendar, leader: 'g', label: 'Go to Calendar', handler: () => navigate('/calendar') },
+    { key: GO_KEYS.atlas, leader: 'g', label: 'Go to Atlas', handler: () => navigate('/chat') },
+    { key: GO_KEYS.score, leader: 'g', label: 'Go to Needs Attention', handler: () => navigate('/scoring') },
+    { key: GO_KEYS.alerts, leader: 'g', label: 'Go to Notifications', handler: () => navigate('/notifications') },
   ] : []);
 
   useEffect(() => {
@@ -237,6 +401,10 @@ function AppRoutes() {
 
   return (
     <AppScope>
+      {/* The empty page backdrop, not the splash: a screen's chunk is on disk
+          after the first visit, so this is up for a frame or two, and a
+          backdrop with nothing on it reads as the next screen arriving. */}
+      <Suspense fallback={<div className="ag-page min-h-screen" />}>
       <Routes>
         {/* Public, unauthenticated read-only shared view — the target of every
             SimpleURL short link. Must stay outside ProtectedRoute so anyone
@@ -244,29 +412,37 @@ function AppRoutes() {
         <Route path="/s/:shareId" element={<SharePage />} />
         {/* TEMP-SPLASH-PREVIEW - remove before commit */}
         <Route path="/__splash" element={<SplashScreen />} />
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+        {/* Signing in lands where BASE opens (BIG-6): the Dashboard, unless
+            this device was set to open on Home. */}
+        <Route path="/login" element={user ? <Navigate to={readLanding() === 'dashboard' ? '/dashboard' : '/'} replace /> : <LoginPage />} />
         <Route
           path="/"
           element={
-            <ProtectedRoute>
-              <Home />
-            </ProtectedRoute>
+            <ProtectedRoute>{null}</ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>{null}</ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calendar"
+          element={
+            <ProtectedRoute>{null}</ProtectedRoute>
           }
         />
         <Route
           path="/chat"
           element={
-            <ProtectedRoute>
-              <ChatPage />
-            </ProtectedRoute>
+            <ProtectedRoute>{null}</ProtectedRoute>
           }
         />
         <Route
           path="/select"
           element={
-            <ProtectedRoute>
-              <TaskSelection />
-            </ProtectedRoute>
+            <ProtectedRoute>{null}</ProtectedRoute>
           }
         />
         <Route
@@ -306,25 +482,19 @@ function AppRoutes() {
         <Route
           path="/scoring"
           element={
-            <ProtectedRoute>
-              <NeedsAttention />
-            </ProtectedRoute>
+            <ProtectedRoute>{null}</ProtectedRoute>
           }
         />
         <Route
           path="/notifications"
           element={
-            <ProtectedRoute>
-              <NotificationsPage />
-            </ProtectedRoute>
+            <ProtectedRoute>{null}</ProtectedRoute>
           }
         />
         <Route
           path="/settings"
           element={
-            <ProtectedRoute>
-              <SettingsPage />
-            </ProtectedRoute>
+            <ProtectedRoute>{null}</ProtectedRoute>
           }
         />
         {/* Google's redirect target after the Calendar consent screen. The path
@@ -336,6 +506,17 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <OAuthCallbackPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* 29-1P1 (BIG-15) — the design system, every colour and button live.
+            His call: a hidden address, typed, with nothing in the app pointing
+            at it. Every 29-1P session adds its pieces here as they land. */}
+        <Route
+          path="/design"
+          element={
+            <ProtectedRoute>
+              <DesignSystemPage />
             </ProtectedRoute>
           }
         />
@@ -443,6 +624,9 @@ function AppRoutes() {
         ))}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
+      {user && <KeptScreens />}
+      <SpeedMeter />
       {user && <FloatingNav />}
       {/*
         BUILD-1 — the focus session, once it stopped belonging to one screen.
@@ -456,12 +640,32 @@ function AppRoutes() {
         session that survives a route change cannot live in the thing the route
         change unmounts.
       */}
+      {/* 29-1P1, idea 70 — one keyboard focus ring for the whole app, gliding
+          from control to control. Draws nothing until a key is pressed. */}
+      <FocusGlide />
       {user && <FocusRunHost />}
       {user && <FocusRunPill />}
+      {/* 29-1P10b, idea 101: "You were away 4 min" — on whatever screen he
+          comes back to, for the pill's reason. */}
+      {user && <FocusAwayHost />}
+      {user && <FocusBreakHost />}
       {/* BUILD-9 — Ctrl+K, and the sheet a task found there opens in. Here for
           FocusRunHost's reason: it answers on every screen, so it cannot live in
           one. Never on the share view, which is a client's, not his. */}
       {user && !onShare && <CommandPaletteHost />}
+      {/* 29-1P4a — his undo: the toast, Ctrl+Z beside Ctrl+K, and two fingers
+          on the tablet. Every screen, for the palette's reason; never the
+          share view. */}
+      {user && !onShare && <UndoHost />}
+      {/* 29-1P6b — hold a task in a list that is not sortable to peek at it. */}
+      {user && !onShare && <PeekHost />}
+      {/* 29-1P4b — a task's tick floats a gold +1 and builds "3 in a row!". */}
+      {user && !onShare && <TickCheerHost />}
+      {/* 29-1P14a — confetti when today's hours are met (a perfect day). */}
+      {user && !onShare && <MomentsHost />}
+      {/* 29-2a — the event sheet and the archive of passed events: opened from
+          the Countdown widget, Capture and Ctrl+K, so on every screen. */}
+      {user && !onShare && <EventSheetHost />}
       {/*
         The four app-level banners share ONE fixed column (UI-18; item 18
         added the third, which reports what the deadline rule moved, and APP-3
@@ -477,6 +681,10 @@ function AppRoutes() {
         `Z.panel` is the rung `zLayers.ts` reserves for exactly this — "app
         level sync banners, and the modals that have to clear them", because
         a banner reporting broken sync must stay readable over an open modal.
+
+        29-1P14d1: the four are a pile now (idea 26, `NoticeStack`) — the first
+        in front, at most three, fanned out by a point or a tap — and the
+        offline pill (idea 114) sits above it, outside the pile.
       */}
       {user && (
         <div
@@ -489,13 +697,17 @@ function AppRoutes() {
             top: 'calc(var(--sp-5) + var(--safe-t))',
           }}
         >
-          <SyncStatusBanner />
-          <ReminderSyncBanner />
-          <DeadlineShiftBanner />
-          {/* Last, deliberately. The three above it are about something that
-              just happened to your data; this one is about the app itself and
-              is never urgent — it can wait its turn under them. */}
-          <UpdateBanner />
+          <OfflinePill />
+          <NoticeStack max={3} gap={12}>
+            <SyncStatusBanner />
+            <ReminderSyncBanner />
+            <DeadlineShiftBanner />
+            {/* Last, deliberately. The three above it are about something that
+                just happened to your data; this one is about the app itself and
+                is never urgent — it can wait its turn under them, and is the
+                one left waiting when all four are up. */}
+            <UpdateBanner />
+          </NoticeStack>
         </div>
       )}
       {user && <ArchiveToast />}
@@ -503,18 +715,33 @@ function AppRoutes() {
   );
 }
 
+/**
+ * BASE opens on the Dashboard (BIG-6, his call 2026-09-30) — decided once,
+ * before the router reads the address, so opening the app at `/` never builds
+ * Home first and never flashes it. Only a cold open at `/` moves: a tap on
+ * Home later is a tap on Home. Settings → App sets this device back to Home
+ * (`lib/landingPref.ts`), and the screenshot harness does, so Home's
+ * baselines still photograph Home.
+ */
+function landOnce(): true {
+  if (typeof window !== 'undefined' && window.location.pathname === '/' && readLanding() === 'dashboard') {
+    window.history.replaceState(window.history.state, '', `/dashboard${window.location.search}${window.location.hash}`);
+  }
+  return true;
+}
+
 export default function App() {
+  useState(landOnce);
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ShortcutsProvider>
-          {/* V3's `#ag-lens` filter (V3-1). Draws nothing and bends nothing
-              outside a `<V3Scope>`; mounted once here so any screen that
-              switches to V3 finds it. */}
-          <GlassLens />
-          <AppRoutes />
-        </ShortcutsProvider>
-      </AuthProvider>
+      {/* Every change of screen animates, and waits for the new screen's code. */}
+      <ScreenTransitions preloadRoute={preloadRoute}>
+        <AuthProvider>
+          <ShortcutsProvider>
+            <AppRoutes />
+          </ShortcutsProvider>
+        </AuthProvider>
+      </ScreenTransitions>
     </BrowserRouter>
   );
 }

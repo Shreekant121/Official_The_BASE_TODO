@@ -38,13 +38,10 @@
  *      screen prints the date every time it prints a number from that file.
  *      Nothing measures these at runtime and nothing pretends to.
  *   2. **Controls no session had built** — the spend ceilings (item 13) and
- *      the Gemini block (DESIGN.md §3.2). Shreekant's call was to draw them
- *      rather than leave gaps, so later items decorate this screen instead of
- *      rebuilding it. Both are real now: the ceilings since item 13A, and the
- *      block since BUILD-12, turned round into Downshift. **No value is
- *      invented for any of them** — an unmetered spend reads "—", not a
- *      plausible number, and a switch the laptop did not report is drawn
- *      off and inert rather than guessed.
+ *      the Gemini block (DESIGN.md §3.2). Both were built (13A, BUILD-12's
+ *      Downshift) and both were removed with the AI spending (OPT-4,
+ *      2026-10-06), his call. The panel that held Downshift keeps its rows
+ *      about what leaves the laptop.
  *   3. **What the mockup draws that this machine cannot know.** The laptop's
  *      charger/battery state and Ollama's version number are in
  *      `atlas-host.html` and are not in `/health`; the browser's own battery
@@ -65,30 +62,30 @@
  * of address, not a rebuild"*. The host taken out of `baseUrl` is the same
  * identity, is reported rather than assumed, and follows Atlas when it moves.
  *
- * The `ProgressRing` sits inside a `Card`, whose `backdrop-filter` crops the
- * glow its `.prompt.md` asks for room around. Knowingly: the mockup does the
- * same, and so do the app's four existing rings — a lone exception here would
- * read as a mistake rather than as care.
+ * The share of the model on the graphics card was a ring until 29-1P14d2:
+ * every progress ring left in BASE is replaced by its number (his call), so
+ * it reads "100%" in lime when it all fits and in the warning grey when not.
+ *
+ * WAITING (29-1P14d2, idea 116)
+ * -----------------------------
+ * Until the first probe lands the status is `unknown`, and this screen used
+ * to draw it as asleep — the lid-shut panel and "the laptop is not
+ * answering" for a beat before finding it awake. It waits in the shape of
+ * what is coming now: the pill, the line and the four tiles as placeholders,
+ * model cards on their way, and the real ones fade in over them.
  */
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Button, Card, Icon, IconButton, MetaKicker, MiniNav, ProgressRing, Slider,
-  StatusPill, Switch, Toast, Well, useMedia, WIDE, type IconName, type StatusName,
+  Bone, Button, Card, Icon, IconButton, MetaKicker, MiniNav, SkeletonRows, SoftButton,
+  StatusPill, Toast, useArrival, Well, useMedia, WIDE, type IconName, type StatusName,
 } from '../ui';
 import { RailMark } from '../components/BrandMark';
 import { useNavModel } from '../components/navModel';
 import { useAtlasStore } from '../lib/atlas/atlasStore';
+import { mcpReport, PROBE_TIMEOUT_MS, type AtlasHealth } from '../lib/atlas/client';
 import {
-  fetchCeilings,
-  mcpReport,
-  PROBE_TIMEOUT_MS,
-  saveCeilings,
-  type AtlasCeilings,
-  type AtlasHealth,
-} from '../lib/atlas/client';
-import {
-  BENCHMARK_MACHINE, READINGS_TAKEN_ON, UNVERIFIED, readingFor, type HostReading,
+  READINGS_TAKEN_ON, readingFor, type HostReading,
 } from '../lib/atlas/hostReadings';
 import { selectEffectiveModel, useModelStore } from '../lib/agent/modelStore';
 import type { ModelOption } from '../lib/agent/models';
@@ -100,8 +97,8 @@ import { Z } from '../lib/zLayers';
 /** The source's own column. Wider than Settings' 880 — the model rows need it. */
 const COLUMN_PX = 1000;
 
-/** Emerald that stays legible as a glyph on `--glass-tint-accent`. ChatPage's literal. */
-const MARK_INK = 'oklch(0.93 0.07 162)';
+/** Atlas's violet, legible as a glyph on `--glass-tint-violet` (29-1P2c3; it was emerald). */
+const MARK_INK = 'var(--job-violet-text)';
 
 interface ToastPayload {
   icon: IconName;
@@ -117,19 +114,16 @@ interface ToastPayload {
  *
  * The mockup's own rule, kept: *"Never two — the moment a card carries two
  * decisions it becomes a control panel, which is what this screen is trying
- * not to be."* `notBuilt` is the second thing this screen needed that the
- * mockup did not: a panel whose controls are drawn and inert, saying which
- * session makes them real.
+ * not to be."*
  */
 function Panel({
-  kicker, title, hint, right, tone, notBuilt, children,
+  kicker, title, hint, right, tone, children,
 }: {
   kicker: string;
   title: string;
   hint?: string;
   right?: React.ReactNode;
   tone?: 'warn';
-  notBuilt?: string;
   children?: React.ReactNode;
 }) {
   return (
@@ -137,21 +131,15 @@ function Panel({
       style={{
         display: 'grid',
         gap: 'var(--sp-6)',
+        /* A warning panel is quiet since 29-1P2c2: grey glass, its icon the signal. */
         ...(tone === 'warn'
-          ? { backgroundImage: 'var(--glass-tint-amber)', boxShadow: 'var(--glass-rim-2), var(--glass-cast-2)' }
+          ? { backgroundImage: 'var(--glass-tint-warn)', boxShadow: 'var(--glass-rim-2), var(--glass-cast-2)' }
           : {}),
       }}
     >
       <header style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
         <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 180 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-            <MetaKicker>{kicker}</MetaKicker>
-            {notBuilt !== undefined && (
-              <StatusPill status="archived" size="sm" dot={false}>
-                not built
-              </StatusPill>
-            )}
-          </div>
+          <MetaKicker>{kicker}</MetaKicker>
           <h2
             style={{
               font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)',
@@ -168,16 +156,6 @@ function Panel({
               }}
             >
               {hint}
-            </p>
-          )}
-          {notBuilt !== undefined && (
-            <p
-              style={{
-                font: 'var(--type-caption)', color: 'var(--status-review)',
-                margin: 0, maxWidth: '58ch', textWrap: 'pretty',
-              }}
-            >
-              {notBuilt}
             </p>
           )}
         </div>
@@ -280,8 +258,8 @@ function ModelCard({
       style={{
         display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)',
         borderRadius: 'var(--r-lg)',
-        backgroundImage: selected ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
-        boxShadow: selected ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
+        backgroundImage: selected ? 'var(--glass-tint-lime)' : 'var(--glass-fill-1)',
+        boxShadow: selected ? 'var(--glass-rim-2), var(--job-lime-shine)' : 'var(--glass-rim-1)',
         transition: 'var(--t-hover)',
       }}
     >
@@ -300,7 +278,7 @@ function ModelCard({
             style={{
               display: 'grid', placeItems: 'center', width: 34, height: 34, flex: '0 0 auto',
               borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)',
-              boxShadow: 'var(--glass-rim-2)', color: selected ? MARK_INK : 'var(--fg-3)',
+              boxShadow: 'var(--glass-rim-2)', color: selected ? 'var(--job-lime-text)' : 'var(--fg-3)',
             }}
           >
             <Icon name="cpu" size={16} />
@@ -320,7 +298,7 @@ function ModelCard({
         </button>
 
         {resident ? (
-          <StatusPill status="running" size="sm">resident</StatusPill>
+          <StatusPill status="atlas" size="sm">resident</StatusPill>
         ) : (
           <StatusPill status="archived" size="sm" dot={false}>on disk</StatusPill>
         )}
@@ -383,7 +361,7 @@ function ModelCard({
                         backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
                         font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
                         textTransform: 'var(--kicker-transform)' as CSSProperties['textTransform'],
-                        color: unproven ? 'var(--status-review)' : 'var(--fg-3)',
+                        color: unproven ? 'var(--status-warn)' : 'var(--fg-3)',
                       }}
                     >
                       {/* Capitalised by hand since V3-9: V3 drops the kicker's
@@ -443,7 +421,7 @@ function heroTiles(
       hint: awake
         ? 'private network · no open ports'
         : `no answer within ${(PROBE_TIMEOUT_MS / 1000).toFixed(1)}s`,
-      tone: awake ? 'var(--accent)' : 'var(--fg-4)',
+      tone: awake ? 'var(--job-violet)' : 'var(--fg-4)',
     },
     {
       key: 'round trip',
@@ -476,7 +454,8 @@ function heroTiles(
         ? 'var(--fg-4)'
         : health?.ollama.reachable
           ? 'var(--fg-1)'
-          : 'var(--status-review)',
+          /* Broken: coral (29-1P2c2). */
+          : 'var(--status-overrun)',
     },
     {
       key: 'tools',
@@ -492,7 +471,7 @@ function heroTiles(
           : failure
             ? `${failure.name}: ${failure.reason}`
             : 'Atlas is answering and no MCP server connected',
-      tone: !awake ? 'var(--fg-4)' : toolsUp ? 'var(--accent)' : 'var(--status-review)',
+      tone: !awake ? 'var(--fg-4)' : toolsUp ? 'var(--job-violet)' : 'var(--status-overrun)',
     },
   ];
 }
@@ -512,6 +491,7 @@ export default function AtlasHostPage() {
   const setSnapshot = useAtlasStore((s) => s.setSnapshot);
 
   const local = useModelStore((s) => s.local);
+  const modelsLoading = useModelStore((s) => s.loading);
   const select = useModelStore((s) => s.select);
   const refreshModels = useModelStore((s) => s.refresh);
   const setCatalogue = useModelStore((s) => s.setCatalogue);
@@ -522,102 +502,6 @@ export default function AtlasHostPage() {
 
   const [toast, setToast] = useState<ToastPayload | null>(null);
   const [checking, setChecking] = useState(false);
-
-  /*
-   * ITEM 13A — THE TWO SPENDING CEILINGS AND THE METER (DESIGN.md §3.4).
-   *
-   * Held here rather than read off `health.spend`, even though `/health`
-   * carries every field of it, because this screen **writes** them: a slider
-   * whose value came from a poll would snap back to the old number between the
-   * drag and the next poll landing. `/health` is how *other* screens learn the
-   * ceilings; this is the screen that sets them.
-   *
-   * `null` covers three states that mean the same thing here — a sleeping
-   * laptop, an Atlas too old to have ceilings (404), and one that could not
-   * open its data directory (503). The panel keeps 9B's "not built" treatment
-   * for all three rather than drawing a slider parked on an invented number.
-   */
-  const [fetchedCeilings, setCeilings] = useState<AtlasCeilings | null>(null);
-
-  /*
-   * **Derived at render rather than cleared in the effect**, which is not a
-   * style preference: a laptop that went to sleep has to stop this panel
-   * showing last week's total *this* render, and an effect that reacts to it
-   * paints the stale figure once before correcting itself. It is also what
-   * `react-hooks/set-state-in-effect` is pointing at — a `setState` in an
-   * effect body is a second render doing what one render could have done.
-   */
-  const ceilings = baseUrl === null || status !== 'awake' ? null : fetchedCeilings;
-
-  useEffect(() => {
-    if (baseUrl === null || status !== 'awake') return;
-    const controller = new AbortController();
-    void fetchCeilings(baseUrl, controller.signal)
-      .then(setCeilings)
-      .catch(() => setCeilings(null));
-    return () => controller.abort();
-  }, [baseUrl, status]);
-
-  /**
-   * Moves a slider and writes it through.
-   *
-   * Optimistic, for the reason every control on a tailnet has to be: waiting
-   * for the laptop to answer before the thumb moves feels broken. A failed
-   * write re-reads rather than leaving the slider showing a number nothing
-   * agreed to, and says so — this is the screen where the money lives, and a
-   * ceiling he believes he set and did not is the one wrong outcome here.
-   */
-  const moveCeiling = useCallback(
-    (next: { monthlyRupees?: number; perTurnRupees?: number }) => {
-      if (baseUrl === null) return;
-      setCeilings((current) => (current === null ? current : { ...current, ceilings: { ...current.ceilings, ...next } }));
-      void saveCeilings(baseUrl, next)
-        .then(setCeilings)
-        .catch(() => {
-          setToast({
-            icon: 'triangle-alert',
-            title: 'Not saved',
-            detail: 'The laptop did not take that. Showing what it actually holds.',
-          });
-          void fetchCeilings(baseUrl).then(setCeilings).catch(() => setCeilings(null));
-        });
-    },
-    [baseUrl],
-  );
-
-  /*
-   * BUILD-12: Downshift, written through the same route as the ceilings and
-   * for the same reason they are held here. Optimistic, and a failed write
-   * re-reads rather than leaving the switch showing a setting nothing agreed
-   * to. **Then a fresh probe**, because `/chat` and the side panel route on
-   * `health.spend.downshift`: without it a Gemini pick would keep running in
-   * this browser until the next poll.
-   */
-  const flipDownshift = useCallback(
-    (on: boolean) => {
-      if (baseUrl === null) return;
-      setCeilings((current) => (current === null ? current : { ...current, downshift: on }));
-      void saveCeilings(baseUrl, { downshift: on })
-        .then((saved) => {
-          setCeilings(saved);
-          void probe();
-          setToast(
-            on
-              ? { icon: 'laptop', title: 'Downshift is on', detail: 'Nothing runs on a paid model. A Gemini pick runs on the laptop instead.' }
-              : { icon: 'sparkles', title: 'Downshift is off', detail: 'A Gemini pick runs on Gemini again.' },
-          );
-        })
-        .catch(() => {
-          setToast({
-            icon: 'triangle-alert',
-            title: 'Not saved',
-            detail: 'The laptop did not take that. Showing what it actually holds.',
-          });
-          void fetchCeilings(baseUrl).then(setCeilings).catch(() => setCeilings(null));
-        });
-    },
-    [baseUrl, probe],
-  );
 
   /* BUILD-12: this screen has no chat open, so its Copy takes the one he
      last touched — the one he has just given up on. Each chat carries its
@@ -669,6 +553,14 @@ export default function AtlasHostPage() {
 
   const awake = status === 'awake';
   const unconfigured = status === 'unconfigured';
+  const waiting = status === 'unknown';
+  /* The models are asked for after the probe, so an awake laptop has none
+     listed for a beat; that beat is a wait too, not "listed no models". */
+  const modelsWaiting = local.length === 0 && (waiting || (awake && modelsLoading));
+  const tilesArrived = useRef<HTMLDivElement>(null);
+  useArrival(tilesArrived, !waiting);
+  const modelsArrived = useRef<HTMLDivElement>(null);
+  useArrival(modelsArrived, !modelsWaiting);
 
   /* The tailnet name, which is the identity Atlas keeps when it moves
      machines. `URL` throws on a malformed override, and a bad value in
@@ -683,7 +575,9 @@ export default function AtlasHostPage() {
   }
 
   const resident = health?.ollama.loaded ?? [];
-  const onGemini = chosen.provider === 'gemini';
+  /* BIG-1: Gemini, Claude or ChatGPT — a cloud model, which may well be running
+     through this laptop now, but not on it and not for free. */
+  const onCloud = chosen.provider !== 'ollama';
   const ringReading = awake ? readingFor(resident[0] ?? '') : null;
 
   const pill: { status: StatusName; label: string; line: string } = unconfigured
@@ -694,14 +588,14 @@ export default function AtlasHostPage() {
       }
     : awake
       ? {
-          status: 'running',
+          status: 'atlas',
           label: 'Awake',
           line: 'Reachable from this device over Tailscale.',
         }
       : {
           status: 'archived',
           label: 'Asleep',
-          line: 'The laptop lid is shut, or it is off the tailnet. You are talking to the basic assistant.',
+          line: 'The laptop lid is shut, or it is off the tailnet. Atlas answers from this device instead.',
         };
 
   return (
@@ -714,7 +608,7 @@ export default function AtlasHostPage() {
               padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
             }}
           >
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -757,14 +651,14 @@ export default function AtlasHostPage() {
                   style={checking ? { animation: 'ag-spin 900ms linear infinite' } : undefined}
                 />
               </IconButton>
-              <Button
+              {/* Soft since 29-1P2, as the log's way back. */}
+              <SoftButton
                 size="sm"
-                variant="glass"
-                iconLeft={<Icon name="sparkles" size={15} />}
+                icon={<Icon name="sparkles" size={15} />}
                 onClick={() => navigate('/chat')}
               >
                 Back to Atlas
-              </Button>
+              </SoftButton>
             </header>
 
             {/* ── The connection. One hero card, because "is Atlas reachable"
@@ -788,18 +682,19 @@ export default function AtlasHostPage() {
                   style={{
                     position: 'relative', display: 'grid', placeItems: 'center',
                     width: 64, height: 64, flex: '0 0 auto', borderRadius: '50%',
-                    backgroundImage: awake ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
-                    boxShadow: awake ? 'var(--glass-rim-2), var(--glow-accent-md)' : 'var(--glass-rim-1)',
+                    backgroundImage: awake ? 'var(--glass-tint-violet)' : 'var(--glass-fill-1)',
+                    boxShadow: awake ? 'var(--glass-rim-2), var(--job-violet-shine-md)' : 'var(--glass-rim-1)',
                     color: awake ? MARK_INK : 'var(--fg-4)',
                   }}
                 >
-                  <Icon name={awake ? 'server' : 'moon'} size={26} />
+                  <Icon name={awake || waiting ? 'server' : 'moon'} size={26} />
                   {awake && (
                     <span
                       style={{
                         position: 'absolute', inset: -6, borderRadius: '50%',
-                        border: '1px solid var(--accent-hairline)',
-                        animation: 'var(--kf-ripple) 2800ms var(--ease-glass) infinite',
+                        border: '1px solid var(--job-violet-line)',
+                        /* Still, not rippling: a loop that never ends redraws the
+                           whole screen every frame (StatusPill.tsx says more). */
                       }}
                     />
                   )}
@@ -815,7 +710,11 @@ export default function AtlasHostPage() {
                     >
                       {host ?? 'Atlas'}
                     </h2>
-                    <StatusPill status={pill.status} size="sm">{pill.label}</StatusPill>
+                    {waiting ? (
+                      <Bone width={72} height={22} />
+                    ) : (
+                      <StatusPill status={pill.status} size="sm">{pill.label}</StatusPill>
+                    )}
                     {health !== null && (
                       <MetaKicker tone="var(--fg-4)">atlas {health.version}</MetaKicker>
                     )}
@@ -826,13 +725,14 @@ export default function AtlasHostPage() {
                       margin: 0, maxWidth: '52ch', textWrap: 'pretty',
                     }}
                   >
-                    {pill.line}
+                    {waiting ? <Bone width="64%" height={11} style={{ marginTop: 'var(--sp-2)' }} /> : pill.line}
                   </p>
                 </div>
               </div>
 
               {!unconfigured && (
                 <div
+                  ref={tilesArrived}
                   style={{
                     display: 'grid',
                     /* 150 rather than the mockup's 180: at 180 the fourth tile
@@ -844,7 +744,23 @@ export default function AtlasHostPage() {
                     gap: 'var(--sp-4)',
                   }}
                 >
-                  {heroTiles(awake, host, health, roundTripMs).map((tile) => (
+                  {waiting ? Array.from({ length: 4 }, (_, i) => (
+                    <div
+                      key={i}
+                      role="status"
+                      aria-busy="true"
+                      aria-label="Asking the laptop"
+                      style={{
+                        display: 'grid', gap: 'var(--sp-4)', alignContent: 'start',
+                        padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
+                        backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                      }}
+                    >
+                      <Bone width="48%" height={9} delay={i * 90} />
+                      <Bone width="62%" height={16} radius="var(--r-md)" delay={i * 90} />
+                      <Bone width="86%" height={8} delay={i * 90} />
+                    </div>
+                  )) : heroTiles(awake, host, health, roundTripMs).map((tile) => (
                     <div
                       key={tile.key}
                       style={{
@@ -897,19 +813,19 @@ export default function AtlasHostPage() {
             </section>
 
             {/* ── The fallback, when there is nothing to fall back from ── */}
-            {!awake && !unconfigured && (
+            {!awake && !unconfigured && !waiting && (
               <Panel
                 tone="warn"
-                kicker="Fallback"
-                title="You are talking to the basic assistant"
-                hint="The in-browser Gemini agent still adds a task and reads your backlog. It cannot reach anything that lives on the host, and it never queues work silently — a request either lands now or is refused now."
+                kicker="Lid shut"
+                title="Atlas is answering from this device"
+                hint="Everything Atlas does on the laptop, run here on a cloud model — your tasks, notes, skills, the log with Revert, and the tray. The one thing missing is the laptop's own local model. What it writes, the laptop takes in when it wakes."
                 right={
                   <span
                     aria-hidden="true"
                     style={{
                       display: 'grid', placeItems: 'center', width: 40, height: 40,
                       borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)',
-                      boxShadow: 'var(--glass-rim-2)', color: 'var(--status-review)',
+                      boxShadow: 'var(--glass-rim-2)', color: 'var(--status-warn)',
                     }}
                   >
                     <Icon name="wifi-off" size={18} />
@@ -919,17 +835,18 @@ export default function AtlasHostPage() {
                 {/*
                   The mockup puts two switches here — "use the basic assistant"
                   and "wake the host when the lid opens". Neither is a setting:
-                  the fallback is automatic and unconditional (`ChatPage`
-                  routes on `atlasStatus`, with nothing to turn off), and
-                  nothing anywhere can wake a sleeping laptop over a network it
-                  is not on. Stated as behaviour rather than drawn as a control
-                  that would do nothing.
+                  the switch to Atlas on this device is automatic (`ChatPage`
+                  routes on `atlasStatus`, with nothing to turn off; the basic
+                  assistant is retired since BIG-12), and nothing anywhere can
+                  wake a sleeping laptop over a network it is not on. Stated as
+                  behaviour rather than drawn as a control that would do
+                  nothing.
                 */}
                 <Row
                   icon="git-branch"
                   title="The switch happens on its own"
-                  hint="Every conversation probes the host first and routes to whichever assistant answered. There is nothing to turn on."
-                  control={<MetaKicker tone="var(--status-review)">automatic</MetaKicker>}
+                  hint="Every conversation asks the laptop first, and runs Atlas here when it does not answer. There is nothing to turn on."
+                  control={<MetaKicker tone="var(--status-warn)">automatic</MetaKicker>}
                 />
               </Panel>
             )}
@@ -942,19 +859,22 @@ export default function AtlasHostPage() {
               right={
                 ringReading !== null ? (
                   <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-2)' }}>
-                    <ProgressRing
-                      value={ringReading.onGpu}
-                      max={100}
-                      size={72}
-                      thickness={7}
-                      tone={ringReading.onGpu === 100 ? 'accent' : 'amber'}
-                    />
+                    <span
+                      style={{
+                        font: 'var(--type-numeric)', fontSize: 'var(--text-2xl)', fontVariantNumeric: 'tabular-nums',
+                        color: ringReading.onGpu === 100 ? 'var(--job-lime-text)' : 'var(--status-warn)',
+                      }}
+                    >
+                      {ringReading.onGpu}%
+                    </span>
                     <MetaKicker tone="var(--fg-4)">on the card</MetaKicker>
                   </div>
                 ) : undefined
               }
             >
-              {local.length === 0 ? (
+              {modelsWaiting ? (
+                <SkeletonRows rows={3} lead="square" sub card rowHeight={72} label="Listing the laptop's models" />
+              ) : local.length === 0 ? (
                 <Well style={{ display: 'grid', gap: 'var(--sp-3)' }}>
                   <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)' }}>
                     {unconfigured
@@ -968,7 +888,7 @@ export default function AtlasHostPage() {
                   </span>
                 </Well>
               ) : (
-                <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+                <div ref={modelsArrived} style={{ display: 'grid', gap: 'var(--sp-4)' }}>
                   {local.map((option) => {
                     const reading = readingFor(option.id);
                     return (
@@ -981,7 +901,7 @@ export default function AtlasHostPage() {
                         numCtx={health?.numCtx ?? null}
                         onSelect={() => {
                           if (chosen.key === option.key) return;
-                          select(option.key);
+                          select(option);
                           setToast({
                             icon: 'cpu',
                             title: `${option.label} selected`,
@@ -997,9 +917,9 @@ export default function AtlasHostPage() {
                 </div>
               )}
 
-              {onGemini && local.length > 0 && (
-                <MetaKicker icon="sparkles" tone="var(--status-review)">
-                  your chat is on {chosen.label} — pick one here to move it to the laptop
+              {onCloud && local.length > 0 && (
+                <MetaKicker icon="sparkles" tone="var(--status-warn)">
+                  your chat is on {chosen.label} — pick one here to answer on the laptop
                 </MetaKicker>
               )}
 
@@ -1015,49 +935,29 @@ export default function AtlasHostPage() {
               </p>
             </Panel>
 
-            {/* ── Downshift (BUILD-12) ─────────────────────────────────
-                9B drew this as "Off-site — Escalation to Gemini": a block
-                switch, a decompose-instead rule and a Copy button, all inert.
-                It turned round because the queue makes the cloud model prime
-                (BIG-1): with nothing to escalate *to*, the switch is his
-                "do not spend money, push it down" instead. **The decompose
-                row is gone, his call (2026-09-24)** — teaching the local
-                model to break a problem up is its own piece of work and
-                would need its own benchmark, and a row promising it would be
-                a claim nothing keeps.
-
-                The switch reads `ceilings.downshift`, which only an Atlas
-                built at BUILD-12 sends; an older one, or a sleeping laptop,
-                draws it off and inert rather than guessed. */}
-            <Panel
-              kicker="Downshift"
-              title="Keep it on the laptop"
-              hint="On, nothing runs on a paid cloud model. Anything that would have gone to Gemini runs on the laptop's own model instead, and the chat says so each time. When the laptop is asleep, the basic assistant still answers."
-              right={
-                <Switch
-                  checked={ceilings?.downshift ?? false}
-                  disabled={ceilings?.downshift === undefined}
-                  onChange={flipDownshift}
-                  label={ceilings?.downshift === undefined ? 'Unavailable' : ceilings.downshift ? 'On' : 'Off'}
-                />
-              }
-            >
-              {ceilings !== null && ceilings.downshift === undefined && (
-                <p style={{ font: 'var(--type-caption)', color: 'var(--status-review)', margin: 0, textWrap: 'pretty' }}>
-                  This Atlas is older than Downshift. Restart it on the laptop to pick up the new build.
-                </p>
-              )}
+            {/* ── What leaves the laptop ──────────────────────────────────
+                9B drew this as "Off-site — Escalation to Gemini" and BUILD-12
+                turned its switch into Downshift. The switch went with the AI
+                spending (OPT-4, 2026-10-06, his call); the rows below are not
+                about money and stay. */}
+            <Panel kicker="Off-site" title="What leaves the laptop">
+              {/* BIG-1: the keys live in Settings now and travel with each
+                  message. What this row can still say truthfully is whether
+                  this laptop's Atlas is new enough to take them, and whether
+                  it has a Gemini key of its own to fall back on. */}
               <Row
                 icon="key-round"
-                title="Atlas's own cloud key"
+                title="Cloud keys"
                 hint={
-                  health?.gemini.configured ?? false
-                    ? "Set in Atlas's .env on the laptop, so Atlas can run Gemini when asked — unless Downshift is on."
-                    : "None is set in Atlas's .env, so Atlas cannot run a cloud model at all yet. The keys in Settings belong to the basic assistant in this browser."
+                  health?.hosted?.keysFromRequest === true
+                    ? `Gemini, Claude and ChatGPT run here on the keys in Settings → Connections, sent with each message and never kept on the laptop.${
+                        health.gemini.configured ? " A Gemini key in Atlas's .env is used when Settings has none." : ''
+                      }`
+                    : "This Atlas is older than Claude and ChatGPT support, and runs a cloud model only on a Gemini key in its own .env. Restart it on the laptop to pick up the new build."
                 }
                 control={
-                  <MetaKicker tone={health?.gemini.configured ?? false ? 'var(--accent)' : 'var(--fg-4)'}>
-                    {health === null ? 'not known' : health.gemini.configured ? 'configured' : 'no key'}
+                  <MetaKicker tone={health?.hosted?.keysFromRequest === true ? 'var(--job-lime)' : 'var(--fg-4)'}>
+                    {health === null ? 'not known' : health.hosted?.keysFromRequest === true ? 'from Settings' : 'older Atlas'}
                   </MetaKicker>
                 }
               />
@@ -1065,9 +965,42 @@ export default function AtlasHostPage() {
                 icon="lock"
                 title="Mail never leaves the laptop"
                 hint="The rule is settled and there is no mailbox to apply it to yet. Item 22 (step 35) connects Gmail, and the action log will record whatever goes upstream."
-                tone="var(--accent)"
+                tone="var(--job-violet)"
                 control={<MetaKicker tone="var(--fg-4)">no mailbox yet</MetaKicker>}
               />
+              {/* BIG-4: Atlas's memory also lives in his account's cloud, so
+                  the tablet reads it with the lid shut. Drawn only by an Atlas
+                  that reports it; the failure is printed verbatim, 9B's rule. */}
+              {health?.memory?.cloud !== undefined && (
+                <Row
+                  icon="refresh-cw"
+                  title="A copy for the tablet"
+                  hint={
+                    !health.memory.cloud.on
+                      ? `Atlas's notes, chats and skills stay on the laptop only. ${health.memory.cloud.reason ?? ''}`.trim()
+                      : health.memory.cloud.lastError !== null
+                        ? `Could not update the cloud copy: ${health.memory.cloud.lastError} Atlas keeps trying, and nothing is lost meanwhile.`
+                        : "Notes, chats, skills, the log and what is waiting for you are copied to your account, so the tablet can read them with the lid shut. The files on the laptop are a backup; edit notes in the app."
+                  }
+                  control={
+                    <MetaKicker
+                      tone={
+                        health.memory.cloud.on && health.memory.cloud.lastError === null ? 'var(--job-lime)' : 'var(--fg-4)'
+                      }
+                    >
+                      {!health.memory.cloud.on
+                        ? 'off'
+                        : health.memory.cloud.lastError !== null
+                          ? 'retrying'
+                          : health.memory.cloud.pending > 0
+                            ? `${health.memory.cloud.pending} to send`
+                            : health.memory.cloud.ready
+                              ? 'in step'
+                              : 'catching up'}
+                    </MetaKicker>
+                  }
+                />
+              )}
               <Row
                 icon="copy"
                 title="Hand-off prompt"
@@ -1084,212 +1017,6 @@ export default function AtlasHostPage() {
                   </Button>
                 }
               />
-            </Panel>
-
-            {/* ── Money — real since item 13A (DESIGN.md §3.4) ────────────
-                9B drew this panel under the "not built" treatment because
-                nothing was counting and nothing was capped, and its own note
-                said a slider parked on an invented number is worse than an em
-                dash. Both halves are settled now: the ledger counts every
-                hosted turn and the two ceilings stop them.
-
-                **The em-dash rule did not go away with the "not built" pill.**
-                A sleeping laptop, an Atlas too old to have ceilings, and one
-                that could not open its data directory all still read "—" here
-                — `ceilings === null` — because "nothing is being counted" is
-                not the same claim as "nothing has been spent". */}
-            <Panel
-              kicker="Money"
-              title="Spend"
-              hint="Local turns are free. Only escalated turns cost anything, and three multipliers — Atlas choosing its own brain, loops, and helpers — are why the ceilings exist."
-              notBuilt={
-                ceilings === null
-                  ? 'Nothing is being counted right now — the laptop is not answering, or Atlas could not open the folder it keeps this in. That is not the same as nothing having been spent, so this reads “—”.'
-                  : undefined
-              }
-            >
-              <Well pad="var(--sp-7)" style={{ display: 'grid', gap: 'var(--sp-4)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
-                  <span style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 160 }}>
-                    <MetaKicker icon="indian-rupee" tone="var(--fg-4)">this month</MetaKicker>
-                    <span
-                      style={{
-                        font: 'var(--type-metric)', fontFamily: 'var(--font-mono)',
-                        fontSize: 'var(--text-3xl)', letterSpacing: 'var(--tracking-display)',
-                        color: ceilings === null ? 'var(--fg-4)' : 'var(--fg-1)',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {ceilings === null ? '₹—' : `₹${ceilings.month.rupees.toFixed(2)}`}
-                    </span>
-                  </span>
-                  {ceilings !== null && (
-                    <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>
-                      of ₹{ceilings.ceilings.monthlyRupees} ·{' '}
-                      {Math.round((ceilings.month.rupees / ceilings.ceilings.monthlyRupees) * 100)}%
-                    </span>
-                  )}
-                </div>
-
-                {/* The bar, drawn only against a real total. `Math.min` caps
-                    the fill and not the reading: he can be over his ceiling —
-                    every turn past it took a tap — and the number above says
-                    so even when the bar has nowhere left to go. */}
-                {ceilings !== null && (
-                  <div
-                    style={{
-                      position: 'relative', height: 8, borderRadius: 'var(--r-pill)',
-                      backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: 'absolute', inset: '0 auto 0 0',
-                        width: `${Math.min(100, (ceilings.month.rupees / ceilings.ceilings.monthlyRupees) * 100)}%`,
-                        borderRadius: 'var(--r-pill)',
-                        background: 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.5), var(--accent))',
-                        boxShadow: '0 0 14px -2px oklch(0.70 0.15 162 / 0.6)',
-                        transition: 'width var(--dur-base) var(--ease-glass)',
-                      }}
-                    />
-                  </div>
-                )}
-
-                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-                  {ceilings === null
-                    ? 'No turn has been metered. The $300 Google credit is half expired and is not part of the plan.'
-                    : ceilings.month.turns === 0
-                      ? 'No turn has gone to a hosted model this month. Everything on your laptop is free. The $300 Google credit is half expired and is not part of the plan.'
-                      : /* The unpriced count is said out loud rather than folded
-                           in, because it changes what the total *means*: a month
-                           with one of these in it has spent at least this, not
-                           exactly this. `agent/pricing.ts`'s rule. */
-                        `${ceilings.month.turns} escalated ${ceilings.month.turns === 1 ? 'turn' : 'turns'} this month.` +
-                        (ceilings.month.unpriced > 0
-                          ? ` ${ceilings.month.unpriced} of them ran on a model with no recorded price, so the total is at least this and not exactly this.`
-                          : '') +
-                        ' The $300 Google credit is half expired and is not part of the plan.'}
-                </span>
-              </Well>
-
-              {/* The two sliders. Both write the same settings Atlas hands the
-                  chat page — the per-turn one is drawn there too, in the tuning
-                  popover, and it is **one setting on two screens** rather than
-                  two. A value per screen would be two ceilings that disagree,
-                  with whichever he happened to be looking at winning by
-                  accident. */}
-              <div
-                style={{
-                  display: 'grid', gap: 'var(--sp-6)',
-                  padding: 'var(--sp-6) var(--sp-6) var(--sp-7)', borderRadius: 'var(--r-lg)',
-                  backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
-                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)', flex: '0 0 auto' }}>
-                    Monthly ceiling
-                  </span>
-                  <span style={{ flex: 1 }} />
-                  <span
-                    style={{
-                      font: 'var(--type-numeric)', fontSize: 'var(--text-md)',
-                      color: ceilings === null ? 'var(--fg-4)' : 'var(--fg-1)',
-                    }}
-                  >
-                    {ceilings === null ? 'not set' : `₹${ceilings.ceilings.monthlyRupees}`}
-                  </span>
-                </div>
-                <Slider
-                  min={ceilings?.bounds.monthly.min ?? 100}
-                  max={ceilings?.bounds.monthly.max ?? 2000}
-                  step={50}
-                  value={ceilings?.ceilings.monthlyRupees ?? 500}
-                  disabled={ceilings === null}
-                  onValueChange={(rupees) => moveCeiling({ monthlyRupees: rupees })}
-                  showValue={false}
-                  label="Monthly ceiling in rupees"
-                  valueText={`${ceilings?.ceilings.monthlyRupees ?? 500} rupees`}
-                />
-                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-                  At the ceiling every hosted turn asks for a tap before it runs. It is not a stop —
-                  being asked beats having Atlas quietly decline.
-                </span>
-
-                <div style={{ height: 1, background: 'var(--line-faint)' }} />
-
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
-                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)', flex: '0 0 auto' }}>
-                    Stop a turn at
-                  </span>
-                  <span style={{ flex: 1 }} />
-                  <span
-                    style={{
-                      font: 'var(--type-numeric)', fontSize: 'var(--text-md)',
-                      color: ceilings === null ? 'var(--fg-4)' : 'var(--fg-1)',
-                    }}
-                  >
-                    {ceilings === null ? 'not set' : `₹${ceilings.ceilings.perTurnRupees}`}
-                  </span>
-                </div>
-                <Slider
-                  min={ceilings?.bounds.perTurn.min ?? 1}
-                  max={ceilings?.bounds.perTurn.max ?? 20}
-                  step={1}
-                  value={ceilings?.ceilings.perTurnRupees ?? 5}
-                  disabled={ceilings === null}
-                  onValueChange={(rupees) => moveCeiling({ perTurnRupees: rupees })}
-                  showValue={false}
-                  label="Per-turn ceiling in rupees"
-                  valueText={`${ceilings?.ceilings.perTurnRupees ?? 5} rupees`}
-                />
-                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-                  At the ceiling Atlas stops, says what it was doing, and offers to continue. Each
-                  tap buys another turn's worth. Helpers count against the same number.
-                </span>
-              </div>
-            </Panel>
-
-            {/* ── What is still unproven, recorded on the screen rather than
-                   in a document. §12 exists because a list of assumptions
-                   nobody sees becomes a list of facts. ── */}
-            <Panel
-              kicker="Unverified"
-              title="Not yet proven on this machine"
-              hint={`Benchmarked ${READINGS_TAKEN_ON} on ${BENCHMARK_MACHINE}. These three were not.`}
-            >
-              <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
-                {UNVERIFIED.map((entry) => (
-                  <div
-                    key={entry.question}
-                    style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)',
-                      padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
-                      backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{ display: 'flex', color: 'var(--fg-4)', flex: '0 0 auto', marginTop: 2 }}
-                    >
-                      <Icon name={entry.icon} size={16} />
-                    </span>
-                    <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
-                      <span
-                        style={{
-                          font: 'var(--type-body)', fontSize: 'var(--text-sm)',
-                          color: 'var(--fg-1)', textWrap: 'pretty',
-                        }}
-                      >
-                        {entry.question}
-                      </span>
-                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-                        {entry.why}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
             </Panel>
 
             <p
@@ -1334,7 +1061,7 @@ export default function AtlasHostPage() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}

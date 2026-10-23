@@ -107,6 +107,11 @@ export interface TaskSheetProps {
    * fewer is fine, and more simply wraps.
    */
   columns: ReactNode[];
+  /**
+   * Full width under the columns, inside the scroll — the task sheet's closed
+   * Optional section (OPT-5), which belongs to no one column.
+   */
+  after?: ReactNode;
   /** Pinned action bar along the foot. */
   footer?: ReactNode;
   /** Panel max width in px. Wide by default — this is the three-column sheet. */
@@ -128,6 +133,8 @@ export interface TaskSheetProps {
    * `components/TaskDetailPanel.tsx`, and UI-22 in IMPROVEMENTS.md.
    */
   onExited?: () => void;
+  /** Forwarded to `Dialog`: the row this sheet grows out of (idea 54, 29-1P6a). */
+  growFrom?: string;
 }
 
 /* The panel is a flex column rather than Dialog's grid: header and footer are
@@ -168,6 +175,7 @@ export function TaskSheet({
   coverHeight = 190,
   header,
   columns,
+  after,
   footer,
   width = 1240,
   zIndex,
@@ -176,6 +184,7 @@ export function TaskSheet({
   closeOnEscape,
   closeOnBackdrop,
   onExited,
+  growFrom,
 }: TaskSheetProps) {
   return (
     <Dialog
@@ -188,6 +197,7 @@ export function TaskSheet({
       closeOnEscape={closeOnEscape}
       closeOnBackdrop={closeOnBackdrop}
       onExited={onExited}
+      growFrom={growFrom}
       style={PANEL}
     >
       {(header || coverUrl) && (
@@ -219,7 +229,7 @@ export function TaskSheet({
       )}
 
       <div
-        className="ag-scroll ag-task-sheet-body"
+        className="ag-scroll ag-fade ag-task-sheet-body"
         style={{
           flex: '1 1 auto',
           minHeight: 0,
@@ -247,6 +257,7 @@ export function TaskSheet({
             </div>
           ))}
         </div>
+        {after && <div style={{ marginTop: 'var(--gap-card)' }}>{after}</div>}
       </div>
 
       {footer && (

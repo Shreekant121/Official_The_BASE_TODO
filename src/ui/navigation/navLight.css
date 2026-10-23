@@ -1,0 +1,69 @@
+/* ---------------------------------------------------------------
+   THE NAV'S LIT CELL (29-1P5b, ideas 71, 23 and 80). `MiniNav` with
+   `screenLit` — every app nav — wears `.ag-nav-lit`.
+
+   ITS COLOUR IS THE SCREEN'S LIGHT, never a second map: the rules in
+   `tokens/screenLight.css` that colour a page colour this too, and fade
+   it the same way when the screen changes (his call, 2026-10-07: the
+   screen's colour, not lime; the Dashboard's is the hour's). The light
+   is a registered, non-inherited property, so it is handed down here
+   as `--nav-light` for the pieces inside the bar.
+
+   THREE PIECES, all still at rest:
+     - the lit icon: a layered glass icon whose back is the light and
+       which glows it (71, 80); every other icon wears the colour of the
+       screen it opens, unlit (his call, 2026-10-07: "all icons have
+       color" — `screenLight.css`, `data-light`);
+     - a key-light under the lit icon, like a lit key (71);
+     - the dot, which is the marker (23): one element for the whole bar,
+       stretched to the next cell like a drop and snapped there by a
+       Web Animation in `MiniNav`. Under the icon on a bar; on the rail
+       it sits on the rail's outer edge, where a dock keeps its dot.
+   --------------------------------------------------------------- */
+
+.ag-nav-lit {
+  --nav-light: var(--screen-light);
+}
+[data-v3] .ag-nav-lit,
+.ag-nav-lit[data-v3] {
+  transition: --screen-light var(--dur-light) var(--ease-glide);
+}
+
+.ag-nav-key {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: -3px;
+  height: 24px;
+  border-radius: 50%;
+  background-image: radial-gradient(closest-side, color-mix(in oklch, var(--nav-light) 70%, transparent), transparent);
+  opacity: 0;
+  transform: scaleX(0.5);
+  transition:
+    opacity var(--dur-slow) var(--ease-glide),
+    transform var(--dur-slow) var(--ease-springy);
+  pointer-events: none;
+}
+.ag-nav-cell[aria-current='page'] .ag-nav-key {
+  opacity: 0.55;
+  transform: none;
+}
+
+.ag-nav-cell .ag-licon {
+  transition: filter var(--dur-slow) var(--ease-glide);
+}
+.ag-nav-cell[aria-current='page'] .ag-licon {
+  --licon-c: var(--nav-light);
+  filter: drop-shadow(0 0 6px color-mix(in oklch, var(--nav-light) 60%, transparent));
+}
+.ag-nav-cell:not([aria-current='page']) .ag-licon-glyph {
+  opacity: 0.6;
+}
+
+.ag-nav-dot {
+  position: absolute;
+  border-radius: var(--r-pill);
+  background-color: var(--nav-light);
+  box-shadow: 0 0 6px var(--nav-light), 0 0 14px -2px var(--nav-light);
+  pointer-events: none;
+}

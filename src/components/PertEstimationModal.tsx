@@ -56,7 +56,7 @@
  * different kind of number.
  */
 import { useState } from 'react';
-import { Button, Dialog, Icon, IconButton } from '../ui';
+import { Button, Dialog, Icon, IconButton, WhiteButton } from '../ui';
 import { TimeWell } from './TimeWell';
 import { useOverlayDismiss } from '../lib/useOverlayDismiss';
 import { formatSpanMinutes } from '../lib/timeSpan';
@@ -119,7 +119,9 @@ export default function PertEstimationModal({
   const rows = [
     { key: 'o' as const, label: 'Optimistic', hint: 'Nothing gets in the way.', value: o, dot: 'var(--hue-cyan)' },
     { key: 'm' as const, label: 'Most likely', hint: 'The honest guess.', value: m, dot: 'var(--fg-1)' },
-    { key: 'p' as const, label: 'Pessimistic', hint: 'Everything that can slip, slips.', value: p, dot: 'var(--hue-amber)' },
+    /* Pessimistic is the late end: coral, the colour of running over (29-1P2c2;
+       it was amber, and yellow is gold's). */
+    { key: 'p' as const, label: 'Pessimistic', hint: 'Everything that can slip, slips.', value: p, dot: 'var(--job-coral)' },
   ];
 
   return (
@@ -220,13 +222,13 @@ export default function PertEstimationModal({
                 style={{
                   position: 'absolute', left: `${at(o)}%`, right: `${100 - at(p)}%`, bottom: 12, height: 6,
                   borderRadius: 'var(--r-pill)',
-                  background: 'linear-gradient(90deg, oklch(0.70 0.15 210 / 0.45), oklch(0.75 0.15 82 / 0.45))',
+                  background: 'linear-gradient(90deg, oklch(0.70 0.15 210 / 0.45), oklch(0.7 0.19 28 / 0.45))',
                 }}
               />
               {[
                 { v: o, c: 'var(--hue-cyan)', h: 18 },
                 { v: m, c: 'var(--fg-1)', h: 34 },
-                { v: p, c: 'var(--hue-amber)', h: 18 },
+                { v: p, c: 'var(--job-coral)', h: 18 },
               ].map((k, i) => (
                 <span
                   key={i}
@@ -239,14 +241,14 @@ export default function PertEstimationModal({
               <span
                 style={{
                   position: 'absolute', left: `${at(expected)}%`, bottom: 6, width: 2, height: 46, marginLeft: -1,
-                  borderRadius: 1, background: 'var(--accent)', boxShadow: '0 0 12px 0 var(--accent)',
+                  borderRadius: 1, background: 'var(--job-lime)', boxShadow: '0 0 12px 0 var(--job-lime)',
                   transition: 'left var(--dur-base) var(--ease-glass)',
                 }}
               />
               <span
                 style={{
                   position: 'absolute', left: `${at(expected)}%`, bottom: 52, transform: 'translateX(-50%)',
-                  font: 'var(--type-kicker)', color: 'var(--accent)', whiteSpace: 'nowrap',
+                  font: 'var(--type-kicker)', color: 'var(--job-lime)', whiteSpace: 'nowrap',
                 }}
               >
                 E
@@ -283,7 +285,7 @@ export default function PertEstimationModal({
             </div>
           </>
         ) : (
-          <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'oklch(0.95 0.07 82)' }}>
+          <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--job-coral-text)' }}>
             Optimistic must be the shortest and pessimistic the longest.
           </span>
         )}
@@ -291,14 +293,13 @@ export default function PertEstimationModal({
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--sp-4)' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button
-          variant="frost"
+        <WhiteButton
           disabled={!valid || Math.round(expected) <= 0}
           onClick={handleApply}
-          iconRight={<Icon name="check" size={16} />}
         >
           {valid ? `Allocate ${formatSpanMinutes(expected)}` : 'Allocate'}
-        </Button>
+          <Icon name="check" size={16} />
+        </WhiteButton>
       </div>
     </Dialog>
   );

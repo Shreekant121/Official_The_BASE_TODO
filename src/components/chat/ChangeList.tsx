@@ -1,8 +1,7 @@
 /* Moved out of `pages/ChatPage.tsx`, unchanged, when it was split (BUILD-7). */
-import { Button, Icon } from '../../ui';
+import { Icon } from '../../ui';
 import type { ToolChip } from '../../lib/agent/toolChip';
-import type { SnapshotTurn } from '../../store/useSnapshotStore';
-import { CHIP_ICONS, type ChatTurn } from './chatShared';
+import { CHIP_ICONS } from './chatShared';
 
 /**
  * What the turn wrote, and the button that undoes it, on one surface.
@@ -28,45 +27,32 @@ import { CHIP_ICONS, type ChatTurn } from './chatShared';
  * What can is Atlas's own action log (DESIGN.md §5.3), which is item 13, and
  * until then a deletion comes back from `/trash`. So the Atlas branch says
  * that instead — no button, because there is no button that would work.
+ *
+ * **Since BIG-12 (27A-5) every turn is Atlas's.** The basic assistant and its
+ * snapshot-ring Revert are retired, so the button this container used to carry
+ * for an in-browser turn is gone with them, and every change is reverted from
+ * the Log — on the laptop, or with the lid shut from the cloud copy there.
  */
 export function ChangeList({
   chips,
-  turn,
-  snapshot,
   onAtlas,
-  onRevert,
 }: {
   chips: ToolChip[];
-  turn: ChatTurn;
-  snapshot: SnapshotTurn | undefined;
-  /** Which machine wrote these, which decides whether Revert can exist at all. */
+  /** Whether Atlas wrote these — always, since 27A-5; kept so a turn that says otherwise draws no promise. */
   onAtlas: boolean;
-  onRevert: (snapshotTurnId: string) => void;
 }) {
-  const reverted = snapshot?.revertedAt !== undefined;
-  // An entry with no prior value is something the turn *created*.
-  const restorable = snapshot?.entries.filter((entry) => entry.prior !== null).length ?? 0;
-
-  const label = !turn.snapshotTurnId
-    ? 'Nothing to revert'
-    : !snapshot
-      ? 'Too old to revert'
-      : restorable === 0
-        ? 'Created — cannot undo'
-        : `Revert ${restorable} change${restorable === 1 ? '' : 's'}`;
-  const enabled = Boolean(turn.snapshotTurnId) && Boolean(snapshot) && !reverted && restorable > 0;
-
   return (
     <div
       style={{
         borderRadius: 'var(--r-lg)',
-        backgroundImage: reverted ? 'var(--glass-fill-1)' : 'var(--glass-fill-2)',
-        boxShadow: reverted ? 'var(--glass-rim-1)' : 'var(--glass-rim-2), var(--glass-cast-1)',
-        opacity: reverted ? 0.62 : 1,
-        transition: 'var(--t-hover)',
+        backgroundImage: 'var(--glass-fill-2)',
+        boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
       }}
     >
-      <div style={{ display: 'grid', padding: '0 var(--sp-6)' }}>
+      {/* One fixed column, or the grid's own `auto` column takes the width of
+          the longest title plus its date and the row never truncates — it
+          runs off the right edge instead (OPT-1, `TurnBlock`'s column). */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', padding: '0 var(--sp-6)' }}>
         {chips.map((chip, index) => (
           <div
             key={`${chip.verb}-${chip.subject ?? index}`}
@@ -78,20 +64,16 @@ export function ChangeList({
           >
             <span
               aria-hidden="true"
-              style={{ display: 'flex', flex: '0 0 auto', color: reverted ? 'var(--fg-4)' : 'var(--accent)' }}
+              style={{ display: 'flex', flex: '0 0 auto', color: 'var(--job-violet)' }}
             >
-              <Icon name={reverted ? 'undo-2' : CHIP_ICONS[chip.icon]} size={16} />
+              <Icon name={CHIP_ICONS[chip.icon]} size={16} />
             </span>
             <span
               title={chip.summary}
               style={{
                 flex: 1, minWidth: 0,
                 font: 'var(--type-body)', fontSize: 'var(--text-sm)',
-                color: reverted ? 'var(--fg-3)' : 'var(--fg-1)',
-                /* Longhand — see `ui/data/TaskRow.tsx`. This one flips the
-                   moment Revert is pressed. */
-                textDecorationLine: reverted ? 'line-through' : 'none',
-                textDecorationColor: 'var(--fg-4)',
+                color: 'var(--fg-1)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}
             >
@@ -121,35 +103,17 @@ export function ChangeList({
         }}
       >
         <span className="ag-kicker" style={{ color: 'var(--fg-4)' }}>
-          {reverted
-            ? 'Reverted'
-            : `${chips.length} change${chips.length === 1 ? '' : 's'} written`}
+          {`${chips.length} change${chips.length === 1 ? '' : 's'} written`}
         </span>
-        <span style={{ flex: 1 }} />
-        {!onAtlas && !reverted && (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!enabled}
-            iconLeft={<Icon name="undo-2" size={14} />}
-            onClick={() => turn.snapshotTurnId && onRevert(turn.snapshotTurnId)}
-            title={
-              enabled
-                ? 'Put every task this turn touched back the way it was'
-                : restorable === 0 && snapshot
-                  ? 'This turn only created things, and deleting is manual by design — remove it in the app if you did not want it.'
-                  : 'This turn has nothing left to undo'
-            }
-          >
-            {label}
-          </Button>
-        )}
       </div>
 
       {/* Atlas wrote these and this browser's ring did not watch it. Said
           rather than offered: a disabled Revert would imply the button is the
-          right idea and merely unavailable, while the Trash is a real answer
-          available right now.
+          right idea and merely unavailable, while the Log is a real answer
+          available right now — on the laptop's log, or since BIG-12 the cloud
+          copy's, where a turn Atlas ran on this tablet reverts in place. (It
+          used to say "on the laptop" and point at "item 13's action log",
+          which was true of neither machine once item 13 shipped.)
 
           On its own line rather than beside the count, because the count and a
           button are a row and the count and a sentence are not: at 880 the
@@ -162,8 +126,8 @@ export function ChangeList({
             font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty',
           }}
         >
-          Atlas wrote these on the laptop, so Revert cannot reach them. Anything it deleted is in
-          the Trash for 30 days; the rest is item 13’s action log.
+          Atlas records every change in its log — revert this turn from the Log screen. Anything it
+          deleted is also in the Trash for 30 days.
         </p>
       )}
     </div>

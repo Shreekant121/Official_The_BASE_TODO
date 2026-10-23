@@ -84,12 +84,24 @@
  * 375. The sideways scroll `MiniNav` gained below 768px is now dead weight
  * rather than load-bearing; leaving it costs nothing and removing it was not
  * this item's job.
+ *
+ * **BIG-6 made it seven, knowingly** (2026-09-30): the Dashboard goes first
+ * and nothing moved out, his call. Seven cells are 360px (7×48 + 6×2 + 12),
+ * which still fits the 390px phone, so the six-cell rule above is broken on
+ * purpose rather than by arithmetic.
+ *
+ * **29-2e1 made it eight** (2026-10-21, his call: the Calendar "its own
+ * screen, in the nav"), after Home. Eight cells are 410px (8×48 + 7×2 + 12):
+ * the tablet's 820 holds them easily, and on a 390px phone the sideways
+ * scroll `MiniNav` keeps below 768px is load-bearing again — until the phone
+ * is designed, step 41.
  */
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icon, type IconName, type MiniNavItem } from '../ui';
 import { useStore, taskNeedsAttention } from '../store/useStore';
 import { usePriorityScores } from '../store/usePriorityScores';
 import { useUIStore } from '../store/useUIStore';
+import { navCellLight } from '../lib/screenLight';
 
 /** Where a destination is reached from — and which nav cell lights on it. */
 export type NavPlace = 'nav' | 'atlas' | 'settings';
@@ -127,15 +139,19 @@ export interface NavEntry {
    * prints both, so a typed URL answers its own question rather than showing
    * a blank page. Only meaningful while `built` is false.
    *
-   * `item` is absent where no session owns the screen yet — today only
-   * Dashboard, which cannot be built before it has been designed.
+   * `item` is absent where no session owns the screen yet.
    */
   soon?: { item?: string; what: string };
 }
 
 export const NAV_ENTRIES: NavEntry[] = [
-  /* ── The six. `atlas.html`'s `NAV`, in its order. ─────────────────── */
+  /* ── The eight. BIG-6's Dashboard first (his call, 2026-09-30: "a new
+     dashboard button on the nav", first, all seven kept), then `atlas.html`'s
+     `NAV`, in its order. ────────────────────────────────────────────── */
+  { value: 'dashboard', label: 'Dashboard',                             icon: 'layout-dashboard', route: '/dashboard',     match: (p) => p === '/dashboard',     where: 'nav', built: true  },
   { value: 'home',      label: 'Home',                                  icon: 'house',            route: '/',              match: (p) => p === '/',              where: 'nav', built: true  },
+  /* 29-2e1 — the Calendar, an eighth cell after Home (his call, 2026-10-21: "its own screen, in the nav"). */
+  { value: 'calendar',  label: 'Calendar',                              icon: 'calendar',         route: '/calendar',      match: (p) => p === '/calendar',      where: 'nav', built: true  },
   { value: 'atlas',     label: 'Atlas',                                 icon: 'sparkles',         route: '/chat',          match: (p) => p === '/chat',          where: 'nav', built: true  },
   /* Set Deadlines and Focus are the second and third steps of New Session,
      not destinations of their own, so the rails they drew for themselves in
@@ -177,17 +193,11 @@ export const NAV_ENTRIES: NavEntry[] = [
   /* BUILD-6 — behind Settings, where the door is shown to his account only.
      Not a seventh nav cell: one account will ever see it. */
   { value: 'admin',     label: 'Admin',                                 icon: 'shield-check',     route: '/admin',         match: (p) => p === '/admin',         where: 'settings', built: true  },
-  /* No `dashboard.html` was exported — not in `design-system/screens/`, and
-     not in the v2 zip either. Every nav in the bundle listed it and the old
-     `atlas.html` pointed it at `home.html` as a stand-in. Shreekant's call: it
-     is a missing screen rather than another name for Home, so it holds its
-     place here and waits for a re-export. It takes its Settings entry when it
-     takes its screen. */
-  { value: 'dashboard', label: 'Dashboard',                             icon: 'layout-dashboard', route: '/dashboard',     match: (p) => p === '/dashboard',     where: 'settings', built: false,
-    soon: { what: 'A screen the design bundle names in every nav but never exported, so there is nothing to build from yet.' } },
+  /* The Dashboard used to wait here, unbuilt, for a design that never came;
+     BIG-6 built it in code at his word and it leads the nav above. */
 ];
 
-/** The destinations `App.tsx` points at `ComingSoon`. Three, since item 13. */
+/** The destinations `App.tsx` points at `ComingSoon`. Two, since BIG-6 built the Dashboard. */
 export const UNBUILT_ENTRIES = NAV_ENTRIES.filter((e) => !e.built);
 
 /**
@@ -198,7 +208,7 @@ export const UNBUILT_ENTRIES = NAV_ENTRIES.filter((e) => !e.built);
 export const ATLAS_SUB_ENTRIES = NAV_ENTRIES.filter((e) => e.where === 'atlas' && e.built);
 
 export interface NavModel {
-  /** Ready to hand straight to `<MiniNav items={...} />`. The six. */
+  /** Ready to hand straight to `<MiniNav items={...} />`. The eight. */
   items: MiniNavItem[];
   /** The `value` of the cell to light for the current route, or '' off-nav. */
   current: string;
@@ -215,7 +225,11 @@ export function useNavModel(): NavModel {
   const setAtlasPanelOpen = useUIStore((s) => s.setAtlasPanelOpen);
   const setDockOpen = useUIStore((s) => s.setDockOpen);
 
-  const needsAttentionCount = backlogTasks.filter((t) => !t.parent && taskNeedsAttention(t)).length;
+  const scores = usePriorityScores();
+  // Ignored work (BIG-3) is never in Needs Attention, so it is never counted.
+  const needsAttentionCount = backlogTasks.filter(
+    (t) => !t.parent && !scores.ignored.ids.has(t.id) && taskNeedsAttention(t),
+  ).length;
   /*
    * ITEM 16 — HOW MANY TASKS ARE INSIDE THEIR DANGER ZONE.
    *
@@ -224,19 +238,21 @@ export function useNavModel(): NavModel {
    * work that has to be started today, and Home is where the day is. Two
    * counts on one cell would also be one dot saying two different things.
    */
-  const redAlertCount = usePriorityScores().redAlertCount;
+  const redAlertCount = scores.redAlertCount;
 
   const items: MiniNavItem[] = NAV_ENTRIES.filter((entry) => entry.where === 'nav' && entry.built).map((entry) => ({
     value: entry.value,
     label: entry.label,
     shortLabel: entry.short,
     icon: <Icon name={entry.icon} size={20} />,
+    /* 29-1P5b: every icon in its screen's colour (his call). */
+    light: navCellLight(entry.route),
     /*
-     * MiniNav renders any non-null badge as a DOT, not a number — that is
-     * the design system's contract, and the Score mockup passes a count to
-     * it knowingly. The count itself is on the Score screen, and since item
-     * 16 also in `badgeNote` below, which is the tooltip and the accessible
-     * name rather than a second visual treatment.
+     * A number draws as a count chip on the cell since 29-1P2 (his call:
+     * "numbers on the nav", over the design system's dot). Red Alert's is
+     * coral, the urgent colour; Score's is neutral — a field missing is a
+     * queue to work through, not something about to be missed. `true` still
+     * draws the dot.
      *
      * The amber "Google needs reconnecting" cue keeps its old rule: it is
      * the only place besides the Notifications page that this is surfaced,
@@ -250,12 +266,11 @@ export function useNavModel(): NavModel {
           : entry.value === 'alerts'
             ? (notificationsNeedReconnect ? true : undefined)
             : undefined,
+    badgeColour: entry.value === 'home' ? 'coral' : 'neutral',
     /*
-     * The dot cannot print a number, so the number goes in the title and in
-     * the accessible name (`MiniNav` builds both off `badgeNote`). That is the
-     * whole of "the nav shows how many there are" that this component's
-     * contract allows — and it is more than the Score badge had, which said
-     * nothing at all.
+     * The count in words, for the title and the accessible name (`MiniNav`
+     * builds both off `badgeNote`) — the chip itself is hidden from a
+     * screen reader, which hears this instead.
      */
     badgeNote:
       entry.value === 'score' && needsAttentionCount > 0

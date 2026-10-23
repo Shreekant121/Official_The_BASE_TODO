@@ -5,7 +5,7 @@
  */
 import type { IconName } from '../../ui';
 import { CHIP_ICON_NAMES, type ToolChipIcon } from '../../lib/agent/toolChip';
-import type { AtlasHeldCall, AtlasMode, AtlasPendingApproval, AtlasTurnCost } from '../../lib/atlas/client';
+import type { AtlasHeldCall, AtlasMode, AtlasPendingApproval } from '../../lib/atlas/client';
 import type { AgentToolCall, TokenUsage } from '../../lib/agent/types';
 import type { AskCard } from '../../lib/askCard';
 
@@ -16,10 +16,6 @@ export interface ChatTurn {
   toolCalls: AgentToolCall[];
   status: 'running' | 'done' | 'error';
   error?: string;
-  /** True when adding or swapping an API key is the fix. */
-  keysWouldHelp?: boolean;
-  /** The `useSnapshotStore` turn this wrote into, or `null` if it wrote nothing. */
-  snapshotTurnId: string | null;
   usage?: TokenUsage;
   /**
    * Which model answered *this* turn, and how long it took (item 9D).
@@ -33,11 +29,16 @@ export interface ChatTurn {
    *
    * `elapsedMs` is measured here rather than reported, for `probeAtlas`'s
    * reason: the client is the only end that knows when the request left.
-   * The mockup's fourth field is the turn's cost in rupees, which is item 13
-   * and is deliberately absent — see the instrument bar.
+   * The mockup's fourth field is the turn's cost in rupees, which is
+   * deliberately absent: the AI spending was removed (OPT-4).
    */
   model?: string;
   elapsedMs?: number;
+  /**
+   * When it was sent, as `Date.now()` (29-1P15d): the working pill counts a
+   * long job from here. Absent on a reopened conversation, which is never running.
+   */
+  startedAt?: number;
   /**
    * Which machine ran **this** turn (item 9D).
    *
@@ -96,33 +97,6 @@ export interface ChatTurn {
    * different device a week later.
    */
   approvals?: AtlasPendingApproval[];
-  /**
-   * What the turn cost, in rupees (item 12, §3.4).
-   *
-   * `rupees: null` is *not known* and draws as an em dash; `0` is *known to be
-   * free*, which every local turn is. Absent on the in-browser path, which is
-   * a third state again — that path has never counted, and `TurnFooter` prints
-   * nothing rather than claiming either.
-   */
-  cost?: AtlasTurnCost;
-  /**
-   * The turn stopped at the per-turn spending ceiling (item 13A, §3.4).
-   *
-   * Present only when it did. `logTurnId` is what **Continue** resumes, and
-   * its absence is why the button is not always drawn: an Atlas keeping no
-   * action log has nowhere to have recorded the steps, and a button offering
-   * to carry on from nothing would be a lie about what a tap does.
-   */
-  ceilingStop?: { rupees: number | null; logTurnId: string | null };
-  /**
-   * The monthly ceiling stopped this turn **before it ran** (item 13A, §3.4).
-   *
-   * Nothing happened: no model was called and nothing was spent. Deliberately
-   * its own field rather than an `error`, because it is not one — §3.4 asks
-   * Atlas to *ask* rather than decline, and an error message beside a button
-   * that works would say the opposite.
-   */
-  monthlyStop?: { spent: number; limit: number; turns: number; model: string };
 }
 
 /*
@@ -137,7 +111,7 @@ export const CHIP_ICONS = CHIP_ICON_NAMES as Record<ToolChipIcon, IconName>;
  * emerald that stays legible on `--glass-tint-accent`, where `--accent` itself
  * is too dark to read as a glyph.
  */
-export const MARK_INK = 'oklch(0.93 0.07 162)';
+export const MARK_INK = 'var(--job-violet-text)';
 
 /**
  * ITEM 13G — ONE COLUMN, 820, AND THE COMPOSER IS IN IT.

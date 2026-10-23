@@ -55,7 +55,6 @@
   /* Task + session status, mapped to the app's real vocabulary */
   --status-running:   var(--accent);       /* timer live               */
   --status-queued:    var(--hue-cyan);     /* in the queue, not started */
-  --status-review:    var(--hue-amber);    /* needs a decision         */
   --status-done:      oklch(0.70 0.15 150);
   --status-overrun:   var(--hue-rose);     /* over allocated time      */
   --status-backburner: var(--hue-violet);

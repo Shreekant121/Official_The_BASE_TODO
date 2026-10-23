@@ -177,6 +177,24 @@ export function planRestore(
     taskIds.add(task.id);
   }
 
+  // A task in the entry kept its own references whole — nothing outside the
+  // entry cut them — so one can point at a task or list deleted and purged
+  // after this entry went in. Keep only the ones that now resolve, by the
+  // rule the reattach below follows. Run after every task has landed, so a
+  // link between two tasks of this entry survives. An emptied list stays `[]`,
+  // as the delete's own cut leaves it — never `undefined` in synced data.
+  for (let i = state.backlogTasks.length; i < backlogTasks.length; i++) {
+    const task = backlogTasks[i];
+    const dependsOn = task.dependsOn?.filter((id) => taskIds.has(id));
+    const sharedListIds = task.sharedListIds?.filter((id) => listIds.has(id));
+    if (dependsOn?.length === task.dependsOn?.length && sharedListIds?.length === task.sharedListIds?.length) continue;
+    backlogTasks[i] = {
+      ...task,
+      ...(dependsOn && { dependsOn }),
+      ...(sharedListIds && { sharedListIds }),
+    };
+  }
+
   // Sew the cut references back on, but only the ones that now resolve —
   // a prerequisite that was itself deleted and purged stays gone rather than
   // coming back as a dangling id.
@@ -207,6 +225,11 @@ export function planRestore(
 export function describeEntryContents(entry: TrashEntry): string {
   if (entry.kind === 'task') return '';
   const parts: string[] = [];
+  // The projects that went inside it (BIG-2) — the row names the first.
+  const inside = entry.projects.length - 1;
+  if (entry.kind === 'project' && inside > 0) {
+    parts.push(`${inside} project${inside === 1 ? '' : 's'} inside`);
+  }
   if (entry.taskLists.length > 0) {
     parts.push(`${entry.taskLists.length} list${entry.taskLists.length === 1 ? '' : 's'}`);
   }

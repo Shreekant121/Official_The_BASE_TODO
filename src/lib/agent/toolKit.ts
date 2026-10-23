@@ -53,8 +53,14 @@ function pluralOf(key: string, declared: Record<string, JsonSchema>): string | n
  * silently never gets written.
  */
 export function validateArgs(toolName: string, schema: JsonSchema, args: ToolArgs): ToolArgs {
+  return readArgs(toolName, schema, args).args;
+}
+
+function readArgs(toolName: string, schema: JsonSchema, args: ToolArgs, entryList?: string): { args: ToolArgs; lifted: string[] } {
   const declared = schema.properties ?? {};
+  const entryFields = entryList !== undefined ? (declared[entryList]?.items?.properties ?? {}) : {};
   const clean: ToolArgs = {};
+  const stray: ToolArgs = {};
 
   for (const [key, value] of Object.entries(args ?? {})) {
     if (!(key in declared)) {
@@ -63,6 +69,10 @@ export function validateArgs(toolName: string, schema: JsonSchema, args: ToolArg
         if (value === null || value === undefined) continue;
         const already = Array.isArray(clean[plural]) ? (clean[plural] as unknown[]) : [];
         clean[plural] = [...already, ...(Array.isArray(value) ? value : [value])];
+        continue;
+      }
+      if (key in entryFields) {
+        if (value !== null && value !== undefined) stray[key] = value;
         continue;
       }
       const accepted = Object.keys(declared).join(', ') || 'none';
@@ -74,11 +84,83 @@ export function validateArgs(toolName: string, schema: JsonSchema, args: ToolArg
       : value;
   }
 
+  const lifted = entryList !== undefined ? liftEntryFields(clean, stray, entryList, declared[entryList]) : [];
+
   for (const key of schema.required ?? []) {
     if (!(key in clean)) throw new ToolArgError(`${toolName} requires "${key}".`);
   }
 
-  return clean;
+  return { args: clean, lifted };
+}
+
+/**
+ * FIX-13 — FIELDS SENT BESIDE THE LIST INSTEAD OF INSIDE IT.
+ *
+ * A creator takes `{ tasks: [{ title, deadline, … }] }`, and gemma4:e4b sent
+ * `{ deadline, emergencyBoost, …, tasks: [{ title }] }` in 3 of 6 turns of
+ * FIX-12's check. The old answer was the unknown-key refusal above, which ends
+ * *"Accepted parameters: tasks"* — and a 4B model read that as "drop them",
+ * retried with the bare title, and the task was made with no deadline while the
+ * turn reported success.
+ *
+ * **One entry in the list: the fields are its**, there is nothing else they
+ * could belong to, so they are moved in and the reply says so (`defineTool`
+ * appends it). A field also inside the entry with a different value is a
+ * contradiction, refused rather than settled by guessing which one he meant.
+ * No list at all but a title beside it is the same one entry, written flat.
+ *
+ * **Several entries: refused, nothing made.** A deadline beside three tasks may
+ * be one task's or all three's, and copying it onto every one invents two
+ * deadlines — the very thing the tool description forbids. A refusal costs one
+ * round trip and names where the fields go; a wrong guess costs his data
+ * quietly. It refuses the whole call, not each entry, because the fault is one
+ * fact about the arguments (the `update_task` patch rule in `taskTools.ts`).
+ */
+function liftEntryFields(clean: ToolArgs, stray: ToolArgs, listKey: string, listSchema: JsonSchema | undefined): string[] {
+  const fields = Object.keys(stray);
+  if (fields.length === 0) return [];
+
+  const titleKey = listSchema?.items?.required?.[0] ?? 'title';
+  const named = joinFields(fields);
+  const raw = clean[listKey];
+  const entries: unknown[] = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+
+  if (entries.length === 0) {
+    if (!(titleKey in stray)) {
+      throw new ToolArgError(`${named} belong inside "${listKey}", one entry each: {"${listKey}": [{"${titleKey}": "…", "${fields[0]}": …}]}.`);
+    }
+    clean[listKey] = [stray];
+    return fields;
+  }
+
+  if (entries.length > 1) {
+    throw new ToolArgError(
+      `${named} ${fields.length === 1 ? 'was' : 'were'} sent beside "${listKey}" rather than inside an entry, and with ` +
+        `${entries.length} entries there is no telling which ${fields.length === 1 ? 'it belongs' : 'they belong'} to, so nothing was made. ` +
+        `Put each field inside the entry it belongs to: {"${listKey}": [{"${titleKey}": "…", "${fields[0]}": …}, …]}.`,
+    );
+  }
+
+  const only = entries[0];
+  // Anything that is neither a string nor an object is left for the tool's own
+  // reader, which names the entry and what it got.
+  if (typeof only !== 'string' && (only === null || typeof only !== 'object' || Array.isArray(only))) return [];
+  const entry: Record<string, unknown> = typeof only === 'string' ? { [titleKey]: only } : { ...(only as Record<string, unknown>) };
+
+  for (const field of fields) {
+    const inside = entry[field];
+    if (inside !== undefined && inside !== null && JSON.stringify(inside) !== JSON.stringify(stray[field])) {
+      throw new ToolArgError(`"${field}" was sent twice, beside "${listKey}" and inside its entry, with different values. Send it once, inside the entry.`);
+    }
+    entry[field] = stray[field];
+  }
+  clean[listKey] = [entry];
+  return fields;
+}
+
+function joinFields(fields: string[]): string {
+  const quoted = fields.map((field) => `"${field}"`);
+  return quoted.length === 1 ? quoted[0] : `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
 }
 
 export function requiredString(args: ToolArgs, key: string): string {
@@ -210,7 +292,10 @@ export function requiredRecordArray<T>(
     if (item === null || typeof item !== 'object' || Array.isArray(item)) {
       throw new ToolArgError(`"${key}"[${index}] must be an object (got ${typeName(item)}).`);
     }
-    return readItem(item as Record<string, unknown>, index);
+    // FIX-13: a null inside an entry is an optional left unfilled, as it is at
+    // the top level (`validateArgs`). gemma4:e4b sent `"estimatedTime": null`
+    // on one task of two, which failed that task with "must be a number".
+    return readItem(Object.fromEntries(Object.entries(item).filter(([, value]) => value !== null)), index);
   });
 }
 
@@ -244,13 +329,28 @@ export function optionalObjectArray<T>(
  * the caller. A tool that throws mid-write still returns a readable failure,
  * which matters because the agent loop feeds `summary` straight back to the
  * model as the function response.
+ *
+ * `entryList` names a creator's list (`tasks`, `steps`): entry fields sent
+ * beside it are read as described at `liftEntryFields`, and when they were
+ * moved in, the reply says so — to the model, so it nests them next time, and
+ * on the chip, so a deadline he did not see typed is not a surprise.
  */
-export function defineTool(def: ToolDef): ToolDef {
+export function defineTool(def: ToolDef, opts?: { entryList?: string }): ToolDef {
   return {
     ...def,
     execute: async (args: ToolArgs, ctx: ToolContext): Promise<ToolResult> => {
       try {
-        return await def.execute(validateArgs(def.name, def.parametersSchema, args), ctx);
+        const read = readArgs(def.name, def.parametersSchema, args, opts?.entryList);
+        const result = await def.execute(read.args, ctx);
+        if (read.lifted.length === 0 || !result.ok) return result;
+        const fields = joinFields(read.lifted);
+        return {
+          ...result,
+          summary:
+            `${result.summary} (${fields} ${read.lifted.length === 1 ? 'was' : 'were'} sent beside "${opts?.entryList}" ` +
+            `rather than inside it, and ${read.lifted.length === 1 ? 'was' : 'were'} read as that entry's.)`,
+          data: { ...((result.data as Record<string, unknown> | undefined) ?? {}), movedIntoEntry: read.lifted },
+        };
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
         return { ok: false, summary: `${def.name} failed: ${detail}` };

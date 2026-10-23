@@ -63,8 +63,17 @@
  *
  * NOT PORTED: `size`. The source has one geometry and so does this now — the
  * old `sm`/`md` pair was invented and nothing ever asked for `sm`.
+ *
+ * CLICKS AS YOU SLIDE (29-1P3, idea 123). Every whole step the value crosses
+ * clicks and buzzes softly, like the wheel on a phone's timer, so he can feel
+ * the hours go by under his finger. A "whole step" is `detent`: the caller's
+ * unit when it has one (Set Deadlines passes an hour), otherwise `step`, made
+ * coarser until the track has at most 24 of them — a click per percent of a
+ * volume would be a buzz, not a click.
  */
+import { useRef } from 'react';
 import type { CSSProperties, InputHTMLAttributes, ReactNode } from 'react';
+import { cue } from '../../lib/sound';
 
 /**
  * Each tone is the fill's two gradient stops, the emission under it, and the
@@ -86,11 +95,19 @@ const TONE = {
     glow: 'oklch(0.70 0.15 210 / 0.6)',
     bead: '0 0 0 1px oklch(0.70 0.15 210 / 0.34), 0 0 16px -2px oklch(0.70 0.15 210 / 0.45)',
   },
+  /* 29-1P2c3: violet is Atlas's (`--job-violet`, hue 300) and teal is
+     Focus's (`--job-teal`, 200) — brown noise is calm focus. */
   violet: {
-    from: 'oklch(0.70 0.15 296 / 0.5)',
-    to: 'oklch(0.70 0.15 296)',
-    glow: 'oklch(0.70 0.15 296 / 0.6)',
-    bead: '0 0 0 1px oklch(0.70 0.15 296 / 0.34), 0 0 16px -2px oklch(0.70 0.15 296 / 0.45)',
+    from: 'oklch(0.7 0.19 300 / 0.5)',
+    to: 'oklch(0.7 0.19 300)',
+    glow: 'oklch(0.7 0.19 300 / 0.6)',
+    bead: '0 0 0 1px oklch(0.7 0.19 300 / 0.34), 0 0 16px -2px oklch(0.7 0.19 300 / 0.45)',
+  },
+  teal: {
+    from: 'oklch(0.7 0.13 200 / 0.5)',
+    to: 'oklch(0.7 0.13 200)',
+    glow: 'oklch(0.7 0.13 200 / 0.6)',
+    bead: '0 0 0 1px oklch(0.7 0.13 200 / 0.34), 0 0 16px -2px oklch(0.7 0.13 200 / 0.45)',
   },
   amber: {
     from: 'oklch(0.75 0.15 82 / 0.5)',
@@ -131,7 +148,12 @@ export interface SliderProps
   label: string;
   /** What the value IS, in words: "4h 00m", not "14400". Defaults to `format`. */
   valueText?: string;
+  /** One click's worth of value (123). Defaults to `step`, at most 24 clicks a track. */
+  detent?: number;
 }
+
+/** At most this many clicks along a whole track. */
+const MAX_DETENTS = 24;
 
 export function Slider({
   value,
@@ -144,6 +166,7 @@ export function Slider({
   showValue = true,
   label,
   valueText,
+  detent,
   disabled = false,
   className = '',
   style,
@@ -151,6 +174,15 @@ export function Slider({
 }: SliderProps) {
   const t = TONE[tone] ?? TONE.accent;
   const span = max - min;
+  const click = detent ?? step * Math.max(1, Math.ceil(span / step / MAX_DETENTS));
+  /* Which click the value sat in at the last change — a new one sounds. */
+  const lastClick = useRef<number | null>(null);
+  const onInput = (next: number) => {
+    const at = Math.round((next - min) / click);
+    if (at !== (lastClick.current ?? Math.round((value - min) / click))) cue('detent');
+    lastClick.current = at;
+    onValueChange?.(next);
+  };
   /* Note 3 — a fraction, so screens.css can offset it by half a bead. */
   const pct = span === 0 ? 0 : Math.max(0, Math.min(1, (value - min) / span));
   const read = (n: number) => (format ? format(n) : n);
@@ -188,7 +220,7 @@ export function Slider({
           disabled={disabled}
           aria-label={label}
           aria-valuetext={valueText ?? (format ? String(format(value)) : undefined)}
-          onChange={(e) => onValueChange?.(Number(e.target.value))}
+          onChange={(e) => onInput(Number(e.target.value))}
           {...rest}
         />
         <span aria-hidden="true" className="ag-slider__track" />

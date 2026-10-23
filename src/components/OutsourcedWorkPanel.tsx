@@ -34,9 +34,8 @@
  *                   the one genuinely live thing on the screen, and it gets
  *                   `StatusPill`'s ripple for free — which IS the system's
  *                   whole signalling rule, not decoration.
- *   submitted    →  `review`. Amber, "needs a decision". It is waiting on
- *                   the owner, which is exactly what amber means everywhere
- *                   else in this app.
+ *   submitted    →  `review`, "needs a look" — grey with its triangle since
+ *                   29-1P2c2 (it was amber). It is waiting on the owner.
  *
  * Submitted rows come first for the same reason they always did: the ones
  * waiting on you outrank the ones that are not.
@@ -49,7 +48,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore, formatINR } from '../store/useStore';
-import { Button, Card, Icon, Kicker, StatusPill, Well } from '../ui';
+import { Button, Card, Icon, Kicker, StatusPill, Well, WhiteButton } from '../ui';
 import {
   subscribeSubmissions, subscribeSubmissionDetails, setSubmission, clearSubmission, normaliseFilesLink,
   type ShareSubmission, type SubmissionDetails,
@@ -222,16 +221,15 @@ export default function OutsourcedWorkPanel({ shareIds }: { shareIds: string[] }
               >
                 Send back
               </Button>
-              <Button
+              <WhiteButton
                 size="sm"
-                variant="tint"
-                tone="accent"
-                loading={busy}
+                disabled={busy}
+                aria-busy={busy || undefined}
                 onClick={() => approve(e)}
-                iconLeft={<Icon name="check" size={14} />}
+                icon={<Icon name="check" size={14} />}
               >
                 Approve
-              </Button>
+              </WhiteButton>
             </div>
           )}
         </Well>

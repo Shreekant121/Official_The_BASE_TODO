@@ -17,7 +17,7 @@ const TZ = 'Asia/Kolkata';
 const NOW = new Date('2026-09-16T06:30:00Z'); // 12:00 in Kolkata
 
 const state: SubjectState = {
-  projects: [{ id: 'p-empire', name: 'Shreekant Empire', color: '#7c3aed', createdAt: 0, order: 0 } as Project],
+  projects: [{ id: 'p-empire', name: 'Shreekant Empire', createdAt: 0, order: 0 } as Project],
   taskLists: [
     { id: 'l-ops', title: 'Operations', projectId: 'p-empire', order: 0 } as TaskList,
     { id: 'l-loose', title: 'Self Care', order: 1 } as TaskList,

@@ -46,16 +46,17 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { collection, doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import {
-  Button,
+  BlurAcross, Button,
   Icon,
-  IconButton,
   Input,
   MiniNav,
   SegmentedControl,
+  SoftIconButton,
   SparkBars,
   Switch,
   TravellingTrack,
   useMedia,
+  WhiteButton,
   WIDE,
 } from '../ui';
 import { RailMark } from '../components/BrandMark';
@@ -614,15 +615,15 @@ function VerifyFirst() {
         would pass the same check. Send yourself the link, open it, then come back here.
       </span>
       <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-        <Button
-          variant="tint"
-          iconLeft={<Icon name="mail" size={15} />}
+        {/* The card's yes: solid white since 29-1P2. */}
+        <WhiteButton
+          icon={<Icon name="mail" size={15} />}
           onClick={() => {
             sendOwnerVerification().then(() => setState('sent'), () => setState('failed'));
           }}
         >
           Send the link
-        </Button>
+        </WhiteButton>
         <Button
           variant="ghost"
           onClick={() => {
@@ -815,8 +816,10 @@ export default function AdminPage() {
             />
           </span>
           <span style={{ flex: '0 0 auto', maxWidth: '100%', overflowX: 'auto' }}>
+            {/* The soft pressed-in switch since 29-1P2, as every view switch. */}
             <SegmentedControl
               size="sm"
+              look="soft"
               value={sort}
               onChange={(v) => setSort(v as Sort)}
               options={[
@@ -836,6 +839,8 @@ export default function AdminPage() {
           </span>
         )}
 
+        {/* 29-1P5c, idea 60: a new order blurs across. */}
+        <BlurAcross value={sort} index={['active', 'new', 'key'].indexOf(sort)} style={{ display: 'grid', gap: 'var(--sp-8)' }}>
         {loadError ? (
           <span role="alert" style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--status-overrun)' }}>
             Could not load the accounts ({loadError}).
@@ -863,6 +868,7 @@ export default function AdminPage() {
             ))}
           </div>
         )}
+        </BlurAcross>
 
         <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
           Signup is open: a new account gets its own tasks and its own calendar, on its own key, with the assistant off.
@@ -883,7 +889,7 @@ export default function AdminPage() {
               padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
             }}
           >
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -896,9 +902,10 @@ export default function AdminPage() {
         >
           {!detail && (
             <header style={{ width: '100%', maxWidth: 1180, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
-              <IconButton label="Back" onClick={() => navigate(-1)}>
+              {/* Round soft since 29-1P2, as every header's icon button. */}
+              <SoftIconButton label="Back" onClick={() => navigate(-1)}>
                 <Icon name="arrow-left" size={18} />
-              </IconButton>
+              </SoftIconButton>
               <div style={{ display: 'grid', gap: 'var(--sp-2)', minWidth: 0 }}>
                 <Kick color="var(--fg-3)">Visible to your account only</Kick>
                 <h1
@@ -924,7 +931,7 @@ export default function AdminPage() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}

@@ -1,0 +1,274 @@
+/*
+ * The Calendar (29-2e1). The hours reuse the Dashboard timeline's `.tl-*`
+ * rules (dashboard.css); what is here is the screen's frame, the month and
+ * the events. Nothing moves at rest (rule 1): the only motion is a swipe
+ * or a pinch.
+ */
+
+/* The screen is the window's height: the header stays, the body fills the rest. */
+.cal-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+}
+.cal-header {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-7);
+}
+.cal-kicker {
+  margin: 0 0 var(--sp-1);
+  font: var(--type-label);
+  color: var(--job-sky-text);
+  min-height: 1.2em;
+}
+.cal-title {
+  margin: 0;
+  font: var(--weight-light) var(--text-4xl) / 1.05 var(--font-display);
+  letter-spacing: -0.04em;
+  color: var(--fg-1);
+}
+.cal-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-4);
+  margin-left: auto;
+}
+.cal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Two fingers here are the calendar's pinch (29-2e2), never the page's zoom. */
+  touch-action: pan-x pan-y;
+}
+/* What a pinch scales, about the point between the fingers (`usePinchZoom`).
+   Only while it moves is the body clipped and the layer promoted: at rest
+   nothing here differs from a plain box. */
+.cal-zoom {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cal-zoom[data-pinching] { will-change: scale, opacity; }
+.cal-body:has(> .cal-zoom[data-pinching]) { overflow: clip; }
+
+/* ── Idea 53: the month ─────────────────────────────────────────────────── */
+.cal-month {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-width: 980px;
+}
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  font: var(--type-caption);
+  font-size: 11px;
+  color: var(--fg-3);
+  text-align: center;
+}
+/* The browser keeps the vertical scroll; the sideways drag turns the month. */
+.cal-month-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: clip;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cal-month-grid {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(52px, 1fr));
+  gap: var(--sp-1);
+}
+.cal-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3) 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background-color: oklch(1 0 0 / 0.025);
+  color: var(--fg-1);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-glass);
+}
+.cal-day:hover { background-color: oklch(1 0 0 / 0.06); }
+.cal-day:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: 1px; }
+.cal-day-num {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-weight: var(--weight-light);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+}
+.cal-day[data-past] .cal-day-num { color: var(--fg-2); }
+/* Days of the months either side: there, but quiet. */
+.cal-day[data-out] { background-color: transparent; }
+.cal-day[data-out] .cal-day-num { color: var(--fg-4); }
+/* The day the calendar is on: chosen, lime. */
+.cal-day[aria-current='date'] {
+  background-color: var(--job-lime-wash);
+  box-shadow: inset 0 0 0 1px var(--job-lime-line);
+}
+.cal-day[aria-current='date'] .cal-day-num { color: var(--job-lime-text); font-weight: var(--weight-semi); }
+/* Idea 53: today in an orange ring — the now line's orange. */
+.cal-day[data-today] .cal-day-num {
+  box-shadow: inset 0 0 0 1.5px var(--job-orange), var(--job-orange-glow-sm);
+  color: var(--fg-1);
+}
+.cal-dots { display: flex; align-items: center; gap: 3px; height: 6px; }
+.cal-dots > i { width: 6px; height: 6px; border-radius: 50%; }
+.cal-more { font: var(--type-caption); font-size: 9.5px; line-height: 6px; color: var(--fg-3); margin-left: 1px; }
+
+/* ── The day and the week ───────────────────────────────────────────────── */
+.cal-hours {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.cal-scroll { flex: 1; }
+.cal-allday-label {
+  align-self: flex-end;
+  padding: 0 var(--sp-3) 6px 0;
+  text-align: right;
+  font: var(--type-caption);
+  font-size: 10.5px;
+  color: var(--fg-4);
+}
+.cal-head { display: grid; align-content: end; gap: var(--sp-2); min-width: 0; padding: 0 2px; }
+.cal-colhead {
+  padding: var(--sp-2) 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  cursor: pointer;
+}
+.cal-colhead:hover { background-color: oklch(1 0 0 / 0.05); }
+.cal-strip { display: grid; align-content: start; gap: 2px; }
+/* An event: a block in its own colour (`eventColours`), all day or timed. */
+.cal-chip {
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-left: 2px solid var(--ev);
+  border-radius: 6px;
+  background-color: var(--ev-wash);
+  color: var(--ev-text);
+  text-align: left;
+  font: var(--type-caption);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.tl-item.cal-event {
+  border-left-color: var(--ev);
+  background-color: var(--ev-wash);
+  color: var(--ev-text);
+}
+.tl-item.cal-event:hover { box-shadow: 0 0 0 1px var(--ev); }
+.cal-chip:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: 1px; }
+
+/* ── 29-2e3b: the tray of undated tasks (`CalendarTray`) ────────────────── */
+/* Beside the hours on the laptop, under them on a narrow window. */
+.cal-hours-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.cal-hours-wrap[data-wide] { flex-direction: row; }
+.cal-hours-wrap > .cal-hours { flex: 1; min-width: 0; }
+.cal-tray {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background-color: oklch(1 0 0 / 0.025);
+  transition: background-color var(--dur-fast) var(--ease-glass);
+}
+.cal-tray[data-wide] { flex-basis: 248px; }
+.cal-tray-head {
+  margin: 0;
+  min-height: 1.4em;
+  font: var(--type-caption);
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+.cal-tray-rows {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+.cal-tray:not([data-wide]) .cal-tray-rows {
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+}
+/* A row is a block-to-be: the hours' block, standing in a list. */
+.tl-item.cal-tray-item {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 40px;
+  justify-content: center;
+  cursor: grab;
+}
+.cal-tray:not([data-wide]) .cal-tray-item { width: 168px; }
+/* Its carried copy is over the hours; the row it came from waits, faint. */
+.cal-tray-item[data-lifted] { opacity: 0.35; }
+.cal-tray-sentinel { flex: 0 0 1px; }
+.cal-tray-empty { margin: var(--sp-2) 0; font: var(--type-caption); color: var(--fg-3); }
+
+/* A block from the hours is held: the tray, or its button when shut, is somewhere to put it. */
+.cal-main:has(.tl-item[data-dragging]) .cal-tray,
+.cal-main:has(.tl-item[data-dragging]) .cal-tray-button > .ds-soft {
+  outline: 1.5px dashed var(--job-lime-line);
+  outline-offset: -1.5px;
+}
+.cal-tray[data-drop-hot=''],
+.cal-tray-button[data-drop-hot=''] > .ds-soft { background-color: var(--job-lime-wash); }
+.cal-tray-button[data-drop-hot=''] > .ds-soft { color: var(--job-lime-text); }
+.cal-main:has(.tl-item[data-dragging]) [data-drop-hot='refuse'] { outline-color: var(--fg-4); }
+.cal-main:has(.tl-item[data-dragging]) .cal-tray-button[data-drop-hot='refuse'] > .ds-soft { outline-color: var(--fg-4); }
+/* Over it the block dims where it was: let go, and it leaves the hours. */
+.tl-item[data-dragging][data-out] { opacity: 0.45; }
+/* What letting go does, in the tray's top line. */
+.cal-tray-take, .cal-tray-keep { display: none; }
+.cal-tray[data-drop-hot] .cal-tray-idle { display: none; }
+.cal-tray[data-drop-hot=''] .cal-tray-take { display: inline; color: var(--job-lime-text); }
+.cal-tray[data-drop-hot='refuse'] .cal-tray-keep { display: inline; color: var(--fg-2); }

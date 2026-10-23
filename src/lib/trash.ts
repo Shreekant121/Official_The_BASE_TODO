@@ -8,7 +8,7 @@
  * delete time, because a public link that outlives its deletion by thirty days
  * is not a Trash, it is a leak.
  */
-import { useStore, DEFAULT_LISTS, upgradeTaskScoring } from '../store/useStore';
+import { useStore, DEFAULT_LISTS, upgradeTaskNotesAndTags, upgradeTaskScoring } from '../store/useStore';
 import { useTrashStore } from '../store/useTrashStore';
 import { planRestore, type RestoreResult } from './trashModel';
 
@@ -35,7 +35,7 @@ export function restoreFromTrash(entryId: string): RestoreResult | null {
   // which would read as an unscored task with a score of zero. This is the
   // third door `upgradeTaskScoring` guards, after the persist migration and
   // the cloud snapshot.
-  useStore.setState({ ...result.next, backlogTasks: upgradeTaskScoring(result.next.backlogTasks) });
+  useStore.setState({ ...result.next, backlogTasks: upgradeTaskNotesAndTags(upgradeTaskScoring(result.next.backlogTasks)) });
   useTrashStore.getState().remove(entryId);
   return result;
 }

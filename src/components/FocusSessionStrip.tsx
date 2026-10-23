@@ -30,10 +30,11 @@
  * records either way — so the readout follows `Countdown`'s rule for the same
  * situation: `+` and `--status-overrun`, with the word switching from
  * "remaining" to "over". The mockup clamps at zero and never has to answer
- * this.
+ * this. **Since 29-1P10b (idea 102) it is gold and says "in flow"**, as the
+ * task clock does: running past the window while deep in it is not a fault.
  */
 import { formatHms, formatSpan } from '../lib/timeSpan';
-import { Button, Icon, MetaKicker } from '../ui';
+import { Icon, MetaKicker, SoftToggle } from '../ui';
 
 export interface SessionSegment {
   id: string;
@@ -82,13 +83,14 @@ export function FocusSessionStrip({ segments, secondsLeft, doneCount, total, sor
           <span
             style={{
               font: 'var(--type-numeric)', fontSize: 'var(--text-xl)',
-              color: over ? 'var(--status-overrun)' : 'var(--fg-1)',
+              color: over ? 'var(--job-gold)' : 'var(--fg-1)',
+              textShadow: over ? '0 0 18px oklch(0.8 0.16 82 / 0.45)' : 'none',
               fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
             }}
           >
             {over ? '+' : ''}{formatHms(Math.abs(secondsLeft))}
           </span>
-          <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)' }}>{over ? 'over' : 'remaining'}</span>
+          <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)' }}>{over ? 'in flow' : 'remaining'}</span>
         </span>
       </div>
 
@@ -110,8 +112,9 @@ export function FocusSessionStrip({ segments, secondsLeft, doneCount, total, sor
               style={{
                 flex: s.seconds / span, minWidth: 6, borderRadius: 'var(--r-pill)', overflow: 'hidden',
                 backgroundImage: s.state === 'queued' ? 'var(--glass-fill-2)' : 'none',
-                /* A closed task holds a dimmed accent — it was live once. */
-                backgroundColor: s.state === 'done' ? 'oklch(0.70 0.15 162 / 0.42)' : undefined,
+                /* A closed task is done: dimmed lime (29-1P2c1). The live one
+                   is emerald, running now. */
+                backgroundColor: s.state === 'done' ? 'oklch(0.84 0.17 130 / 0.42)' : undefined,
                 boxShadow: s.state === 'live' ? 'var(--glow-accent-sm)' : 'none',
                 transition: 'flex var(--dur-slow) var(--ease-glass)',
               }}
@@ -146,17 +149,17 @@ export function FocusSessionStrip({ segments, secondsLeft, doneCount, total, sor
         </span>
       </div>
 
+      {/* Soft, pressed in once the queue is in score order (29-1P2). */}
       {onSort && (
-        <Button
+        <SoftToggle
           size="sm"
-          variant={sorted ? 'tint' : 'glass'}
-          tone="cyan"
+          pressed={!!sorted}
           onClick={onSort}
-          iconLeft={<Icon name="arrow-down-wide-narrow" size={15} />}
+          icon={<Icon name="arrow-down-wide-narrow" size={15} />}
           title="Sort the queue by priority score"
         >
           Smart sort
-        </Button>
+        </SoftToggle>
       )}
     </div>
   );

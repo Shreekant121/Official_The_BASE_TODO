@@ -1,0 +1,252 @@
+/* ---------------------------------------------------------------
+   ATLAS AT WORK (29-1P15a, ideas 47 and 67). Both move only while
+   Atlas is working, and stop the moment it is not: the shimmer is
+   on a line that exists only while it works, and the edge light's
+   loop is paused whenever it is off.
+
+   Violet, Atlas's one colour (29-1P2c3). The demos used a rainbow
+   for the edges; one colour, one job, so the ring is violet's own
+   shades, lighter and deeper, travelling round.
+   --------------------------------------------------------------- */
+
+[data-v3] {
+  /* The shimmer's two inks: a readable violet and the light running through it. */
+  --job-violet-shimmer: oklch(0.74 0.11 300);
+  --job-violet-shimmer-lit: oklch(0.97 0.03 300);
+  /* The edge ring's four shades, all violet (hue 285-315). */
+  --edge-light-1: oklch(0.7 0.19 300);
+  --edge-light-2: oklch(0.86 0.1 308);
+  --edge-light-3: oklch(0.58 0.2 286);
+  --edge-light-4: oklch(0.76 0.16 315);
+  /* The travelling line, the still glow inside it, and the time one
+     turn of colour takes (the card's 3.2s). */
+  --edge-light-line: 2px;
+  --edge-light-depth: 26px;
+  --edge-light-glow-a: oklch(0.72 0.18 300 / 0.42);
+  --edge-light-glow-b: oklch(0.7 0.19 300 / 0.12);
+  --edge-light-turn: 3.2s;
+}
+
+/* ── 47 THE THINKING SHIMMER ────────────────────────────────────
+   A soft light runs through the words while Atlas works. Put on the
+   working line's words only, never its dots or tool name. Under
+   reduced motion the global rule plays it once in 1ms and the words
+   stay a still violet. */
+@keyframes ag-atlas-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -50% 0; }
+}
+.ag-atlas-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    var(--job-violet-shimmer) 30%,
+    var(--job-violet-shimmer-lit) 50%,
+    var(--job-violet-shimmer) 70%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ag-atlas-shimmer 1.6s linear infinite;
+}
+
+/* ── 67 ATLAS LIGHTS THE EDGES ──────────────────────────────────
+   While Atlas works, the edges of its screen glow, the colour
+   travelling round them; when it answers the light fades out.
+
+   COMPOSITOR ONLY, ON PURPOSE. The card turned a conic gradient by
+   animating its angle, which repaints the whole screen every frame,
+   and blurred a copy of it, which a cheap tablet cannot afford for
+   seconds at a time. Here each edge is a 2px line holding a long
+   strip of colour that slides along it by `translate`: the browser
+   moves four small painted layers and repaints nothing. Top runs
+   right, right runs down, bottom left, left up: the colour goes round
+   clockwise.
+
+   THE GLOW IS STILL, AND THAT IS MEASURED. A first version faded each
+   strip inward with a `mask-image`; on the tablet stand-in (swiftshader,
+   CPU 4x, /chat working) that cost 54-59fps with hitches against a flat
+   60 without it, and the same strips unmasked, or masked and still,
+   were back at 59-60: a mask over a moving layer is drawn off-screen
+   every frame. An inset shadow on the whole frame instead was worse
+   (56-57): it made the frame a window-sized layer redrawn every frame.
+   So each edge is a thin strip with the glow painted into it once, a
+   plain gradient fading inward, and only the 2px line travels.
+
+   `.ag-edge-light` fills its positioned parent and takes its corners;
+   `data-fixed` pins it to the window instead (the chat page). */
+.ag-edge-light {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 600ms var(--ease-glass);
+}
+.ag-edge-light[data-fixed] {
+  position: fixed;
+}
+.ag-edge-light[data-on] {
+  opacity: 1;
+}
+.ag-edge-light > i {
+  position: absolute;
+  overflow: hidden;
+}
+.ag-edge-light > i::before {
+  content: '';
+  position: absolute;
+  /* One period of the colour is 640px (the keyframes' distance); the
+     strip reaches one period past each end of its edge and slides by
+     exactly one period, so it loops seamlessly. */
+  --edge-period: 640px;
+  background-image: repeating-linear-gradient(
+    var(--edge-dir),
+    var(--edge-light-1) 0,
+    var(--edge-light-2) 160px,
+    var(--edge-light-3) 320px,
+    var(--edge-light-4) 480px,
+    var(--edge-light-1) 640px
+  );
+  animation-duration: var(--edge-light-turn);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  /* Off, the loop holds still where it is: it stops costing anything,
+     and the fade-out is not a jump back to the start. */
+  animation-play-state: paused;
+}
+.ag-edge-light[data-on] > i::before {
+  animation-play-state: running;
+  will-change: translate;
+}
+/* Literal distances (one period, 640px), never a variable: a keyframe
+   that reads a custom property can keep the browser from running it on
+   the compositor. */
+@keyframes ag-edge-right { to { translate: 640px 0; } }
+@keyframes ag-edge-down { to { translate: 0 640px; } }
+@keyframes ag-edge-left { to { translate: -640px 0; } }
+@keyframes ag-edge-up { to { translate: 0 -640px; } }
+
+/* The four edges. Each is a strip as deep as the glow, painted once
+   with the glow fading inward, and the travelling line along its outer
+   side. */
+.ag-edge-light > i:nth-child(1),
+.ag-edge-light > i:nth-child(3) {
+  left: 0;
+  right: 0;
+  height: var(--edge-light-depth);
+}
+.ag-edge-light > i:nth-child(2),
+.ag-edge-light > i:nth-child(4) {
+  top: 0;
+  bottom: 0;
+  width: var(--edge-light-depth);
+}
+.ag-edge-light > i:nth-child(1) { background-image: linear-gradient(to bottom, var(--edge-light-glow-a), var(--edge-light-glow-b) 35%, transparent); }
+.ag-edge-light > i:nth-child(2) { background-image: linear-gradient(to left, var(--edge-light-glow-a), var(--edge-light-glow-b) 35%, transparent); }
+.ag-edge-light > i:nth-child(3) { background-image: linear-gradient(to top, var(--edge-light-glow-a), var(--edge-light-glow-b) 35%, transparent); }
+.ag-edge-light > i:nth-child(4) { background-image: linear-gradient(to right, var(--edge-light-glow-a), var(--edge-light-glow-b) 35%, transparent); }
+.ag-edge-light > i:nth-child(1) { top: 0; }
+.ag-edge-light > i:nth-child(2) { right: 0; }
+.ag-edge-light > i:nth-child(3) { bottom: 0; }
+.ag-edge-light > i:nth-child(4) { left: 0; }
+
+.ag-edge-light > i:nth-child(1)::before,
+.ag-edge-light > i:nth-child(3)::before {
+  height: var(--edge-light-line);
+  left: calc(-1 * var(--edge-period));
+  width: calc(100% + 2 * var(--edge-period));
+  --edge-dir: 90deg;
+}
+.ag-edge-light > i:nth-child(2)::before,
+.ag-edge-light > i:nth-child(4)::before {
+  width: var(--edge-light-line);
+  top: calc(-1 * var(--edge-period));
+  height: calc(100% + 2 * var(--edge-period));
+  --edge-dir: 180deg;
+}
+/* Each line on its strip's outer side. */
+.ag-edge-light > i:nth-child(1)::before { top: 0; }
+.ag-edge-light > i:nth-child(2)::before { right: 0; }
+.ag-edge-light > i:nth-child(3)::before { bottom: 0; }
+.ag-edge-light > i:nth-child(4)::before { left: 0; }
+/* Top runs right, right runs down, bottom left, left up. */
+.ag-edge-light > i:nth-child(1)::before { animation-name: ag-edge-right; }
+.ag-edge-light > i:nth-child(2)::before { animation-name: ag-edge-down; }
+.ag-edge-light > i:nth-child(3)::before { animation-name: ag-edge-left; }
+.ag-edge-light > i:nth-child(4)::before { animation-name: ag-edge-up; }
+
+/* ── 77 COLOURS MOVING INSIDE THE GLASS (29-1P15d) ───────────────
+   Once Atlas has worked for a while, soft violet light drifts behind
+   its working pill (`DriftGlass.tsx`). Three shades of violet, his
+   call; the card drifted four colours.
+
+   CHEAP BY CONSTRUCTION, the edge light's rule. The card blurred
+   three discs with `filter: blur(28px)` and moved them; here each
+   disc is a radial gradient that already fades to nothing at its
+   edge, painted once, and only `translate` moves: no filter, no
+   mask, no repaint. Off, it fades out and the loop holds still
+   where it is, so the colours settle rather than jump.
+
+   It sits at z-index -1 in a parent that is `isolation: isolate`:
+   over the pill's own glass, under its words. 1px in, so the pill's
+   rim stays on top. */
+[data-v3] {
+  --drift-glass-1: oklch(0.6 0.2 300 / 0.55);
+  --drift-glass-2: oklch(0.55 0.19 284 / 0.5);
+  --drift-glass-3: oklch(0.68 0.16 318 / 0.45);
+  --drift-glass-time: 5.5s;
+}
+.ag-drift-glass {
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1s var(--ease-glass);
+}
+.ag-drift-glass[data-on] {
+  opacity: 1;
+}
+.ag-drift-glass > i {
+  position: absolute;
+  top: 50%;
+  width: 96px;
+  height: 96px;
+  margin-top: -48px;
+  border-radius: 50%;
+  animation-duration: var(--drift-glass-time);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-play-state: paused;
+}
+.ag-drift-glass[data-on] > i {
+  animation-play-state: running;
+  will-change: translate;
+}
+.ag-drift-glass > i:nth-child(1) {
+  left: -36px;
+  background-image: radial-gradient(closest-side, var(--drift-glass-1), transparent);
+  animation-name: ag-drift-a;
+}
+.ag-drift-glass > i:nth-child(2) {
+  left: 38%;
+  background-image: radial-gradient(closest-side, var(--drift-glass-2), transparent);
+  animation-name: ag-drift-b;
+  animation-delay: -2s;
+}
+.ag-drift-glass > i:nth-child(3) {
+  right: -36px;
+  background-image: radial-gradient(closest-side, var(--drift-glass-3), transparent);
+  animation-name: ag-drift-c;
+  animation-delay: -4s;
+}
+/* Literal distances, as the edge light's: a keyframe reading a
+   custom property can keep it off the compositor. */
+@keyframes ag-drift-a { to { translate: 110px -14px; } }
+@keyframes ag-drift-b { to { translate: -90px 16px; } }
+@keyframes ag-drift-c { to { translate: -120px -10px; } }

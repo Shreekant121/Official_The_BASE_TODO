@@ -31,7 +31,6 @@
  */
 import { create } from 'zustand';
 import {
-  AtlasMonthlyCeilingReached,
   decideApproval,
   patchConversation,
   revertLogTurn,
@@ -39,16 +38,12 @@ import {
   type AtlasHeldCall,
 } from './atlas/client';
 import { useAtlasStore } from './atlas/atlasStore';
-import { atlasModelId, downshiftOn, routesToAtlas } from './atlas/routing';
-import { runAgentTurn } from './agent/core';
-import { getActiveApiKey } from './agent/apiKeys';
+import { atlasModelId, cloudRoutingOf, routesToAtlas } from './atlas/routing';
+import { atlasApiKey } from './agent/apiKeys';
 import { resolveUserTimeZone } from './agent/dates';
-import { createLiveSession } from './agent/liveContext';
 import { selectEffectiveModel, useModelStore } from './agent/modelStore';
-import { fallbackTools } from './agent/tools';
-import { createGeminiTransport } from './agent/transports/geminiTransport';
-import type { AgentMessage, AgentToolCall, ToolDef } from './agent/types';
-import { useSnapshotStore } from '../store/useSnapshotStore';
+import type { AgentMessage, AgentToolCall } from './agent/types';
+import { auth } from './firebase';
 import {
   didFromToolCall,
   fieldsInPatch,
@@ -63,6 +58,8 @@ import {
   type ScoreField,
 } from './aiPanel';
 import { parseAnswerMessage, type AnswerReceipt, type AskCard } from './askCard';
+import { rememberedNotes } from './atlas/remembered';
+import { cue } from './sound';
 
 // ─── Items ──────────────────────────────────────────────────────────────────
 
@@ -87,12 +84,16 @@ export type PanelItem =
       done?: string;
     }
   | { kind: 'filled'; id: string; field: string; value: string }
+  /** A note Atlas saved this turn (29-1P15b, idea 94): "Remembered", which opens it. */
+  | { kind: 'remembered'; id: string; path: string }
   /** Something the panel itself has to say: a failure, or a fact about the turn. */
   | { kind: 'note'; id: string; text: string; tone: 'error' | 'quiet' };
 
 export type UndoState =
   | { status: 'ready'; via: 'atlas'; logTurnId: string }
-  | { status: 'ready'; via: 'ring'; snapshotTurnId: string }
+  /* BIG-12: a turn Atlas ran in this page. Reverted from the cloud copy of its
+     log, by Atlas in this page — the retired basic assistant's ring is gone. */
+  | { status: 'ready'; via: 'here'; logTurnId: string; uid: string }
   | { status: 'busy' }
   | { status: 'done'; summary: string }
   | { status: 'unavailable'; reason: string };
@@ -144,6 +145,9 @@ function patchSession(key: string, update: (session: PanelSession) => PanelSessi
 }
 
 function pushItem(key: string, item: PanelItem): void {
+  /* 29-1P3: every error note here answers something he pressed — a send, an
+     undo, an approval — so each one sounds. */
+  if (item.kind === 'note' && item.tone === 'error') cue('error');
   patchSession(key, (s) => ({ ...s, items: [...s.items, item] }));
 }
 
@@ -188,31 +192,6 @@ export function registerFillHost(key: string, host: FillHost): () => void {
   };
 }
 
-/**
- * The in-browser half of Atlas's Ask-first mode: every write is recorded and
- * not run. The sentence the model reads back is written for this screen —
- * the value is on his screen and he saves it — so it carries straight on.
- */
-function holdingTools(tools: ToolDef[], onHold: (call: AtlasHeldCall) => void): ToolDef[] {
-  return tools.map((tool) =>
-    tool.mutates
-      ? {
-          ...tool,
-          execute: async (args) => {
-            onHold({ name: tool.name, args, description: tool.description });
-            return {
-              ok: true,
-              summary:
-                `Not written: ${tool.name} put the value on Shreekant's screen, and he saves it himself. ` +
-                'Do not call it again for the same field.',
-              data: { held: true },
-            };
-          },
-        }
-      : tool,
-  );
-}
-
 // ─── Running a turn ─────────────────────────────────────────────────────────
 
 const inFlight = new Map<string, AbortController>();
@@ -224,9 +203,6 @@ export function isRunning(key: string): boolean {
 export function stopTurn(key: string): void {
   inFlight.get(key)?.abort();
 }
-
-let geminiTransport: ReturnType<typeof createGeminiTransport> | null = null;
-let liveSession: ReturnType<typeof createLiveSession> | null = null;
 
 /**
  * Has anything asked the laptop yet? `/chat` probes on mount; a panel can be
@@ -256,6 +232,16 @@ export function ensureCatalogue(): Promise<void> {
  * selector falls through to Gemini on an empty list, and printing that would
  * name a machine the turn is not going to run on.
  */
+/** BIG-1: the cloud half of the rule, as the chat computes it. */
+function panelOnAtlas(model: ReturnType<typeof selectEffectiveModel>, atlas: ReturnType<typeof useAtlasStore.getState>): boolean {
+  return routesToAtlas(
+    model,
+    atlas.status,
+    atlas.baseUrl,
+    cloudRoutingOf(atlas.health, atlasApiKey('gemini') !== null),
+  );
+}
+
 export function whoAnswers(): string | null {
   const models = useModelStore.getState();
   const atlas = useAtlasStore.getState();
@@ -264,12 +250,11 @@ export function whoAnswers(): string | null {
   if (model.provider === 'ollama') {
     return atlas.status === 'awake' ? `${model.label}, on the laptop` : `${model.label} — the laptop is not answering`;
   }
-  /* BUILD-12: Downshift sends a Gemini pick to the laptop, which runs its
-     own default model instead. */
-  if (routesToAtlas(model, atlas.status, atlas.baseUrl, downshiftOn(atlas.health))) {
-    return `${atlas.health?.defaultModel ?? 'The local model'}, on the laptop — Downshift is on`;
-  }
-  return `${model.label}, in this browser`;
+  /* BIG-1: a cloud pick with everything Atlas has, run from the laptop. */
+  if (panelOnAtlas(model, atlas)) return `${model.label}, through the laptop`;
+  /* BIG-12 (27A-5): anything else is Atlas in this page — the basic
+     assistant it used to be is retired. */
+  return auth.currentUser !== null ? `${model.label}, Atlas on this device` : 'Sign in to talk to Atlas';
 }
 
 export interface SendOptions {
@@ -332,6 +317,10 @@ async function runTurn(subject: PanelSubject, text: string, options: SendOptions
     });
   };
 
+  /* 29-1P15b, idea 94: the notes this turn saved, shown as "Remembered"
+     under the reply once the turn is over. */
+  const savedNotes: string[] = [];
+
   const onToolCall = (call: AgentToolCall) => {
     openText = null;
     /* A held write arrives here too, on both paths, and AT THE MOMENT it was
@@ -343,6 +332,7 @@ async function runTurn(subject: PanelSubject, text: string, options: SendOptions
       if (fill) applyHeld([{ name: call.name, args: call.args, description: '' }]);
       return;
     }
+    for (const path of rememberedNotes([call])) if (!savedNotes.includes(path)) savedNotes.push(path);
     const did = didFromToolCall(call, timezone, new Date());
     if (did === null) {
       patchSession(key, (s) => ({ ...s, working: { label: 'Reading', tool: call.name } }));
@@ -388,35 +378,46 @@ async function runTurn(subject: PanelSubject, text: string, options: SendOptions
     await ensureCatalogue();
     const model = selectEffectiveModel(useModelStore.getState());
     const atlas = useAtlasStore.getState();
-    const onAtlas = routesToAtlas(model, atlas.status, atlas.baseUrl, downshiftOn(atlas.health));
+    const onAtlas = panelOnAtlas(model, atlas);
 
     if (model.provider === 'ollama' && !onAtlas) {
       pushItem(key, {
         kind: 'note',
         id: nextId('note'),
         tone: 'error',
-        text: `${model.label} runs on your laptop, and Atlas is not answering. Wake the laptop, or pick a Gemini model on the chat screen.`,
+        text: `${model.label} runs on your laptop, and Atlas is not answering. Wake the laptop, or pick Gemini, Claude or ChatGPT on the chat screen.`,
       });
+      return;
+    }
+    /* BIG-12 (27A-5): a pick the laptop does not take runs on Atlas in this
+       page, which needs an account to read and write his memory with. */
+    const uid = onAtlas ? null : (auth.currentUser?.uid ?? null);
+    if (!onAtlas && uid === null) {
+      pushItem(key, { kind: 'note', id: nextId('note'), tone: 'error', text: 'Sign in to talk to Atlas.' });
       return;
     }
 
     const userMessage = prefaced ? message : withPreface(subject, message);
     const session = usePanelStore.getState().sessions[key] ?? EMPTY_SESSION;
 
-    if (onAtlas && atlas.baseUrl !== null) {
-      const baseUrl = atlas.baseUrl;
-      const result = await runAtlasTurn({
-        baseUrl,
+    {
+      const baseUrl = onAtlas ? atlas.baseUrl : null;
+      /* The same options for either machine (BIG-12): the laptop's Atlas over
+         the wire, or Atlas in this page, loaded only when it is needed. */
+      const options: Omit<Parameters<typeof runAtlasTurn>[0], 'baseUrl'> = {
         userMessage,
         history: session.history,
         model: atlasModelId(model),
+        /* BIG-1: the key for a cloud pick; Atlas keeps it nowhere. */
+        apiKey: model.provider === 'ollama' ? null : atlasApiKey(model.provider),
         timezone,
         conversationId: session.conversationId,
         /* Ask-first holds every write with its arguments intact, which is
            exactly a fill. Auto everywhere else: the panel's own contract is
            that a reversible change applies and offers Undo. */
         mode: fill ? 'ask' : 'auto',
-        effort: 'some',
+        /* OPT-8 — Max, as in the chat: thinking has no dial any more. */
+        effort: 'hard',
         signal: controller.signal,
         onConversation: (id) => patchSession(key, (s) => ({ ...s, conversationId: id })),
         onTextDelta: appendText,
@@ -446,14 +447,11 @@ async function runTurn(subject: PanelSubject, text: string, options: SendOptions
           });
         },
         onNotice: (notice) => pushItem(key, { kind: 'note', id: nextId('note'), tone: 'quiet', text: notice }),
-        onMonthlyCeiling: (report) =>
-          pushItem(key, {
-            kind: 'note',
-            id: nextId('note'),
-            tone: 'error',
-            text: `This month has reached its ₹${report.limit} ceiling, so nothing ran. The chat screen can run it past the ceiling.`,
-          }),
-      });
+      };
+      const result =
+        baseUrl !== null
+          ? await runAtlasTurn({ baseUrl, ...options })
+          : await (await import('./atlas/engine/runTabletAtlasTurn')).runTabletAtlasTurn({ ...options, uid: uid as string });
 
       patchSession(key, (s) => ({
         ...s,
@@ -462,9 +460,11 @@ async function runTurn(subject: PanelSubject, text: string, options: SendOptions
         undos: s.items.some((item) => item.kind === 'did' && item.turn === turn && item.did.ok)
           ? {
               ...s.undos,
-              [turn]: result.logTurnId
-                ? { status: 'ready', via: 'atlas', logTurnId: result.logTurnId }
-                : { status: 'unavailable', reason: 'This Atlas keeps no log, so the Trash is the way back.' },
+              [turn]: !result.logTurnId
+                ? { status: 'unavailable', reason: 'This Atlas keeps no log, so the Trash is the way back.' }
+                : baseUrl !== null
+                  ? { status: 'ready', via: 'atlas', logTurnId: result.logTurnId }
+                  : { status: 'ready', via: 'here', logTurnId: result.logTurnId, uid: uid as string },
             }
           : s.undos,
       }));
@@ -473,48 +473,29 @@ async function runTurn(subject: PanelSubject, text: string, options: SendOptions
          which here starts with the bracketed subject line. Renamed once,
          after the subject, which is his call (2026-09-16). */
       const after = usePanelStore.getState().sessions[key];
-      if (after && !after.titled && after.conversationId) {
+      if (baseUrl !== null && after && !after.titled && after.conversationId) {
         patchSession(key, (s) => ({ ...s, titled: true }));
         void patchConversation(baseUrl, after.conversationId, { title: subject.chatTitle }).catch(() => {
           patchSession(key, (s) => ({ ...s, titled: false }));
         });
       }
-    } else {
-      geminiTransport ??= createGeminiTransport({ getApiKey: getActiveApiKey });
-      liveSession ??= createLiveSession({ timezone });
-      const result = await runAgentTurn({
-        userMessage,
-        history: session.history,
-        transport: geminiTransport,
-        model: model.id,
-        session: liveSession,
-        tools: fill ? holdingTools(fallbackTools, (call) => applyHeld([call])) : undefined,
-        signal: controller.signal,
-        onTextDelta: appendText,
-        onToolCall,
-      });
-      patchSession(key, (s) => ({
-        ...s,
-        history: result.history,
-        undos: result.turnId ? { ...s.undos, [turn]: { status: 'ready', via: 'ring', snapshotTurnId: result.turnId } } : s.undos,
-      }));
     }
   } catch (err) {
     const aborted = err instanceof DOMException && err.name === 'AbortError';
-    if (!(err instanceof AtlasMonthlyCeilingReached)) {
-      pushItem(key, {
-        kind: 'note',
-        id: nextId('note'),
-        tone: aborted ? 'quiet' : 'error',
-        text: aborted
-          ? 'Stopped. Anything already done is still done.'
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      });
-    }
+    pushItem(key, {
+      kind: 'note',
+      id: nextId('note'),
+      tone: aborted ? 'quiet' : 'error',
+      text: aborted
+        ? 'Stopped. Anything already done is still done.'
+        : err instanceof Error
+          ? err.message
+          : String(err),
+    });
   } finally {
     inFlight.delete(key);
+    /* After the reply, and even after a Stop: a note saved before it is saved. */
+    for (const path of savedNotes) pushItem(key, { kind: 'remembered', id: nextId('remembered'), path });
     patchSession(key, (s) => ({ ...s, working: null }));
   }
 
@@ -546,14 +527,18 @@ export async function undoTurn(key: string, turn: string): Promise<void> {
   patchSession(key, (s) => ({ ...s, undos: { ...s.undos, [turn]: { status: 'busy' } } }));
 
   let result: UndoState;
-  if (state.via === 'ring') {
-    const reverted = useSnapshotStore.getState().revertTurn(state.snapshotTurnId);
-    result = reverted.ok ? { status: 'done', summary: reverted.summary } : { status: 'unavailable', reason: reverted.summary };
-  } else {
+  {
     const baseUrl = useAtlasStore.getState().baseUrl;
     try {
-      if (baseUrl === null) throw new Error('Atlas is not configured here.');
-      const reverted = await revertLogTurn(baseUrl, state.logTurnId);
+      let reverted: { ok: boolean; summary: string };
+      if (state.via === 'here') {
+        // Today in his zone: the log files a turn under the day it ran, and a panel turn is minutes old.
+        const day = new Intl.DateTimeFormat('en-CA', { timeZone: resolveUserTimeZone() }).format(new Date());
+        reverted = await (await (await import('./atlas/engine/tabletAtlas')).tabletAtlas(state.uid)).revert(state.logTurnId, day);
+      } else {
+        if (baseUrl === null) throw new Error('Atlas is not configured here.');
+        reverted = await revertLogTurn(baseUrl, state.logTurnId);
+      }
       result = reverted.ok ? { status: 'done', summary: reverted.summary } : { status: 'unavailable', reason: reverted.summary };
     } catch (err) {
       // A failure leaves it undoable: a tap that did not work must not read as one that did.
@@ -572,8 +557,10 @@ export async function undoTurn(key: string, turn: string): Promise<void> {
 
 export async function decide(key: string, itemId: string, decision: 'approve' | 'discard'): Promise<void> {
   const item = usePanelStore.getState().sessions[key]?.items.find((i) => i.id === itemId);
-  const baseUrl = useAtlasStore.getState().baseUrl;
-  if (!item || item.kind !== 'approve' || item.state !== 'waiting' || baseUrl === null) return;
+  const atlas = useAtlasStore.getState();
+  const baseUrl = atlas.status === 'awake' ? atlas.baseUrl : null;
+  const uid = auth.currentUser?.uid ?? null;
+  if (!item || item.kind !== 'approve' || item.state !== 'waiting' || (baseUrl === null && uid === null)) return;
 
   const setItem = (next: Partial<Extract<PanelItem, { kind: 'approve' }>>) =>
     patchSession(key, (s) => ({
@@ -583,7 +570,16 @@ export async function decide(key: string, itemId: string, decision: 'approve' | 
 
   setItem({ state: 'deciding' });
   try {
-    const answer = await decideApproval(baseUrl, item.approvalId, decision);
+    /* BIG-12 (27A-3): with the laptop away, Atlas in this page decides. */
+    const answer =
+      baseUrl !== null
+        ? await decideApproval(baseUrl, item.approvalId, decision)
+        : await (async () => {
+            const here = await (await import('./atlas/engine/tabletAtlas')).tabletAtlas(uid as string);
+            const done = decision === 'approve' ? await here.approve(item.approvalId) : await here.discard(item.approvalId);
+            if (done.approval?.state === 'waiting' || (!done.ok && done.approval === null)) throw new Error(done.summary);
+            return done;
+          })();
     setItem({ state: decision === 'approve' ? 'yes' : 'no', done: answer.summary });
   } catch (err) {
     setItem({ state: 'waiting' });

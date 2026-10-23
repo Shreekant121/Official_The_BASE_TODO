@@ -35,6 +35,22 @@ export interface BuiltInShortcut {
   where: ShortcutPlace[];
 }
 
+/**
+ * The fixed go-to sequences: `g` then this key, by the nav entry it opens
+ * (`components/navModel.tsx`'s `value`). `App.tsx` registers them from here
+ * and the palette draws them beside its "Go to" rows (idea 18), so the two
+ * cannot disagree.
+ */
+export const GO_KEYS = {
+  dashboard: 'd',
+  home: 'h',
+  /* 29-2e1: cAlendar — c was Atlas's (chat) long before. */
+  calendar: 'a',
+  atlas: 'c',
+  score: 's',
+  alerts: 'n',
+} as const;
+
 /** Every single-key action a screen registers. Add one here, then register it by id. */
 export const BUILT_IN_SHORTCUTS = {
   'new-project': { label: 'New project', key: 'p', where: ['home'] },

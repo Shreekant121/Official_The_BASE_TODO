@@ -20,8 +20,9 @@
  *   pill with a Σ and `--fg-2` digits, which says *this number is the sum of
  *   what is below it* without a sentence. The mockup: *"a parent with subtasks
  *   stops being typed at all — its allocation is the sum."*
- * - **`tone="amber"`**, for the one reading on the screen that can be wrong (a
- *   session window the plan has outrun).
+ * - **`tone="coral"`**, for the one reading on the screen that can be wrong (a
+ *   session window the plan has outrun). Over time is coral's job (29-1P2c2;
+ *   it was amber, which is gold's hue).
  * - The source's own digit parse — strip everything that is not a digit, keep
  *   the last two, clamp — instead of `parseInt`, which turned "1e5" into 1 and
  *   let "99" stand as an hour.
@@ -45,10 +46,21 @@
  * WHAT CHANGED IN THE CONTRACT: `onHours`/`onMinutes` became one
  * `onSeconds(total)`. Every call site already rebuilt the total from the two
  * halves, and the stepper and the arrow keys have no half to report.
+ *
+ * 29-1P10a, IDEA 97 — THE RULER. Given `ruler`, a press on the time opens
+ * `MinuteRuler` under it (his call: "tapping a task's time opens the same
+ * ruler; the boxes stay for typing"). With a mouse the caret still lands in
+ * the box, so typing is unchanged. With a finger the keyboard is held back
+ * (`inputMode="none"`) while the ruler is open — a keyboard rising over the
+ * ruler it was opened for is the one thing the press did not ask for — and
+ * "Type it" under the ruler brings it up. The boxes follow the ruler as it
+ * slides; the task is written once it comes to rest, not on every click.
  */
-import { useState } from 'react';
-import type { CSSProperties } from 'react';
-import { Icon } from '../ui';
+import { useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { Icon, MinuteRuler, SoftButton } from '../ui';
+import { cue } from '../lib/sound';
+import { PortalDropdown } from './PortalDropdown';
 
 export type TimeWellSize = 'sm' | 'md' | 'lg';
 
@@ -64,7 +76,9 @@ export interface TimeWellProps {
   /** Rolled up from below: a read-only Σ pill instead of two inputs. */
   locked?: boolean;
   /** The one reading here that can be wrong. */
-  tone?: 'amber';
+  tone?: 'coral';
+  /** Open the minute ruler on a press (29-1P10a). `hint` says what a length would mean. */
+  ruler?: { hint?: (seconds: number) => ReactNode; maxMinutes?: number };
 }
 
 /** The source's clamp: hours to 23, minutes to 59, so 23h 59m is the ceiling. */
@@ -86,19 +100,33 @@ export function TimeWell({
   size = 'md',
   locked = false,
   tone,
+  ruler,
 }: TimeWellProps) {
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const blank = blankWhenZero && !seconds;
+  const wellRef = useRef<HTMLDivElement>(null);
+  const hoursRef = useRef<HTMLInputElement>(null);
+  const [rulerOpen, setRulerOpen] = useState(false);
+  /** Opened by a finger: the keyboard stays down until "Type it". */
+  const [byTouch, setByTouch] = useState(false);
+  /** Minutes the ruler is on before it comes to rest and writes. */
+  const [sliding, setSliding] = useState<number | null>(null);
+  const closeRuler = () => { setRulerOpen(false); setByTouch(false); setSliding(null); };
+  const shownSeconds = rulerOpen && sliding !== null ? sliding * 60 : seconds;
+  const h = Math.floor(shownSeconds / 3600);
+  const m = Math.floor((shownSeconds % 3600) / 60);
+  const blank = blankWhenZero && !shownSeconds;
 
   const big = size === 'lg';
   const height = big ? 52 : size === 'sm' ? 36 : 40;
   const numeral = big ? 'var(--text-xl)' : size === 'sm' ? 'var(--text-sm)' : 'var(--text-md)';
 
   const set = (nh: number, nm: number) => onSeconds(Math.min(MAX_SECONDS, Math.max(0, nh * 3600 + nm * 60)));
-  const bump = (deltaSeconds: number) => onSeconds(Math.min(MAX_SECONDS, Math.max(0, seconds + deltaSeconds)));
+  /* 29-1P3, 123: every bump of the hours or minutes clicks. */
+  const bump = (deltaSeconds: number) => {
+    cue('detent');
+    onSeconds(Math.min(MAX_SECONDS, Math.max(0, seconds + deltaSeconds)));
+  };
 
   const unit: CSSProperties = {
     font: 'var(--type-kicker)',
@@ -165,13 +193,23 @@ export function TimeWell({
     font: 'var(--type-numeric)',
     fontSize: numeral,
     fontVariantNumeric: 'tabular-nums',
-    color: tone === 'amber' ? 'oklch(0.95 0.07 82)' : 'var(--fg-1)',
+    color: tone === 'coral' ? 'var(--job-coral-text)' : 'var(--fg-1)',
   };
 
+  const keyboard = byTouch ? 'none' : 'numeric';
+
   return (
+    <>
     <div
+      ref={wellRef}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onPointerDown={ruler ? (e) => {
+        /* The ±15 nudges are their own press. */
+        if ((e.target as Element).closest('button')) return;
+        if (!rulerOpen) setByTouch(e.pointerType !== 'mouse');
+        setRulerOpen(true);
+      } : undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -182,7 +220,7 @@ export function TimeWell({
         borderRadius: 'var(--r-pill)',
         backgroundImage: 'var(--glass-well)',
         boxShadow: focus
-          ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+          ? 'var(--glass-well-shadow), var(--job-lime-focus)'
           : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
         transition: 'box-shadow var(--dur-base) var(--ease-glass)',
       }}
@@ -190,13 +228,14 @@ export function TimeWell({
       <input
         className="ag-field"
         data-ag-field=""
-        inputMode="numeric"
+        ref={hoursRef}
+        inputMode={keyboard}
         placeholder="00"
         aria-label={`Hours ${name}`}
         value={blank ? '' : pad(h)}
         onFocus={(e) => { setFocus(true); e.target.select(); }}
         onBlur={() => setFocus(false)}
-        onChange={(e) => set(digits(e.target.value, 23), m)}
+        onChange={(e) => { setSliding(null); set(digits(e.target.value, 23), m); }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowUp') { e.preventDefault(); bump(3600); }
           if (e.key === 'ArrowDown') { e.preventDefault(); bump(-3600); }
@@ -207,13 +246,13 @@ export function TimeWell({
       <input
         className="ag-field"
         data-ag-field=""
-        inputMode="numeric"
+        inputMode={keyboard}
         placeholder="00"
         aria-label={`Minutes ${name}`}
         value={blank ? '' : pad(m)}
         onFocus={(e) => { setFocus(true); e.target.select(); }}
         onBlur={() => setFocus(false)}
-        onChange={(e) => set(h, digits(e.target.value, 59))}
+        onChange={(e) => { setSliding(null); set(h, digits(e.target.value, 59)); }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowUp') { e.preventDefault(); bump(300); }
           if (e.key === 'ArrowDown') { e.preventDefault(); bump(-300); }
@@ -237,6 +276,37 @@ export function TimeWell({
         <Nudge label={`Take 15 minutes off ${name}`} icon="chevron-down" big={big} onClick={() => bump(-900)} />
       </span>
     </div>
+
+    {ruler && (
+      <PortalDropdown isOpen={rulerOpen} onClose={closeRuler} triggerRef={wellRef} width={320} align="right">
+        {/* Portalled, but React still bubbles its presses to the row it was
+            opened from — and that row is a drag handle on Set Deadlines. */}
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-3)', padding: 'var(--sp-5) var(--sp-4) var(--sp-4)' }}
+        >
+          <MinuteRuler
+            label={`Time ${name}`}
+            value={sliding ?? Math.round(seconds / 60)}
+            max={ruler.maxMinutes ?? 480}
+            hint={ruler.hint?.((sliding ?? Math.round(seconds / 60)) * 60)}
+            onChange={setSliding}
+            onCommit={(minutes) => { onSeconds(minutes * 60); setSliding(null); }}
+          />
+          {byTouch && (
+            <SoftButton
+              size="sm"
+              icon={<Icon name="keyboard" size={14} />}
+              onClick={() => { setByTouch(false); window.setTimeout(() => hoursRef.current?.focus(), 0); }}
+            >
+              Type it
+            </SoftButton>
+          )}
+        </div>
+      </PortalDropdown>
+    )}
+    </>
   );
 }
 

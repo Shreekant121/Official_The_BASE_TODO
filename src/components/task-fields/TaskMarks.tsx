@@ -16,10 +16,10 @@
  * flagged — so it takes the chip geometry `Tag` and `BlockedLine` use, a
  * carved surface with a glyph and a number, and no dot.
  *
- * **Emergency is rose and Avoided is neutral, and the pairing is the point.**
- * Rose is what this system spends on danger, which is exactly the claim the
+ * **Emergency is coral and Avoided is neutral, and the pairing is the point.**
+ * Coral is what this system spends on danger (rose until 29-1P2c2), which is exactly the claim the
  * flag makes, and the ⚡ plus the level make it readable without the hue. Where
- * it sits beside a rose Red Alert pill they are saying the same *kind* of
+ * it sits beside a coral Red Alert pill they are saying the same *kind* of
  * thing from two directions — the engine's reading and yours — and a second
  * hue between them would imply a difference that is not there. What keeps them
  * apart at a glance is that only the pill ripples: **`overrun` is one of the
@@ -58,7 +58,7 @@ export interface EmergencyMarkProps {
 export function EmergencyMark({ level, lapsed = false, compact = false, style }: EmergencyMarkProps) {
   if (!level || level <= 0) return null;
 
-  const tone = lapsed ? 'var(--fg-4)' : 'var(--hue-rose)';
+  const tone = lapsed ? 'var(--fg-4)' : 'var(--job-coral-tag-fg)';
 
   return (
     <span
@@ -71,7 +71,7 @@ export function EmergencyMark({ level, lapsed = false, compact = false, style }:
         flex: '0 0 auto',
         display: 'inline-flex', alignItems: 'center', gap: 5,
         padding: '3px var(--sp-4) 3px var(--sp-3)', borderRadius: 'var(--r-pill)',
-        backgroundImage: lapsed ? 'var(--glass-well)' : 'var(--glass-tint-rose)',
+        backgroundImage: lapsed ? 'var(--glass-well)' : 'var(--glass-tint-coral)',
         boxShadow: lapsed ? 'var(--glass-well-shadow)' : 'var(--glass-rim-1)',
         color: tone,
         textDecoration: lapsed ? 'line-through' : 'none',
@@ -87,6 +87,44 @@ export function EmergencyMark({ level, lapsed = false, compact = false, style }:
         }}
       >
         {compact ? level : `Emergency ${level}`}
+      </span>
+    </span>
+  );
+}
+
+export interface IgnoredMarkProps {
+  /** The sentence behind it — `ignoreSentence` from `lib/ignoredWork.ts`. */
+  title: string;
+  style?: CSSProperties;
+}
+
+/**
+ * `Ignored` (BIG-3) — where the score would be on a task, and on the head of a
+ * list or a project that is ignored. A quiet well, never a colour: ignored work
+ * is fully visible on its own board and is not a warning about anything.
+ */
+export function IgnoredMark({ title, style }: IgnoredMarkProps) {
+  return (
+    <span
+      title={title}
+      style={{
+        flex: '0 0 auto',
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px var(--sp-4) 3px var(--sp-3)', borderRadius: 'var(--r-pill)',
+        backgroundImage: 'var(--glass-well)',
+        boxShadow: 'var(--glass-well-shadow)',
+        color: 'var(--fg-4)',
+        ...style,
+      }}
+    >
+      <Icon name="moon" size={12} style={{ flex: '0 0 auto', color: 'inherit' }} />
+      <span
+        style={{
+          font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
+          textTransform: 'var(--kicker-transform)' as CSSProperties['textTransform'], color: 'inherit', whiteSpace: 'nowrap',
+        }}
+      >
+        Ignored
       </span>
     </span>
   );

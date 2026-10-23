@@ -41,7 +41,7 @@ const INLINE_FIELD = {
   minWidth: 0,
   padding: '0 0 2px',
   border: 0,
-  borderBottom: '1px solid var(--accent-hairline)',
+  borderBottom: '1px solid var(--job-lime-line)',
   borderRadius: 0,
   outline: 'none',
   background: 'transparent',
@@ -57,13 +57,20 @@ export interface QueueSubtaskTreeProps {
   listId: string;
   depth: number;
   expandedIds: Set<string>;
-  addingContext: { rootTaskId: string; parentId: string; isNested: boolean } | null;
-  newSubtaskTitle: string;
-  onAddClick: (subtaskId: string, rootTaskId: string, listId: string) => void;
   onToggle: (id: string) => void;
-  onTitleChange: (val: string) => void;
-  onConfirm: () => void;
-  onCancel: () => void;
+  /**
+   * The **+** that adds a child, and the inline field it opens. Optional: the
+   * Today column leaves it out and draws no **+** (FIX-12, audit A1 — adding a
+   * subtask happens on the Available side, one place for one thing).
+   */
+  adding?: {
+    context: { rootTaskId: string; parentId: string; isNested: boolean } | null;
+    title: string;
+    onAddClick: (subtaskId: string, rootTaskId: string, listId: string) => void;
+    onTitleChange: (val: string) => void;
+    onConfirm: () => void;
+    onCancel: () => void;
+  };
   /** When set, subtask rows become draggable — dropping one onto "Selected for Today" queues just that subtask. */
   onDragStartSub?: (subtaskId: string) => void;
   onDragEndSub?: () => void;
@@ -76,13 +83,8 @@ export default function QueueSubtaskTree({
   listId,
   depth,
   expandedIds,
-  addingContext,
-  newSubtaskTitle,
-  onAddClick,
   onToggle,
-  onTitleChange,
-  onConfirm,
-  onCancel,
+  adding,
   onDragStartSub,
   onDragEndSub,
   draggedSubtaskId,
@@ -93,7 +95,7 @@ export default function QueueSubtaskTree({
         const isExpanded = expandedIds.has(sub.id);
         const hasChildren = (sub.subtasks ?? []).length > 0;
         const isAddingHere =
-          addingContext?.rootTaskId === rootTaskId && addingContext.parentId === sub.id;
+          adding?.context?.rootTaskId === rootTaskId && adding.context.parentId === sub.id;
         const indentPx = depth * 12;
 
         const isBeingDragged = draggedSubtaskId === sub.id;
@@ -164,15 +166,17 @@ export default function QueueSubtaskTree({
                   the tablet, and `screens.css` writes the touch and focus-within
                   cases this needs. Same fix UI-13 made to the editor tree. */}
               <span className="ag-card-actions" style={{ display: 'flex', flex: '0 0 auto', gap: 2 }}>
-                <IconButton
-                  size="sm"
-                  variant="ghost"
-                  label={`Add a subtask under ${sub.title}`}
-                  title="Add sub-subtask"
-                  onClick={() => onAddClick(sub.id, rootTaskId, listId)}
-                >
-                  <Icon name="plus" size={13} />
-                </IconButton>
+                {adding && (
+                  <IconButton
+                    size="sm"
+                    variant="ghost"
+                    label={`Add a subtask under ${sub.title}`}
+                    title="Add sub-subtask"
+                    onClick={() => adding.onAddClick(sub.id, rootTaskId, listId)}
+                  >
+                    <Icon name="plus" size={13} />
+                  </IconButton>
+                )}
                 {hasChildren && (
                   <IconButton
                     size="sm"
@@ -196,7 +200,7 @@ export default function QueueSubtaskTree({
 
             {/* Inline add input for this subtask */}
             <AnimatePresence>
-              {isAddingHere && (
+              {isAddingHere && adding && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -226,13 +230,13 @@ export default function QueueSubtaskTree({
                       type="text"
                       data-ag-field=""
                       className="ag-field"
-                      value={newSubtaskTitle}
-                      onChange={(e) => onTitleChange(e.target.value)}
+                      value={adding.title}
+                      onChange={(e) => adding.onTitleChange(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') onConfirm();
-                        if (e.key === 'Escape') onCancel();
+                        if (e.key === 'Enter') adding.onConfirm();
+                        if (e.key === 'Escape') adding.onCancel();
                       }}
-                      onBlur={() => { if (!newSubtaskTitle.trim()) onCancel(); }}
+                      onBlur={() => { if (!adding.title.trim()) adding.onCancel(); }}
                       placeholder="Add a sub-subtask…"
                       style={INLINE_FIELD}
                     />
@@ -257,13 +261,8 @@ export default function QueueSubtaskTree({
                       listId={listId}
                       depth={depth + 1}
                       expandedIds={expandedIds}
-                      addingContext={addingContext}
-                      newSubtaskTitle={newSubtaskTitle}
-                      onAddClick={onAddClick}
                       onToggle={onToggle}
-                      onTitleChange={onTitleChange}
-                      onConfirm={onConfirm}
-                      onCancel={onCancel}
+                      adding={adding}
                       onDragStartSub={onDragStartSub}
                       onDragEndSub={onDragEndSub}
                       draggedSubtaskId={draggedSubtaskId}

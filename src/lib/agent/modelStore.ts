@@ -1,12 +1,19 @@
 import { create } from 'zustand';
 import { GEMINI_API_BASE, MODELS_ENDPOINT } from './constants';
-import { atlasBaseUrl, fetchAtlasModels } from '../atlas/client';
-import { getActiveApiKey } from './apiKeys';
+import { atlasBaseUrl, fetchAtlasHostedModels, fetchAtlasModels } from '../atlas/client';
+import { useAtlasStore } from '../atlas/atlasStore';
+import { atlasApiKey, getActiveApiKey } from './apiKeys';
 import {
   EMPTY_CATALOGUE,
   parseGeminiModels,
+  parseCloudModels,
   parseOllamaModels,
-  resolveSelection,
+  choiceFromLegacy,
+  resolveChoice,
+  sideOf,
+  type CloudProvider,
+  type ModelChoice,
+  type ModelSide,
   type ModelCatalogue,
   type ModelOption,
 } from './models';
@@ -34,25 +41,55 @@ import {
  * failure, one layer up. Keep it local.
  */
 
-const STORAGE_KEY = 'mutineer_model_choice';
+/**
+ * OPT-8: three keys now, not one. Which side the composer's Local | Cloud switch
+ * is on, and the default model of each side, picked in Settings → Atlas. All
+ * three stay on this device for the reason above. The one key before them,
+ * `mutineer_model_choice`, is read once into the side it was on and removed.
+ */
+const LEGACY_KEY = 'mutineer_model_choice';
+const SIDE_KEY = 'base.model.side';
+const LOCAL_KEY = 'base.model.local';
+const CLOUD_KEY = 'base.model.cloud';
 
-function readChoice(): string | null {
+function readKey(key: string): string | null {
   if (typeof localStorage === 'undefined') return null;
   try {
-    return localStorage.getItem(STORAGE_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function writeChoice(key: string | null): void {
+function writeKey(key: string, value: string | null): void {
   if (typeof localStorage === 'undefined') return;
   try {
-    if (key === null) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, key);
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
   } catch {
     // Private mode / quota. The choice still holds for this session.
   }
+}
+
+function writeChoice(choice: ModelChoice): void {
+  writeKey(SIDE_KEY, choice.side);
+  writeKey(LOCAL_KEY, choice.local);
+  writeKey(CLOUD_KEY, choice.cloud);
+}
+
+function readChoice(): ModelChoice {
+  const legacy = readKey(LEGACY_KEY);
+  if (legacy !== null && readKey(SIDE_KEY) === null) {
+    const moved = choiceFromLegacy(legacy);
+    writeChoice(moved);
+    writeKey(LEGACY_KEY, null);
+    return moved;
+  }
+  return {
+    side: readKey(SIDE_KEY) === 'local' ? 'local' : 'cloud',
+    local: readKey(LOCAL_KEY),
+    cloud: readKey(CLOUD_KEY),
+  };
 }
 
 /**
@@ -162,13 +199,72 @@ async function fetchLocalModels(signal: AbortSignal): Promise<{ models: ModelOpt
   }
 }
 
+/**
+ * Claude's and ChatGPT's lists, asked of the laptop with his keys (BIG-1).
+ *
+ * **Only providers he has a key for are asked**, so an empty group with no
+ * error is the ordinary state of a sheet with no Claude or ChatGPT key in it.
+ * Each provider fails on its own — a rejected Claude key must not hide a
+ * working ChatGPT list — and the failures are joined into the one line the
+ * picker shows.
+ *
+ * **With the lid shut they are asked for here (BIG-12).** Claude and ChatGPT
+ * used to answer only through the laptop (his call, 2026-09-24), so a sleeping
+ * laptop emptied the group. The tablet runs Atlas itself now, on these same
+ * keys, so it lists them itself too — with Atlas's own listing code, from the
+ * engine bundle, which is loaded only on this path: the probe has landed by the
+ * time this runs (`useModelLists`), so an awake laptop never pulls it in.
+ */
+async function fetchCloudModels(signal: AbortSignal): Promise<{ models: ModelOption[]; error: string | null }> {
+  const providers = (['anthropic', 'openai'] as CloudProvider[])
+    .map((provider) => ({ provider, key: atlasApiKey(provider) }))
+    .filter((entry): entry is { provider: CloudProvider; key: string } => entry.key !== null);
+  if (providers.length === 0) return { models: [], error: null };
+
+  const baseUrl = atlasBaseUrl();
+  const status = useAtlasStore.getState().status;
+  const here = status === 'asleep' || status === 'unconfigured' || baseUrl === null;
+  if (status === 'unknown' && !here) return { models: [], error: null };
+
+  const listHere = here ? (await import('../atlas/engine/tabletAtlas')).listHostedModelsHere : null;
+  const results = await Promise.allSettled(
+    providers.map(async ({ provider, key }) =>
+      parseCloudModels(
+        provider,
+        listHere !== null
+          ? await listHere(provider, key)
+          : await fetchAtlasHostedModels(baseUrl as string, provider, key, signal),
+      ),
+    ),
+  );
+  const models = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+  const errors = results.flatMap((result, i) =>
+    result.status === 'rejected'
+      ? [`${providers[i].provider === 'anthropic' ? 'Claude' : 'ChatGPT'}: ${cloudReason(result.reason)}`]
+      : [],
+  );
+  return { models, error: errors.length > 0 ? errors.join(' ') : null };
+}
+
+function cloudReason(reason: unknown): string {
+  if (reason instanceof TypeError) return useAtlasStore.getState().status === 'awake'
+      ? 'the laptop is not answering, so these models cannot be listed.'
+      : 'could not be reached from this device. Check the connection.';
+  return messageOf(reason);
+}
+
 // ─── The store ──────────────────────────────────────────────────────────────
 
 interface ModelState extends ModelCatalogue {
-  /** `null` means "nothing chosen" — `resolveSelection` then decides. */
-  selectedKey: string | null;
+  /** The switch and the two defaults; `resolveChoice` turns them into a model. */
+  choice: ModelChoice;
   loading: boolean;
-  select: (key: string | null) => void;
+  /** The composer's Local | Cloud switch. */
+  chooseSide: (side: ModelSide) => void;
+  /** A side's default, from Settings → Atlas; `null` is the app's own default. Leaves the switch alone. */
+  chooseDefault: (side: ModelSide, key: string | null) => void;
+  /** This model, now: it becomes its side's default and the switch moves to it (`/atlas-host`'s cards). */
+  select: (option: ModelOption) => void;
   /** Re-reads both lists. Safe to call repeatedly; a run in flight is abandoned. */
   refresh: () => Promise<void>;
   /** Dev-only: `lib/devModelFixture.ts` seeds the harness a literal catalogue. */
@@ -179,13 +275,30 @@ let inFlight: AbortController | null = null;
 
 export const useModelStore = create<ModelState>()((set) => ({
   ...EMPTY_CATALOGUE,
-  selectedKey: readChoice(),
+  choice: readChoice(),
   loading: false,
 
-  select: (key) => {
-    writeChoice(key);
-    set({ selectedKey: key });
-  },
+  chooseSide: (side) =>
+    set((state) => {
+      const choice = { ...state.choice, side };
+      writeChoice(choice);
+      return { choice };
+    }),
+
+  chooseDefault: (side, key) =>
+    set((state) => {
+      const choice = { ...state.choice, [side]: key };
+      writeChoice(choice);
+      return { choice };
+    }),
+
+  select: (option) =>
+    set((state) => {
+      const side = sideOf(option.provider);
+      const choice = { ...state.choice, side, [side]: option.key };
+      writeChoice(choice);
+      return { choice };
+    }),
 
   setCatalogue: (catalogue) => set({ ...catalogue, loading: false }),
 
@@ -197,9 +310,10 @@ export const useModelStore = create<ModelState>()((set) => ({
 
     // Settled, not `all`: one list failing is the normal state of the other
     // one, and a browser with no Ollama must still see Gemini's models.
-    const [hosted, local] = await Promise.allSettled([
+    const [hosted, local, cloud] = await Promise.allSettled([
       fetchGeminiModels(controller.signal),
       fetchLocalModels(controller.signal),
+      fetchCloudModels(controller.signal),
     ]);
 
     if (controller.signal.aborted) return;
@@ -212,6 +326,8 @@ export const useModelStore = create<ModelState>()((set) => ({
       local: local.status === 'fulfilled' ? local.value.models : [],
       localWithoutTools: local.status === 'fulfilled' ? local.value.withoutTools : 0,
       localError: local.status === 'rejected' ? messageOf(local.reason) : null,
+      cloud: cloud.status === 'fulfilled' ? cloud.value.models : [],
+      cloudError: cloud.status === 'fulfilled' ? cloud.value.error : messageOf(cloud.reason),
       loading: false,
     });
   },
@@ -226,6 +342,8 @@ export function catalogueOf(state: ModelState): ModelCatalogue {
   return {
     hosted: state.hosted,
     local: state.local,
+    cloud: state.cloud,
+    cloudError: state.cloudError,
     hostedWithoutChat: state.hostedWithoutChat,
     localWithoutTools: state.localWithoutTools,
     hostedError: state.hostedError,
@@ -235,5 +353,5 @@ export function catalogueOf(state: ModelState): ModelCatalogue {
 
 /** Which model answers the next turn. A selector, so the header re-renders with it. */
 export function selectEffectiveModel(state: ModelState): ModelOption {
-  return resolveSelection(catalogueOf(state), state.selectedKey);
+  return resolveChoice(catalogueOf(state), state.choice);
 }

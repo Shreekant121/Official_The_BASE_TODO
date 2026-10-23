@@ -24,7 +24,7 @@ import {
   type ArchiveEntry,
 } from '../lib/archiveModel';
 
-const PROJECT: Project = { id: 'p1', name: 'Diwali gift boxes', color: '#fff', createdAt: new Date(2025, 8, 3).getTime(), order: 0, shareId: 'share-p1' };
+const PROJECT: Project = { id: 'p1', name: 'Diwali gift boxes', createdAt: new Date(2025, 8, 3).getTime(), order: 0, shareId: 'share-p1' };
 const LISTS: TaskList[] = [
   { id: 'action-steps', title: 'Action Steps' },
   { id: 'l1', title: 'Suppliers', projectId: 'p1', order: 0 },

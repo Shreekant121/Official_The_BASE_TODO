@@ -31,6 +31,10 @@ export function paletteCommandCatalog(owner: boolean): PaletteCommandMeta[] {
       keywords: 'start focus session select choose tasks today', icon: 'list-checks', group: 'Command',
     },
     { id: 'new-project', name: 'New project', keywords: 'create add make project', icon: 'plus', group: 'Command' },
+    {
+      id: 'new-event', name: 'New event', detail: 'A date to count down to: a trip, a birthday, a race',
+      keywords: 'create add make event countdown date birthday trip calendar', icon: 'calendar-plus', group: 'Command',
+    },
   ];
   for (const entry of NAV_ENTRIES) {
     if (!entry.built || entry.value === 'session') continue;

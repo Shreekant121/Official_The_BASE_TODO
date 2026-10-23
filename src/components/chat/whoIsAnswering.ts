@@ -40,6 +40,11 @@ import type { AtlasStatus } from '../../lib/atlas/atlasStore';
  * this one's own rail, so it is already one press away. If a link ever does
  * belong here, it goes in the control row on the right, not in this sentence.
  */
+/*
+ * Since BIG-12 (27A-5) there is one assistant, Atlas, answering from the laptop
+ * or from this page. The notes above describe the two-assistant years and are
+ * kept for why the sentences are short.
+ */
 export function whoIsAnswering(
   onAtlas: boolean,
   atlasStatus: AtlasStatus,
@@ -61,7 +66,15 @@ export function whoIsAnswering(
    * the warnings keep their own words.
    */
   working: boolean,
+  /** BIG-12: Atlas is running in this page — the laptop is shut, or cannot take this pick. */
+  onTablet = false,
+  /** Whether an account is signed in; Atlas in this page needs one. */
+  signedIn = true,
 ): { text: string; warn: boolean } {
+  /* BIG-12. Not a warning: this is all of Atlas, on this device. The one thing
+     it lacks away from the laptop is the laptop's own model. Kept short for the
+     reason the sentences below are — a second line pushes the header taller. */
+  if (onTablet) return { text: working ? 'Working' : 'Atlas, running here', warn: false };
   if (onAtlas) {
     /*
      * ITEM 9: THIS IS READ FROM ATLAS, NOT ASSUMED
@@ -90,11 +103,18 @@ export function whoIsAnswering(
     // by asking for it back.
     return { text: working ? 'Working' : 'Awake on the laptop', warn: false };
   }
-  if (atlasStatus === 'asleep') {
-    // DESIGN.md §9's sentence and nothing after it. A second clause about the
-    // backlog wrapped this onto two lines and pushed the header taller, and it
-    // was already saying what the composer's own hint says four inches below.
-    return { text: 'Atlas is asleep — you’re talking to the basic assistant.', warn: true };
-  }
-  return { text: 'Types into your real backlog. Every turn can be reverted.', warn: false };
+  /*
+   * BIG-12 (27A-5): the basic assistant is retired, his call — "Retire it,
+   * Atlas for all" — so nothing else answers. What is left is a pick that
+   * cannot run anywhere: a local model with the laptop away, or no account to
+   * run Atlas here for. Each sentence names the one thing that fixes it.
+   */
+  if (!signedIn) return { text: 'Sign in to talk to Atlas.', warn: true };
+  return {
+    text:
+      atlasStatus === 'asleep' || atlasStatus === 'unconfigured'
+        ? 'The laptop is asleep — pick Gemini, Claude or ChatGPT to talk to Atlas here.'
+        : 'Checking the laptop…',
+    warn: atlasStatus !== 'unknown',
+  };
 }

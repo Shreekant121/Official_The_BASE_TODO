@@ -99,23 +99,30 @@
  *   version is `lib/devNotificationsFixture.ts`, dev-only and folded out of
  *   the shipped bundle — the same decision DESIGN-1 made about `voice.html`'s
  *   footer.
- * - **Diagnostics stays**, at the foot of the left column. The mockup has no
- *   equivalent because its Google connection cannot fail; ours can, and this
- *   log is the only thing that says why.
+ * - **Diagnostics moved to Settings → Connections (OPT-8)**, his words:
+ *   *"Take diagnostics in the notification page and put it into settings
+ *   page."* It is `components/GoogleDiagnosticsCard.tsx`; a failed reconnect
+ *   here says where it is.
  * - **The quick-reminder sheet stays ours.** It writes a real standalone
  *   reminder. Those never appear in *Firing today* — they have no task behind
  *   them and so no `due − estimate` to show, and the item is explicit that a
  *   row with no real task behind it does not belong on this screen. They
  *   reach History like everything else.
- * - **The rule line under the rows** says *"tapping it opens the task in
- *   Focus with the timer already running"* again. DESIGN-2 held that sentence
- *   back until it was true; BUILD-5's `/start/:taskId` made it true. The row
- *   menu's *"Start now in Focus"* did not exist either until
- *   **BUILD-2**, which added it. *"Open the task"* became *"Open {project}"*
- *   because no route deep-links to one task — see `FireRow`.
+ * - **No rule line under the rows, and no doze note** — both removed at his
+ *   word (BASE list, 2026-10-06). The row menu's *"Start now in Focus"* came
+ *   with **BUILD-2**. *"Open the task"* became *"Open {project}"* because no
+ *   route deep-links to one task — see `FireRow`.
  * - **Rows beyond today are not listed.** That is the model, not an omission:
  *   every dated task already draws a calendar block, and the Delivery card is
  *   the way to the calendar that holds them.
+ *
+ * EVENTS JOINED THE TIMELINE (29-2c2)
+ * -----------------------------------------------------
+ * An event's alerts ring as a push too now, so they are rows here, on the same
+ * clock as the tasks with one `next` between them (`todaysTimeline`,
+ * `lib/events/eventAlerts.ts`, the sender's own rule). An event row says which
+ * alert it is and when the event is, `sent` or `missed` from the same log, and
+ * opens the event's sheet; it has no snooze and no menu.
  *
  * `scripts/screenshots.ts` waits on `Firing today` for this screen — it waited
  * on `Default lead time`, which this item deleted.
@@ -131,19 +138,20 @@
  * carries the mark; Back is round glass; New reminder and Create reminder
  * are gel; and the labels read `--kicker-transform`, so "Firing today",
  * "Missed", "Now" and the countdown pill are sentence case, his second call
- * that day. The diagnostics log's `INFO` / `WARN` / `ERROR` keep their
- * capitals: that is a machine's log line, not a label. BUILD-15's banner is
+ * that day. BUILD-15's banner is
  * app-wide (`ReminderSyncBanner`, from `App.tsx`) and is not this screen's
  * to place; its Reconnect lands here, on the Delivery card, as before.
  */
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import {
-  Button, Card, Dialog, FieldLabel, Icon, IconButton, Input, Kicker, MiniNav, MorphMenu,
-  NotificationCard, StatusPill, Switch, Textarea, V3Scope, Well,
+  Button, Card, Dialog, FieldLabel, GelButton, Icon, IconButton, Input, Kicker, MiniNav, MorphMenu,
+  Lit, LitLine, NotificationCard, Skeleton, SoftButton, SoftIconButton, StatusPill, Switch, Textarea, V3Scope, Well, WhiteButton,
   useMedia, WIDE, type IconName, type NotificationTone, type StatusName,
 } from '../ui';
 import { RailMark } from '../components/BrandMark';
+import TaskDetailPanel from '../components/TaskDetailPanel';
 import { useNavModel } from '../components/navModel';
 import { useAuth } from '../contexts/AuthContext';
 import { useStore } from '../store/useStore';
@@ -163,17 +171,16 @@ import { cancelTaskDeadline, scheduleReconcile } from '../lib/notificationSync';
 import { subscribeReminders, createReminder, deleteReminder, type Reminder } from '../lib/reminders';
 import { NOTIFICATION_CALENDAR_SUMMARY, tokenHasCalendarScope, tokenHasNotificationScope } from '../lib/googleCalendar';
 import { useUIStore } from '../store/useUIStore';
-import { firingToday, stillToFire, type FiringRow } from '../lib/firingToday';
+import { firingToday, type FiringRow } from '../lib/firingToday';
 import { useStartNowItems } from '../components/task-fields/startNowMenu';
 import { enablePush, isPushEnabled, pushConfigured, pushSupported, subscribePushLog } from '../lib/push';
-import { withDelivery, type PushLog } from '../lib/pushPlan';
-import { devNotificationsFixture, devFiringTasks, devPushLog } from '../lib/devNotificationsFixture';
-import {
-  subscribeDiagnostics,
-  clearDiagnostics,
-  formatDiagnosticsForCopy,
-  type DiagEntry,
-} from '../lib/googleDiagnostics';
+import { LATE_LIMIT_MS, withDelivery, type PushLog } from '../lib/pushPlan';
+import { peekAttr } from '../lib/peek';
+import { devNotificationsFixture, devFiringEvents, devFiringTasks, devPushLog } from '../lib/devNotificationsFixture';
+import { useEventStore } from '../store/useEventStore';
+import { useEventSheet } from '../store/useEventSheet';
+import { eventAlertsToday, todaysTimeline, withEventDelivery, type EventAlertRow } from '../lib/events/eventAlerts';
+import { alertLabel, describeWhen, DEFAULT_EVENT_COLOUR } from '../lib/events/events';
 
 function timeAgoOrAt(ms: number): string {
   const diff = ms - Date.now();
@@ -237,13 +244,6 @@ const STATUS_LOOK: Record<NotificationRecord['status'], { pill: StatusName; labe
 /** A label's case: capitals outside a V3 scope, sentence case inside (V3-7). */
 const KICKER_CASE = 'var(--kicker-transform)' as CSSProperties['textTransform'];
 
-/** Diagnostics level → the token that carries it. Info is deliberately hueless. */
-const DIAG_LOOK: Record<DiagEntry['level'], string> = {
-  info: 'var(--fg-4)',
-  warn: 'var(--status-review)',
-  error: 'var(--status-overrun)',
-};
-
 /* ------------------------------------------------------------------ */
 /* Firing today — the point of the screen                              */
 
@@ -251,8 +251,9 @@ const DIAG_LOOK: Record<DiagEntry['level'], string> = {
  * One alert that will fire today, or has.
  *
  * Level-1 glass and a hairline rim rather than a Card: a row you read, not a
- * surface you act on. `next` is the only row that carries accent and a glow —
- * the mockup's emerald ration, spent on the one thing the screen is for.
+ * surface you act on. `next` is the only row that carries a colour and a glow,
+ * spent on the one thing the screen is for — sky since 29-1P2c2, because a
+ * reminder and its countdown are sky's job (it was the mockup's emerald).
  *
  * **The second line is the arithmetic**, `18:00 − 45 min`, so the fire time is
  * never a mystery and never has to be trusted. Every number in it comes from
@@ -263,6 +264,7 @@ function FireRow({
   now,
   muted,
   delay,
+  onOpenTask,
   onOpenProject,
   onSkip,
 }: {
@@ -270,6 +272,7 @@ function FireRow({
   now: number;
   muted: boolean;
   delay: number;
+  onOpenTask: (() => void) | null;
   onOpenProject: (() => void) | null;
   onSkip: () => void;
 }) {
@@ -287,6 +290,8 @@ function FireRow({
 
   return (
     <div
+      /* 29-1P6b: hold the row to peek at its task. */
+      {...peekAttr(row.task.id)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -294,7 +299,7 @@ function FireRow({
         padding: 'var(--sp-4) var(--sp-6)', borderRadius: 'var(--r-lg)', boxSizing: 'border-box',
         backgroundImage: next || hover ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
         boxShadow: next
-          ? 'var(--glass-rim-2), var(--glass-cast-2), var(--glow-accent-sm)'
+          ? 'var(--glass-rim-2), var(--glass-cast-2), var(--job-sky-shine)'
           : hover ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)',
         opacity: muted || past ? 0.5 : 1,
         transform: hover && !past ? 'translateY(-1px)' : 'none',
@@ -306,7 +311,7 @@ function FireRow({
       <div style={{ display: 'grid', gap: 1, width: 58, flex: '0 0 auto' }}>
         <span
           style={{
-            font: 'var(--type-numeric)', color: next ? 'var(--accent)' : 'var(--fg-1)',
+            font: 'var(--type-numeric)', color: next ? 'var(--job-sky-text)' : 'var(--fg-1)',
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -361,8 +366,8 @@ function FireRow({
         <span
           style={{
             display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 var(--sp-4)',
-            borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-tint-accent)',
-            boxShadow: 'var(--glass-rim-2), var(--glow-accent-sm)', color: 'oklch(0.93 0.07 162)',
+            borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-tint-sky)',
+            boxShadow: 'var(--glass-rim-2), var(--job-sky-shine)', color: 'var(--job-sky-text)',
             font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: KICKER_CASE,
             whiteSpace: 'nowrap', flex: '0 0 auto',
           }}
@@ -375,10 +380,11 @@ function FireRow({
           style={{
             display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 var(--sp-4)',
             borderRadius: 'var(--r-pill)',
-            /* Amber for the one row still owed an alert; the gone-by pills stay quiet. */
-            backgroundImage: snoozed ? 'var(--glass-tint-amber)' : 'var(--glass-fill-1)',
+            /* Sky for the one row still owed an alert — a reminder, sky's job
+               (29-1P2c2; it was amber); the gone-by pills stay quiet. */
+            backgroundImage: snoozed ? 'var(--glass-tint-sky)' : 'var(--glass-fill-1)',
             boxShadow: snoozed ? 'var(--glass-rim-2)' : 'var(--glass-rim-1)',
-            color: snoozed ? 'var(--status-review)' : 'var(--fg-4)',
+            color: snoozed ? 'var(--job-sky-text)' : 'var(--fg-4)',
             font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: KICKER_CASE,
             whiteSpace: 'nowrap', flex: '0 0 auto',
           }}
@@ -408,14 +414,22 @@ function FireRow({
              design is the blocked case, where it offers the blockers instead,
              and it asks before replacing a running session. It is labelled
              "Start now", as on the project rows — one verb, one name.
-             "Open the task" is not built: no route in this app deep links to
-             a single task, so the honest version reaches the board it is on,
-             and is absent for a task in a bare list that has no board. */
+             "Open the task" (FIX-12, audit A4) opens its sheet over this
+             screen, as Ctrl+K does; "Open (project)" goes to its board, and
+             is absent for a task in a bare list that has no board. */
           items={[
             ...startNow,
             /* A blocked row's offers sit under their own section label, so
-               the project link needs a rule to stop reading as one of them. */
-            ...(onOpenProject && startNow.some((it) => it.section) ? [{ divider: true }] : []),
+               the links need a rule to stop reading as one of them. */
+            ...((onOpenTask || onOpenProject) && startNow.some((it) => it.section) ? [{ divider: true }] : []),
+            ...(onOpenTask
+              ? [{
+                  value: 'task',
+                  label: 'Open the task',
+                  icon: <Icon name="arrow-up-right" size={16} />,
+                  onSelect: onOpenTask,
+                }]
+              : []),
             ...(onOpenProject
               ? [{
                   value: 'project',
@@ -425,7 +439,7 @@ function FireRow({
                 }]
               : []),
             /* A sent row has nothing left to fire, so there is nothing to skip. */
-            ...(!sent && (onOpenProject || startNow.length > 0) ? [{ divider: true }] : []),
+            ...(!sent && (onOpenTask || onOpenProject || startNow.length > 0) ? [{ divider: true }] : []),
             ...(sent ? [] : [{
               value: 'skip',
               label: 'Do not fire today',
@@ -448,13 +462,139 @@ function FireRow({
   );
 }
 
-/** Where the clock is, between the rows that have fired and the rows that have not. */
+/**
+ * One event alert that rings today, or has (29-2c2), on the same clock as the
+ * tasks. A task row's material and states; its second line is the alert and
+ * the occurrence it rings for ("1 day before · Thu 12 Mar, 12:00") where a
+ * task's is its arithmetic. It has no menu: there is nothing to start and no
+ * snooze, so its one press opens the event's sheet, where the alerts are.
+ */
+function EventAlertLine({
+  row,
+  now,
+  muted,
+  delay,
+  timeZone,
+}: {
+  row: EventAlertRow;
+  now: number;
+  muted: boolean;
+  delay: number;
+  timeZone: string;
+}) {
+  const [hover, setHover] = useState(false);
+  const missed = row.state === 'missed';
+  const sent = row.state === 'sent';
+  const past = missed || sent;
+  const next = row.state === 'next';
+  const when = describeWhen(row.occurrence, row.allDay, new Date(now), timeZone);
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minHeight: 76,
+        padding: 'var(--sp-4) var(--sp-6)', borderRadius: 'var(--r-lg)', boxSizing: 'border-box',
+        backgroundImage: next || hover ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
+        boxShadow: next
+          ? 'var(--glass-rim-2), var(--glass-cast-2), var(--job-sky-shine)'
+          : hover ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)',
+        opacity: muted || past ? 0.5 : 1,
+        transform: hover && !past ? 'translateY(-1px)' : 'none',
+        transition: 'var(--t-hover)',
+        animation: 'var(--kf-condense) var(--dur-slow) var(--ease-glass) both',
+        animationDelay: `${delay}ms`,
+      }}
+    >
+      <div style={{ display: 'grid', gap: 1, width: 58, flex: '0 0 auto' }}>
+        <span style={{ font: 'var(--type-numeric)', color: next ? 'var(--job-sky-text)' : 'var(--fg-1)', fontVariantNumeric: 'tabular-nums' }}>
+          {clockAt(row.at)}
+        </span>
+        <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)' }}>
+          rings
+        </span>
+      </div>
+
+      <span
+        aria-hidden="true"
+        style={{ width: 1, alignSelf: 'stretch', margin: 'var(--sp-3) 0', background: 'var(--line-faint)', flex: '0 0 auto' }}
+      />
+
+      <div style={{ display: 'grid', gap: 3, flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', minWidth: 0 }}>
+          {/* The event's own colour, as its archive row draws it: this row is an event, not a task. */}
+          <span
+            aria-hidden="true"
+            style={{ width: 8, height: 8, flex: '0 0 auto', borderRadius: '50%', backgroundColor: `var(--job-${row.event.colour ?? DEFAULT_EVENT_COLOUR})` }}
+          />
+          <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {row.event.title}
+          </span>
+        </span>
+        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {alertLabel(row.minutes, row.allDay)} · {when}
+        </span>
+        {missed && (
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+            Not sent. A late alert is never sent.
+          </span>
+        )}
+        {sent && row.delivery?.sentAt !== undefined && (
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+            Sent at {clockAt(row.delivery.sentAt)}.
+          </span>
+        )}
+      </div>
+
+      {next && (
+        <span
+          style={{
+            display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 var(--sp-4)',
+            borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-tint-sky)',
+            boxShadow: 'var(--glass-rim-2), var(--job-sky-shine)', color: 'var(--job-sky-text)',
+            font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', textTransform: KICKER_CASE,
+            whiteSpace: 'nowrap', flex: '0 0 auto',
+          }}
+        >
+          {countdownTo(row.at, now)}
+        </span>
+      )}
+      {past && (
+        <span
+          style={{
+            display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 var(--sp-4)',
+            borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+            color: 'var(--fg-4)', font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
+            textTransform: KICKER_CASE, whiteSpace: 'nowrap', flex: '0 0 auto',
+          }}
+        >
+          {missed ? 'Missed' : 'Sent'}
+        </span>
+      )}
+
+      <IconButton
+        label={`Open ${row.event.title}`}
+        variant="ghost"
+        size="sm"
+        onClick={() => useEventSheet.getState().openEvent(row.event.id)}
+      >
+        <Icon name="arrow-up-right" size={16} />
+      </IconButton>
+    </div>
+  );
+}
+
+/**
+ * Where the clock is, between the rows that have fired and the rows that have
+ * not. Sky since 29-1P2c2: it is the timeline's mark, and the timeline is sky's.
+ */
 function NowLine({ at }: { at: number }) {
   return (
     <div aria-hidden="true" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-2)' }}>
       <span
         style={{
-          font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--accent)',
+          font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--job-sky-text)',
           width: 58, flex: '0 0 auto', fontVariantNumeric: 'tabular-nums',
         }}
       >
@@ -462,88 +602,21 @@ function NowLine({ at }: { at: number }) {
       </span>
       <span
         style={{
-          width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
-          boxShadow: 'var(--glow-accent-sm)', flex: '0 0 auto',
-          animation: 'var(--kf-pulse) 2.4s var(--ease-glass) infinite',
+          width: 7, height: 7, borderRadius: '50%', background: 'var(--job-sky)',
+          boxShadow: 'var(--job-sky-shine)', flex: '0 0 auto',
+          /* Steady, not pulsing — see StatusPill.tsx for why no status dot loops. */
         }}
       />
-      <span style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, var(--accent-hairline), transparent)' }} />
+      <span style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, var(--job-sky-line), transparent)' }} />
       <span
         style={{
           font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
-          textTransform: KICKER_CASE, color: 'var(--accent)',
+          textTransform: KICKER_CASE, color: 'var(--job-sky-text)',
         }}
       >
         Now
       </span>
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* The honest limit. Stated, not discovered.                           */
-
-/**
- * Android may hold a notification back, and the screen says so.
- *
- * The item is explicit that this must not be softened into a tooltip, so it
- * is a block under the timeline. The button does the half that works: no web
- * page can open Android's battery settings, so rather than pretending to, it
- * reveals the taps.
- */
-function DozeNote() {
-  const [showSteps, setShowSteps] = useState(false);
-  const STEPS = [
-    'Open Android Settings, then Apps, then Brave.',
-    'Tap Battery.',
-    'Choose Unrestricted.',
-  ];
-
-  return (
-    <Well pad="var(--sp-6)">
-      <div style={{ display: 'flex', gap: 'var(--sp-5)', alignItems: 'flex-start' }}>
-        <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto', marginTop: 2 }}>
-          <Icon name="moon" size={18} />
-        </span>
-        <div style={{ display: 'grid', gap: 'var(--sp-3)', minWidth: 0 }}>
-          <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>These times are when BASE asks</span>
-          <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty', maxWidth: '62ch' }}>
-            Android decides when to deliver. While the tablet is dozing, a 17:15 alert can land at 17:20, or
-            not until you wake the screen. Nothing else shifts: the deadline, the estimate and the timer are
-            unaffected, and anything that arrives late is reported here instead of re-fired.
-          </p>
-          <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty', maxWidth: '62ch' }}>
-            Exempting Brave from battery optimisation makes late delivery rare. It cannot make it impossible.
-          </p>
-          <span style={{ display: 'flex', marginTop: 'var(--sp-2)' }}>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-expanded={showSteps}
-              iconLeft={<Icon name="battery-charging" size={16} />}
-              onClick={() => setShowSteps((v) => !v)}
-            >
-              How to exempt Brave
-            </Button>
-          </span>
-          {showSteps && (
-            <div style={{ display: 'grid', gap: 'var(--sp-4)', paddingTop: 'var(--sp-3)' }}>
-              {STEPS.map((s, i) => (
-                <div key={s} style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'baseline', minWidth: 0 }}>
-                  <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-2xs)', color: 'var(--accent)', flex: '0 0 auto' }}>
-                    {`0${i + 1}`}
-                  </span>
-                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', textWrap: 'pretty' }}>{s}</span>
-                </div>
-              ))}
-              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-                This is a setting on the tablet itself — BASE cannot open it for you.
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </Well>
   );
 }
 
@@ -609,7 +682,8 @@ function BlockedCard({
             aria-hidden="true"
             style={{
               display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 auto', borderRadius: '50%',
-              backgroundImage: 'var(--glass-tint-amber)', boxShadow: 'var(--glass-rim-2)', color: 'var(--status-review)',
+              /* A warning: quiet, grey with its icon (29-1P2c2). */
+              backgroundImage: 'var(--glass-tint-warn)', boxShadow: 'var(--glass-rim-2)', color: 'var(--status-warn)',
             }}
           >
             <Icon name="bell-off" size={20} />
@@ -632,24 +706,24 @@ function BlockedCard({
             drawing has no browser behind it; this is the same call DESIGN-1
             made about `voice.html`'s *"Open sound & permissions"*. What
             replaces it is the three taps below, which are the whole answer. */}
+        {/* The card's yes: solid white (29-1P2), as frost was. */}
         {state === 'off' && pushConfigured() && (
-          <Button
-            variant="frost"
-            size="lg"
+          <WhiteButton
             block
-            loading={busy}
-            iconLeft={<Icon name="bell" size={18} />}
+            disabled={busy}
+            aria-busy={busy || undefined}
+            icon={<Icon name="bell" size={18} />}
             onClick={onAllow}
           >
-            Allow notifications
-          </Button>
+            {busy ? 'Asking…' : 'Allow notifications'}
+          </WhiteButton>
         )}
 
         {error && (
           <Well
             style={{
               display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)',
-              backgroundImage: 'var(--glass-tint-rose)', boxShadow: 'var(--glass-rim-1)',
+              backgroundImage: 'var(--glass-tint-coral)', boxShadow: 'var(--glass-rim-1)',
             }}
           >
             <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', marginTop: 1, color: 'var(--status-overrun)' }}>
@@ -773,8 +847,8 @@ function QuickReminderModal({
           aria-hidden="true"
           style={{
             display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 auto',
-            borderRadius: '50%', backgroundImage: 'var(--glass-tint-violet)',
-            boxShadow: 'var(--glass-rim-2)', color: 'var(--hue-violet)',
+            borderRadius: '50%', backgroundImage: 'var(--glass-tint-sky)',
+            boxShadow: 'var(--glass-rim-2)', color: 'var(--job-sky-text)',
           }}
         >
           <Icon name="alarm-clock" size={20} />
@@ -824,17 +898,16 @@ function QuickReminderModal({
         </div>
       </div>
 
-      {/* Gel since V3-7, the sheet's one primary. It draws as `solid` if
-          this dialog is ever opened from outside a scope. */}
-      <Button
-        variant="gel"
+      {/* Solid white since 29-1P2: a sheet's yes, as every dialog's is.
+          Gel is a screen's one main action — New reminder, behind it. */}
+      <WhiteButton
         block
         disabled={!valid}
-        iconLeft={<Icon name="calendar-plus" size={16} />}
+        icon={<Icon name="calendar-plus" size={16} />}
         onClick={handleCreate}
       >
         Create reminder
-      </Button>
+      </WhiteButton>
     </Dialog>
   );
 }
@@ -877,7 +950,13 @@ function NotificationsScreen() {
     startCalendarConnect,
   } = useAuth();
   const uid = user?.uid ?? null;
-  const { backlogTasks, taskLists, projects, updateBacklogTask } = useStore();
+  const { backlogTasks, taskLists, projects, updateBacklogTask, deleteBacklogTask } = useStore();
+  /* A row's "Open the task" (FIX-12, A4): its sheet over this screen, read
+     live from the backlog so a dev-fixture row with no real task offers none. */
+  const [sheetTaskId, setSheetTaskId] = useState<string | null>(null);
+  const sheetTask = sheetTaskId ? backlogTasks.find((t) => t.id === sheetTaskId) ?? null : null;
+  const openTaskFor = (id: string) =>
+    backlogTasks.some((t) => t.id === id) ? () => setSheetTaskId(id) : null;
   const setReminderSyncIssue = useUIStore((s) => s.setReminderSyncIssue);
   const setNotificationsNeedReconnect = useUIStore((s) => s.setNotificationsNeedReconnect);
 
@@ -892,9 +971,6 @@ function NotificationsScreen() {
   const [showQuickReminder, setShowQuickReminder] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
-  const [diagEntries, setDiagEntries] = useState<DiagEntry[]>([]);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [copiedDiag, setCopiedDiag] = useState(false);
 
   /*
    * The browser's own answer, read synchronously because it has already
@@ -937,8 +1013,6 @@ function NotificationsScreen() {
     if (import.meta.env.DEV && devNotificationsFixture() !== null) return;
     return subscribePushLog(uid, setPushLog);
   }, [uid]);
-
-  useEffect(() => subscribeDiagnostics(setDiagEntries), []);
 
   /*
    * "Granted" is not the same as "subscribed" — the permission can be held
@@ -1019,7 +1093,6 @@ function NotificationsScreen() {
         const widened = await startCalendarConnect('/notifications');
         if (!widened.started) {
           setReconnectError(widened.message);
-          setShowDiagnostics(true);
         }
         return;
       }
@@ -1044,14 +1117,12 @@ function NotificationsScreen() {
         const started = await startCalendarConnect('/notifications');
         if (!started.started) {
           setReconnectError(started.message);
-          setShowDiagnostics(true);
         }
       } else {
         // Show the *specific* reason the reconnect failed (denied consent,
-        // blocked popup, missing client id, etc.) — and auto-reveal the full
-        // diagnostics log so it can be inspected/copied.
+        // blocked popup, missing client id, etc.). The full log is on
+        // Settings → Connections since OPT-8, and the error line says so.
         setReconnectError(result.message);
-        setShowDiagnostics(true);
       }
     } finally {
       setReconnecting(false);
@@ -1090,16 +1161,6 @@ function NotificationsScreen() {
       );
     } finally {
       setAllowing(false);
-    }
-  };
-
-  const handleCopyDiagnostics = async () => {
-    try {
-      await navigator.clipboard.writeText(formatDiagnosticsForCopy());
-      setCopiedDiag(true);
-      setTimeout(() => setCopiedDiag(false), 1800);
-    } catch {
-      setCopiedDiag(false);
     }
   };
 
@@ -1183,8 +1244,6 @@ function NotificationsScreen() {
   const connectButtonLabel =
     diagnosis.kind === 'not_connected' ? 'Connect Google' : reconnecting ? 'Reconnecting…' : 'Reconnect Google';
 
-  const diagIssueCount = diagEntries.filter((e) => e.level !== 'info').length;
-
   /* `now` is read once per mount rather than once per render — the same
      `useState(() => Date.now())` reading `TrashPage` takes, and for the same
      reason: the clock is impure, and a boundary that moved on every re-render
@@ -1201,16 +1260,48 @@ function NotificationsScreen() {
       ? [...backlogTasks, ...devFiringTasks()]
       : backlogTasks;
 
-  const rows = withDelivery(
+  const taskRows = withDelivery(
     firingToday({ tasks: tasksForToday, taskLists, projects, settings, timeZone, now }),
     pushLog,
     now,
   );
-  const toCome = stillToFire(rows);
+  /* 29-2c2: the events' alerts, from the sender's own rule, on the same clock
+     as the tasks with one `next` between them. The fixture's are merged here
+     only, as its tasks are. */
+  const storedEvents = useEventStore((s) => s.events);
+  const eventsForToday =
+    import.meta.env.DEV && devNotificationsFixture() !== null ? [...storedEvents, ...devFiringEvents()] : storedEvents;
+  const rows = todaysTimeline(
+    taskRows,
+    withEventDelivery(eventAlertsToday(eventsForToday, timeZone, now), pushLog, now, LATE_LIMIT_MS),
+  );
+  const toCome = rows.filter((r) => r.row.state !== 'missed' && r.row.state !== 'sent');
   /* Above the Now line: what has gone by. A snoozed row is still owed its
      last call, so it sits below with what is to come. */
-  const fired = rows.filter((r) => r.state === 'missed' || r.state === 'sent');
-  const afterNow = rows.filter((r) => r.state !== 'missed' && r.state !== 'sent');
+  const fired = rows.filter((r) => r.row.state === 'missed' || r.row.state === 'sent');
+  const afterNow = toCome;
+  const line = (r: (typeof rows)[number], i: number) =>
+    r.kind === 'event' ? (
+      <EventAlertLine
+        key={`event:${r.row.event.id}@${r.at}`}
+        row={r.row}
+        now={now}
+        muted={!settings.enabled}
+        delay={i * 44}
+        timeZone={timeZone}
+      />
+    ) : (
+      <FireRow
+        key={r.row.task.id}
+        row={r.row}
+        now={now}
+        muted={!settings.enabled}
+        delay={i * 44}
+        onOpenTask={openTaskFor(r.row.task.id)}
+        onOpenProject={r.row.projectId ? () => navigate(`/project/${r.row.projectId}`) : null}
+        onSkip={() => handleSkipToday(r.row)}
+      />
+    );
 
   const past = history.filter((n) => !(n.status === 'scheduled' && n.sendAt > now));
 
@@ -1235,7 +1326,7 @@ function NotificationsScreen() {
               padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
             }}
           >
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -1250,10 +1341,10 @@ function NotificationsScreen() {
           <div style={{ width: '100%', maxWidth: 1160, margin: '0 auto', display: 'grid', gap: 'var(--sp-9)' }}>
 
             <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
-              {/* Round glass since V3-7, as every V3 screen's Back. */}
-              <IconButton label="Back" onClick={() => navigate(-1)}>
+              {/* Round soft since 29-1P2, as every header's icon button. */}
+              <SoftIconButton label="Back" onClick={() => navigate(-1)}>
                 <Icon name="arrow-left" size={18} />
-              </IconButton>
+              </SoftIconButton>
               <span
                 aria-hidden="true"
                 style={{
@@ -1269,6 +1360,8 @@ function NotificationsScreen() {
               </span>
               <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
                 <h1
+                  /* 29-1P5c, idea 57: shrinks and fades as the page scrolls. */
+                  className="ag-tuck-title"
                   style={{
                     font: 'var(--type-title)', fontSize: 'var(--text-xl)',
                     letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)',
@@ -1281,16 +1374,18 @@ function NotificationsScreen() {
                 </span>
               </div>
               <span style={{ flex: 1 }} />
-              {/* Gel since V3-7: the screen's one primary, as New task is
-                  on the board. */}
-              <Button
-                variant="gel"
-                iconLeft={<Icon name="plus" size={16} />}
+              {/* The screen's one main action, a plain gel (29-1P2), as New
+                  task is on the board. No tile: the tile is for a Start. */}
+              <GelButton
+                colour="emerald"
+                tile={false}
+                size="md"
+                icon={<Icon name="plus" size={16} />}
                 onClick={() => setShowQuickReminder(true)}
                 style={{ flex: '0 0 auto' }}
               >
                 New reminder
-              </Button>
+              </GelButton>
             </header>
 
             {notifyState !== 'on' && (
@@ -1321,55 +1416,26 @@ function NotificationsScreen() {
                       <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-4)' }}>
                         <Icon name="bell" size={20} />
                       </span>
-                      <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)' }}>Nothing fires today.</span>
+                      {/* 29-1P14c: his approved words, lit. */}
+                      <LitLine style={{ font: 'var(--type-label)', color: 'var(--fg-3)' }}>
+                        <Lit>A quiet day.</Lit> No reminders go off today.
+                      </LitLine>
                       <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', maxWidth: '44ch', textWrap: 'pretty' }}>
                         A task appears here on the day its work has to start — its deadline, less how long you
-                        said it takes.
+                        said it takes. An event appears on the day its alert rings.
                       </span>
                     </Well>
                   ) : (
                     <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
-                      {fired.map((r, i) => (
-                        <FireRow
-                          key={r.task.id}
-                          row={r}
-                          now={now}
-                          muted={!settings.enabled}
-                          delay={i * 44}
-                          onOpenProject={r.projectId ? () => navigate(`/project/${r.projectId}`) : null}
-                          onSkip={() => handleSkipToday(r)}
-                        />
-                      ))}
+                      {fired.map((r, i) => line(r, i))}
                       <NowLine at={now} />
-                      {afterNow.map((r, i) => (
-                        <FireRow
-                          key={r.task.id}
-                          row={r}
-                          now={now}
-                          muted={!settings.enabled}
-                          delay={(fired.length + i) * 44}
-                          onOpenProject={r.projectId ? () => navigate(`/project/${r.projectId}`) : null}
-                          onSkip={() => handleSkipToday(r)}
-                        />
-                      ))}
+                      {afterNow.map((r, i) => line(r, fired.length + i))}
                     </div>
                   )}
 
-                  {/* The rule, under the rows it explains. With no rows the
-                      empty well already says it, so it is not said twice. */}
-                  {rows.length > 0 && (
-                    <p
-                      style={{
-                        font: 'var(--type-caption)', color: 'var(--fg-4)', padding: '0 var(--sp-2)',
-                        textWrap: 'pretty', maxWidth: '68ch',
-                      }}
-                    >
-                      Only tasks starting today appear. Each fires once, at its deadline minus its estimate — the
-                      moment the work has to begin. Tapping it opens the task in Focus with the timer already running.
-                    </p>
-                  )}
-
-                  <DozeNote />
+                  {/* The rule sentence under the rows and the Android doze note
+                      ("These times are when BASE asks", How to exempt Brave)
+                      are gone — his BASE list, 2026-10-06. */}
                 </div>
 
                 {/* ---- ALREADY FIRED ----
@@ -1389,7 +1455,10 @@ function NotificationsScreen() {
                       <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-4)' }}>
                         <Icon name="bell" size={20} />
                       </span>
-                      <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)' }}>Nothing has fired yet.</span>
+                      {/* "today" left off his approved line: this list is every day's. */}
+                      <LitLine style={{ font: 'var(--type-label)', color: 'var(--fg-3)' }}>
+                        <Lit>No reminders</Lit> have gone off yet.
+                      </LitLine>
                       <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', maxWidth: '40ch', textWrap: 'pretty' }}>
                         Alerts land here as deadlines approach and sessions close.
                       </span>
@@ -1405,7 +1474,7 @@ function NotificationsScreen() {
                             icon={<Icon name={TYPE_ICON[n.type]} size={18} />}
                             title={n.title}
                             /* A failed row's body is Google's own reason for
-                               refusing the event, so it is rose and it is long
+                               refusing the event, so it is coral and it is long
                                — the card clamps it to two lines shut and shows
                                it whole open, which is why nothing below
                                repeats it. */
@@ -1416,6 +1485,9 @@ function NotificationsScreen() {
                             }
                             time={timeAgoOrAt(n.sendAt)}
                             badge={<StatusPill size="sm" status={look.pill}>{look.label}</StatusPill>}
+                            /* 29-1P6b, his call: flicking a fired alert away
+                               is its Dismiss below, reminder and all. */
+                            onThrow={() => { void handleDismiss(n); }}
                             actions={
                               <>
                                 {n.googleEventLink && (
@@ -1466,164 +1538,6 @@ function NotificationsScreen() {
                     </div>
                   )}
                 </div>
-
-                {/* ── Diagnostics ────────────────────────────────────────
-                    Not in the mockup — see the header. It lives at the foot
-                    of this column rather than in the rail because it is a
-                    dense, wide log and 360px would shred it. */}
-                <Card>
-                  <div style={{ display: 'grid' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        onClick={() => setShowDiagnostics((v) => !v)}
-                        aria-expanded={showDiagnostics}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 'var(--sp-5)',
-                          flex: 1, minWidth: 200, border: 0, padding: 0,
-                          background: 'transparent', textAlign: 'left', cursor: 'pointer',
-                        }}
-                      >
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            display: 'grid', placeItems: 'center', width: 34, height: 34, flex: '0 0 auto',
-                            borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)',
-                            boxShadow: 'var(--glass-rim-1)', color: 'var(--fg-3)',
-                          }}
-                        >
-                          <Icon name="stethoscope" size={17} />
-                        </span>
-                        <span style={{ display: 'grid', gap: 'var(--sp-2)', minWidth: 0, flex: 1 }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-                            <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Diagnostics</span>
-                            {diagIssueCount > 0 && (
-                              <StatusPill size="sm" status="overrun">
-                                {diagIssueCount} issue{diagIssueCount === 1 ? '' : 's'}
-                              </StatusPill>
-                            )}
-                          </span>
-                          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-                            Detailed log of every Google connection &amp; sync attempt — pinpoints exactly what failed.
-                          </span>
-                        </span>
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            display: 'flex', flex: '0 0 auto', color: 'var(--fg-4)',
-                            transform: showDiagnostics ? 'rotate(180deg)' : 'rotate(0deg)',
-                            transition: 'transform var(--dur-base) var(--ease-glass)',
-                          }}
-                        >
-                          <Icon name="chevron-down" size={16} />
-                        </span>
-                      </button>
-
-                      {diagEntries.length > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto' }}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            iconLeft={<Icon name={copiedDiag ? 'check' : 'copy'} size={15} />}
-                            onClick={handleCopyDiagnostics}
-                            title="Copy the full diagnostics log to share"
-                          >
-                            {copiedDiag ? 'Copied' : 'Copy'}
-                          </Button>
-                          <IconButton
-                            label="Clear the diagnostics log"
-                            title="Clear the diagnostics log"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => clearDiagnostics()}
-                          >
-                            <Icon name="trash-2" size={15} />
-                          </IconButton>
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateRows: showDiagnostics ? '1fr' : '0fr',
-                        transition: 'grid-template-rows var(--dur-base) var(--ease-glass)',
-                      }}
-                    >
-                      <div style={{ overflow: 'hidden', minHeight: 0 }}>
-                        <div style={{ paddingTop: 'var(--sp-6)' }}>
-                          {diagEntries.length === 0 ? (
-                            <Well pad="var(--sp-8)">
-                              <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textAlign: 'center', textWrap: 'pretty' }}>
-                                No diagnostics yet — connection and sync events will be logged here as they happen.
-                              </p>
-                            </Well>
-                          ) : (
-                            <div
-                              className="ag-scroll"
-                              style={{
-                                display: 'grid', gap: 'var(--sp-3)',
-                                maxHeight: 320, overflowY: 'auto', overscrollBehavior: 'contain',
-                              }}
-                            >
-                              {[...diagEntries].reverse().map((e) => (
-                                <Well key={e.id} pad="var(--sp-4) var(--sp-5)" style={{ borderRadius: 'var(--r-sm)' }}>
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' }}>
-                                    <span
-                                      aria-hidden="true"
-                                      style={{
-                                        flex: '0 0 auto', marginTop: 6, width: 6, height: 6, borderRadius: '50%',
-                                        background: DIAG_LOOK[e.level],
-                                      }}
-                                    />
-                                    <div style={{ minWidth: 0, flex: 1, display: 'grid', gap: 2 }}>
-                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-                                        <span
-                                          style={{
-                                            font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
-                                            textTransform: 'uppercase', color: DIAG_LOOK[e.level],
-                                          }}
-                                        >
-                                          {e.level}
-                                        </span>
-                                        <span style={{ font: 'var(--type-kicker)', color: 'var(--fg-4)' }}>
-                                          {e.phase}/{e.code}
-                                        </span>
-                                        <span
-                                          style={{
-                                            marginLeft: 'auto', font: 'var(--type-kicker)', color: 'var(--fg-4)',
-                                            fontVariantNumeric: 'tabular-nums',
-                                          }}
-                                        >
-                                          {new Date(e.time).toLocaleString(undefined, {
-                                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit',
-                                          })}
-                                        </span>
-                                      </div>
-                                      <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', textWrap: 'pretty', overflowWrap: 'anywhere' }}>
-                                        {e.message}
-                                      </span>
-                                      {e.detail && (
-                                        <span
-                                          style={{
-                                            font: 'var(--type-kicker)', color: 'var(--fg-4)',
-                                            textWrap: 'pretty', overflowWrap: 'anywhere',
-                                          }}
-                                        >
-                                          {e.detail}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </Well>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
               </div>
 
               {/* ── Rail: delivery and behaviour ────────────────────────── */}
@@ -1640,74 +1554,44 @@ function NotificationsScreen() {
                   <div style={{ display: 'grid', gap: 'var(--sp-6)' }}>
                     <Kicker>Delivery</Kicker>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto',
-                          background: pushOk ? 'var(--accent)' : 'var(--status-review)',
-                          boxShadow: pushOk ? 'var(--glow-accent-sm)' : 'none',
-                        }}
-                      />
-                      <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto' }}>
-                        <Icon name="tablet" size={16} />
-                      </span>
-                      <div style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
-                        <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Brave on this tablet</span>
-                        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-                          {pushOk
-                            ? 'Allowed. Alerts reach the lock screen with the app closed.'
+                    {/* Icons only, each with its dot (his BASE list, 2026-10-06:
+                        no labels, no descriptions). What each would have said is
+                        its tooltip and its spoken name. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', minWidth: 0 }}>
+                      {[
+                        {
+                          icon: 'tablet' as const,
+                          ok: pushOk,
+                          says: `Brave on this tablet: ${pushOk
+                            ? 'allowed. Alerts reach the lock screen with the app closed.'
                             : notifyState === 'unavailable'
-                              ? 'This browser cannot deliver them. In-app only.'
-                              : 'Blocked. In-app only.'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div aria-hidden="true" style={{ height: 1, background: 'var(--line-faint)' }} />
-
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)', minWidth: 0 }}>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto', marginTop: 6,
-                          background: googleStatusOk ? 'var(--accent)' : 'var(--status-review)',
-                          boxShadow: googleStatusOk ? 'var(--glow-accent-sm)' : 'none',
-                        }}
-                      />
-                      <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto', marginTop: 3 }}>
-                        <Icon name="calendar-clock" size={16} />
-                      </span>
-                      <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 0 }}>
-                        <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)', minWidth: 0 }}>
-                          <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)', flex: 1, minWidth: 0 }}>
-                            Google Calendar
-                          </span>
+                              ? 'this browser cannot deliver them. In-app only.'
+                              : 'blocked. In-app only.'}`,
+                        },
+                        {
+                          icon: 'calendar-clock' as const,
+                          ok: googleStatusOk,
+                          says: `Google Calendar: ${googleStatusLabel}. ${googleStatusDetail}`,
+                        },
+                      ].map((c) => (
+                        <span
+                          key={c.icon}
+                          role="img"
+                          aria-label={c.says}
+                          title={c.says}
+                          style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--fg-3)' }}
+                        >
                           <span
+                            aria-hidden="true"
                             style={{
-                              font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
-                              color: 'var(--fg-4)', textAlign: 'right', flex: '0 0 auto',
+                              width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto',
+                              background: c.ok ? 'var(--accent)' : 'var(--status-warn)',
+                              boxShadow: c.ok ? 'var(--glow-accent-sm)' : 'none',
                             }}
-                          >
-                            {googleStatusLabel}
-                          </span>
+                          />
+                          <Icon name={c.icon} size={18} />
                         </span>
-                        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-                          {googleStatusDetail}
-                        </span>
-                        {/* The second channel keeps its own head start, and
-                            the screen says so rather than letting the two
-                            times be discovered as a discrepancy. His call,
-                            2026-09-16: leave the sending alone, state it
-                            here. Read from the real setting, never hardcoded. */}
-                        {googleStatusOk && settings.defaultDeadlineOffsetMinutes > 0 && (
-                          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-                            The calendar keeps its own head start: its popup arrives{' '}
-                            {settings.defaultDeadlineOffsetMinutes} min before the block begins, so it is the
-                            earlier of the two. A task with its own reminder set uses that instead.
-                          </span>
-                        )}
-                      </div>
+                      ))}
                     </div>
 
                     {googleStatusOk ? (
@@ -1730,23 +1614,35 @@ function NotificationsScreen() {
                         ))}
                       </Well>
                     ) : diagnosis.kind !== 'checking' ? (
-                      <Button
-                        variant="tint"
-                        tone="amber"
-                        block
-                        loading={reconnecting}
-                        iconLeft={<Icon name="link" size={16} />}
+                      <SoftButton
+                        disabled={reconnecting}
+                        aria-busy={reconnecting || undefined}
+                        icon={<Icon name="link" size={16} />}
                         onClick={handleReconnect}
+                        style={{ width: '100%' }}
                       >
                         {connectButtonLabel}
-                      </Button>
-                    ) : null}
+                      </SoftButton>
+                    ) : (
+                      /* 29-1P14d2, idea 116: while Google is asked, the account
+                         well on its way rather than nothing, then a jump. */
+                      <Skeleton
+                        label="Checking Google Calendar"
+                        lines={2}
+                        height={10}
+                        lastLineWidth="70%"
+                        style={{
+                          padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-md)',
+                          backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
+                        }}
+                      />
+                    )}
 
                     {reconnectError && (
                       <Well
                         style={{
                           display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)',
-                          backgroundImage: 'var(--glass-tint-rose)',
+                          backgroundImage: 'var(--glass-tint-coral)',
                           boxShadow: 'var(--glass-rim-1)',
                         }}
                       >
@@ -1757,6 +1653,11 @@ function NotificationsScreen() {
                           <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>Reconnect failed</span>
                           <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', textWrap: 'pretty', overflowWrap: 'anywhere' }}>
                             {reconnectError}
+                          </span>
+                          {/* OPT-8 — the log used to open itself here, at the
+                              foot of this screen; it lives in Settings now. */}
+                          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
+                            Every step is logged in Settings → Connections → Diagnostics.
                           </span>
                         </div>
                       </Well>
@@ -1823,6 +1724,17 @@ function NotificationsScreen() {
         onCreate={handleCreateReminder}
       />
 
+      <AnimatePresence>
+        {sheetTask && (
+          <TaskDetailPanel
+            task={sheetTask}
+            onClose={() => setSheetTaskId(null)}
+            onSave={(updates) => { updateBacklogTask(sheetTask.id, updates); setSheetTaskId(null); }}
+            onDelete={() => { deleteBacklogTask(sheetTask.id); setSheetTaskId(null); }}
+          />
+        )}
+      </AnimatePresence>
+
       {!wide && (
         <div
           style={{
@@ -1832,7 +1744,7 @@ function NotificationsScreen() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}

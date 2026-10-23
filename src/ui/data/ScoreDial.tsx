@@ -38,7 +38,7 @@
  *
  * **TWO STATES, NOT FOUR.** The chip is a carved well with a white numeral
  * until the score reaches `threshold` (10), and an amber pane with an
- * amber numeral at or above it. `prompt.md`: *"Two states, no score-band
+ * amber numeral at or above it (coral in this app since 29-1P2c2). `prompt.md`: *"Two states, no score-band
  * rainbow."* The app's four-band model (rose / amber / violet / neutral)
  * still exists and is still right for the places that tint a second,
  * smaller reading of the same number — it just is not this component's
@@ -77,8 +77,21 @@
  * highest score currently on screen (`usePriorityScores().peak`), not a
  * ceiling, because there is no longer a ceiling to draw against. It is only
  * ever seen under `showMax`.
+ *
+ * 29-1P7a — IT WARMS (idea 33), AND RED ALERT IS STILL THE ONLY CORAL
+ * -------------------------------------------------------------------
+ * `prompt.md`'s "no score-band rainbow" is overruled by his own pick: a score
+ * warms as it rises, the numeral going from white through gold to orange,
+ * with a hairline of the same colour inside the slot. **His call, 2026-10-13:
+ * grey → gold → orange → coral, no teal** (teal is Focus). The first three are
+ * `lib/warmth.ts`'s `scoreWarmth`, read against `max` — the highest open score
+ * in the app — so only work near the top glows and an ordinary board stays
+ * quiet. Coral is not on that ramp: it is still `alert`, the engine's Red
+ * Alert, so it stays as rare as the verdict it stands for. It is still a
+ * number and never a ring; the slot never glows (a glow means live).
  */
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
+import { scoreWarmth, scoreWarmthColour } from '../../lib/warmth';
 
 /** [height, numeral size, horizontal padding] — the real file's table. */
 const DIMS = {
@@ -100,7 +113,7 @@ export interface ScoreDialProps extends HTMLAttributes<HTMLSpanElement> {
   /** sm — inside a task row. md — beside a title in a header. lg — where the score is the subject. */
   size?: ScoreDialSize;
   /**
-   * Red Alert. The chip and its numeral go amber; otherwise they stay
+   * Red Alert. The chip and its numeral go coral; otherwise they stay
    * neutral. Pass `ScoreBreakdown.redAlert` — this component does not decide
    * it, and there is no number here to decide it from.
    */
@@ -109,6 +122,11 @@ export interface ScoreDialProps extends HTMLAttributes<HTMLSpanElement> {
   showMax?: boolean;
   /** Uppercase mono suffix inside the chip. Omit inside dense rows. */
   label?: ReactNode;
+  /**
+   * Warm the numeral by how high the score sits against `max` (idea 33).
+   * Off for a finished task's chip: done work is over and does not press.
+   */
+  warm?: boolean;
 }
 
 export function ScoreDial({
@@ -118,11 +136,13 @@ export function ScoreDial({
   alert = false,
   showMax = false,
   label,
+  warm = true,
   className = '',
   style,
   ...rest
 }: ScoreDialProps) {
   const [h, fontSize, pad] = DIMS[size] ?? DIMS.sm;
+  const warmInk = !alert && warm ? scoreWarmthColour(scoreWarmth(value, max)) : null;
 
   return (
     <span
@@ -137,14 +157,17 @@ export function ScoreDial({
         padding: `0 ${pad}`,
         /* Not `--r-pill`: at pill radius it reads as a tappable control. */
         borderRadius: 'var(--r-xs)',
-        backgroundImage: alert ? 'var(--glass-tint-amber)' : 'var(--glass-well)',
-        boxShadow: alert ? 'var(--glass-rim-1)' : 'var(--glass-well-shadow)',
+        /* Red Alert is coral's job since 29-1P2c2 (it was amber). */
+        backgroundImage: alert ? 'var(--glass-tint-coral)' : 'var(--glass-well)',
+        boxShadow: alert ? 'var(--glass-rim-1)'
+          : warmInk ? `var(--glass-well-shadow), inset 0 0 0 1px color-mix(in oklab, ${warmInk} 34%, transparent)`
+            : 'var(--glass-well-shadow)',
         font: 'var(--type-numeric)',
         fontSize,
         fontVariantNumeric: 'tabular-nums',
-        color: alert ? 'var(--hue-amber)' : 'var(--fg-1)',
+        color: alert ? 'var(--job-coral-tag-fg)' : warmInk ?? 'var(--fg-1)',
         whiteSpace: 'nowrap',
-        transition: 'background var(--dur-base) var(--ease-glass), color var(--dur-base) var(--ease-glass)',
+        transition: 'background var(--dur-base) var(--ease-glass), color var(--dur-base) var(--ease-glass), box-shadow var(--dur-base) var(--ease-glass)',
         ...style,
       }}
       {...rest}
@@ -154,7 +177,7 @@ export function ScoreDial({
         <span
           style={{
             font: 'var(--type-kicker)',
-            color: alert ? 'var(--hue-amber)' : 'var(--fg-4)',
+            color: alert ? 'var(--job-coral-tag-fg)' : 'var(--fg-4)',
             opacity: alert ? 0.72 : 1,
           }}
         >

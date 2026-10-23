@@ -68,7 +68,9 @@ const TONE = {
      of how that screen rations the accent colour. */
   white:   'var(--fg-1)',
   cyan:    'var(--hue-cyan)',
-  violet:  'var(--hue-violet)',
+  violet:  'var(--job-violet)',
+  /* 29-1P2c3: brown noise is calm focus, which is teal's job. */
+  teal:    'var(--job-teal)',
   amber:   'var(--hue-amber)',
   rose:    'var(--hue-rose)',
   neutral: 'var(--fg-3)',

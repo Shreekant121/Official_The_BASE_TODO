@@ -63,18 +63,18 @@
  * holds, the hint carries "everything else is derived", and the `Instrument`
  * beside them does the counting.
  *
- * **`Section` takes the source's material and keeps our body.** Surfaces,
- * insets, the 38px `--r-sm` glyph tile, the rotating `chevron-down` and the
- * outstanding-count badge are the source's; the closed/open shadow ladder is
- * `--glass-rim-1, --glass-cast-1` → `--glass-shadow-pane`. What did NOT come
- * across is `{open && …}`: the source unmounts a closed section, and several of
- * our field editors hold real uncommitted state inside them — a half-typed tag
- * in `TagsEditor`, a link draft in `LinksEditor`, an in-flight rename in
- * `SubtaskTree` — which unmounting would throw away. The body stays mounted,
- * morphs on `grid-template-rows: 0fr → 1fr` and goes `visibility: hidden` on a
- * delay so its fields are not invisible tab stops. That is production
- * structure guarding a real bug, which is the half of the reconciliation rule
- * we keep.
+ * **`Section` is `task-fields/CollapsibleSection.tsx` since OPT-5**, moved
+ * out so the task sheet's Optional section is the same pane. Its header says
+ * what came across from the source and why a closed body stays mounted.
+ *
+ * **OPT-5 added an Optional section at the end (2026-10-06, his call)** —
+ * Start date, Reminder, Status, Links and Share, closed every time a task
+ * comes up (Links left Organize for it in a follow-up, his call).
+ * It is the task sheet's own (`task-fields/OptionalSection.tsx`). Start date
+ * left the score pane for it, Status left Essentials and Reminder left
+ * Advanced. **Share is on this screen for the first time**: it was kept off
+ * because it publishes at once while every other field here waits for Save,
+ * and he asked for it anyway; its hint says so.
  *
  * **`StatusPills` stays; the source's `SegmentedControl` does not.**
  * `readme.md`'s component-selection rules put `SegmentedControl` on *modes*
@@ -89,9 +89,8 @@
  * editor lives on the task sheet. This screen is a merge of the task card and
  * has to carry them.
  */
-import type { ReactNode } from 'react';
 import {
-  Chip, Icon, Input, ProgressRing, StatusPill, Switch, Textarea, Well, type IconName,
+  Chip, Input, Switch, Textarea, WarnLine, Well,
 } from '../../ui';
 import {
   countSubtasksRecursive, emergencyBoostOf, useStore, AVOIDED_MAX, type Task,
@@ -105,16 +104,14 @@ import DependencyPicker from '../../components/task-fields/DependencyPicker';
 import EmergencyPicker from '../../components/task-fields/EmergencyPicker';
 import { emergencyCrowdNote } from '../../components/task-fields/emergencyMenu';
 import EstimateField from '../../components/task-fields/EstimateField';
-import LinksEditor from '../../components/task-fields/LinksEditor';
 import ListLocationPicker from '../../components/task-fields/ListLocationPicker';
 import HumanOverridePicker from '../../components/task-fields/HumanOverridePicker';
 import RecurrencePicker from '../../components/task-fields/RecurrencePicker';
-import ReminderPicker from '../../components/task-fields/ReminderPicker';
-import StatusPills from '../../components/task-fields/StatusPills';
 import SubtaskTree from '../../components/task-fields/SubtaskTree';
-import TagsEditor from '../../components/task-fields/TagsEditor';
-import { Hint, Labelled, Points } from '../../components/task-fields/Labelled';
-import { REMINDER_OPTIONS, REMINDER_USE_DEFAULT } from '../../components/task-fields/reminderOptions';
+import { Labelled, Points } from '../../components/task-fields/Labelled';
+import { CollapsibleSection as Section } from '../../components/task-fields/CollapsibleSection';
+import { OptionalSection } from '../../components/task-fields/OptionalSection';
+import { StepPercent } from '../../components/task-fields/StepPercent';
 import { deadlineReading, durationReading, type ScoreReading } from '../../components/task-fields/scoreReadings';
 import { HUMAN_OVERRIDE_WORDS } from '../../components/task-fields/scoreDisplay';
 import type { NeedId } from '../../components/task-fields/needs';
@@ -123,114 +120,7 @@ import type { TaskDraftController } from '../../components/task-fields/useTaskDr
 /** The source's own quick picks, in minutes. */
 const QUICK_ESTIMATES = [15, 30, 60, 90, 120];
 
-export type SectionId = 'essentials' | 'organize' | 'advanced' | 'subtasks';
-
-// ── Section shell ──────────────────────────────────────────────────────────
-
-interface SectionProps {
-  icon: IconName;
-  title: string;
-  hint: string;
-  /** Draws an amber "N needed" badge in the header. */
-  need?: number;
-  /** A reading in the header, right of the title — the app's own addition. */
-  right?: ReactNode;
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}
-
-function Section({ icon, title, hint, need = 0, right, open, onToggle, children }: SectionProps) {
-  return (
-    <div
-      style={{
-        borderRadius: 'var(--r-card)',
-        backgroundImage: 'var(--glass-fill-1)',
-        backdropFilter: 'var(--glass-bd-sm)',
-        WebkitBackdropFilter: 'var(--glass-bd-sm)',
-        boxShadow: open ? 'var(--glass-shadow-pane)' : 'var(--glass-rim-1), var(--glass-cast-1)',
-        transition: 'box-shadow var(--dur-base) var(--ease-glass)',
-      }}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', width: '100%',
-          padding: 'var(--sp-6) var(--pad-card)', border: 0, background: 'transparent',
-          cursor: 'pointer', textAlign: 'left', borderRadius: 'var(--r-card)', color: 'inherit',
-        }}
-      >
-        {/* Neutral, never tinted — UI-25's correction to `NotificationCard`'s
-            disc, which matters more in a column of these. */}
-        <span
-          aria-hidden="true"
-          style={{
-            display: 'grid', placeItems: 'center', width: 38, height: 38, flex: '0 0 auto',
-            borderRadius: 'var(--r-sm)',
-            backgroundImage: open ? 'var(--glass-fill-3)' : 'var(--glass-fill-1)',
-            boxShadow: 'var(--glass-rim-1)',
-            color: open ? 'var(--fg-1)' : 'var(--fg-3)',
-            transition: 'var(--t-hover)',
-          }}
-        >
-          <Icon name={icon} size={17} />
-        </span>
-        <div style={{ display: 'grid', gap: 2, flex: 1, minWidth: 0 }}>
-          <span style={{ font: 'var(--type-title)', fontSize: 'var(--text-md)', color: 'var(--fg-1)' }}>
-            {title}
-          </span>
-          <span
-            style={{
-              font: 'var(--type-caption)', color: 'var(--fg-4)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}
-          >
-            {hint}
-          </span>
-        </div>
-        {right}
-        {need > 0 && <StatusPill status="review" size="sm" dot={false}>{need} needed</StatusPill>}
-        <span
-          style={{
-            display: 'flex', color: 'var(--fg-3)', flex: '0 0 auto',
-            transform: open ? 'rotate(180deg)' : 'none',
-            transition: 'transform var(--dur-base) var(--ease-glass)',
-          }}
-        >
-          <Icon name="chevron-down" size={18} />
-        </span>
-      </button>
-
-      {/* Mounted whether open or shut — see the note at the top of this file. */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateRows: open ? '1fr' : '0fr',
-          transition: 'grid-template-rows var(--dur-base) var(--ease-glass)',
-        }}
-      >
-        <div
-          style={{
-            overflow: 'hidden', minHeight: 0,
-            visibility: open ? 'visible' : 'hidden',
-            transition: `visibility 0s linear ${open ? '0s' : 'var(--dur-base)'}`,
-          }}
-        >
-          <div
-            style={{
-              display: 'grid', gap: 'var(--gap-stack)',
-              padding: '0 var(--pad-card) var(--pad-card)',
-            }}
-          >
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+export type SectionId = 'essentials' | 'organize' | 'advanced' | 'subtasks' | 'optional';
 
 // ── The body ───────────────────────────────────────────────────────────────
 
@@ -293,10 +183,6 @@ export default function TaskFieldGrid({
   const quasi = task.avoidedCount ?? 0;
 
   const repeat = resolveRule({ recurrence: draft.recurrence, recurrenceRule: draft.recurrenceRule });
-  const reminder = REMINDER_OPTIONS.find((o) => o.value === draft.reminderMinutes);
-  const reminderLabel = draft.reminderMinutes === REMINDER_USE_DEFAULT
-    ? 'default reminder'
-    : (reminder?.label ?? 'custom reminder').toLowerCase();
 
   return (
     <div
@@ -369,16 +255,17 @@ export default function TaskFieldGrid({
           label="Emergency (0–5)"
           right={emergencyLevel > 0 ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
-              <span style={{ color: emergencyLapsed ? 'var(--fg-4)' : 'var(--hue-rose)' }}>
+              <span style={{ color: emergencyLapsed ? 'var(--fg-4)' : 'var(--job-coral-tag-fg)' }}>
                 {emergencyLapsed ? 'lapsed' : 'live'}
               </span>
               <Points value={emergencyPoints} />
             </span>
           ) : undefined}
           hint={(
-            <span style={{ color: emergencyNote.warn ? 'var(--hue-rose)' : undefined }}>
-              {emergencyNote.text}
-            </span>
+            emergencyNote.warn
+              /* Too many flagged: a warning, grey with its icon (29-1P2c2). */
+              ? <WarnLine as="span" style={{ font: 'inherit' }}>{emergencyNote.text}</WarnLine>
+              : <span>{emergencyNote.text}</span>
           )}
         >
           <EmergencyPicker
@@ -387,59 +274,40 @@ export default function TaskFieldGrid({
           />
         </Labelled>
 
-        {/* Dates live HERE, not under Essentials: they are what the Deadline
-            factor is computed from. */}
-        <div
-          style={{
-            display: 'grid', gap: 'var(--gap-stack)',
-            gridTemplateColumns: wide ? '1fr 1fr' : '1fr',
-          }}
+        {/* The deadline lives HERE, not under Essentials: it is what the
+            Deadline factor is computed from. The start date sat beside it
+            until OPT-5 filed it under Optional, at his word. */}
+        <Labelled
+          icon="calendar-clock"
+          label="Deadline"
+          right={<Points value={deadlinePoints} tone={deadline.urgent ? 'var(--job-coral-tag-fg)' : undefined} />}
+          hint={`${deadline.phrase} — the Deadline factor is derived from this.`}
+          {...need('deadline')}
         >
-          <Labelled
-            icon="calendar-clock"
-            label="Deadline"
-            right={<Points value={deadlinePoints} tone={deadline.urgent ? 'var(--hue-amber)' : undefined} />}
-            hint={`${deadline.phrase} — the Deadline factor is derived from this.`}
-            {...need('deadline')}
-          >
-            <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
-              <Input
-                type="datetime-local"
-                value={draft.deadline}
-                onChange={(e) => setField('deadline', e.target.value)}
-                aria-label="Deadline"
-              />
-              {/* Item 18's opt-out, in the same place it sits on the task
-                  sheet: inside the deadline field, because it is a property
-                  of this date rather than a separate question. This screen
-                  exists to fill in what is missing, and a task whose date
-                  must not move is a fact about it that is just as missing. */}
-              <Switch
-                size="sm"
-                checked={draft.deadlineIsFixed}
-                onChange={(v) => setField('deadlineIsFixed', v)}
-                label={(
-                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
-                    Fixed date (never auto-reschedule)
-                  </span>
-                )}
-              />
-            </div>
-          </Labelled>
-
-          <Labelled
-            icon="play"
-            label="Start date"
-            hint="Optional. Keeps the task from surfacing early."
-          >
+          <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
             <Input
               type="datetime-local"
-              value={draft.startDate}
-              onChange={(e) => setField('startDate', e.target.value)}
-              aria-label="Start date"
+              value={draft.deadline}
+              onChange={(e) => setField('deadline', e.target.value)}
+              aria-label="Deadline"
             />
-          </Labelled>
-        </div>
+            {/* Item 18's opt-out, in the same place it sits on the task
+                sheet: inside the deadline field, because it is a property
+                of this date rather than a separate question. This screen
+                exists to fill in what is missing, and a task whose date
+                must not move is a fact about it that is just as missing. */}
+            <Switch
+              size="sm"
+              checked={draft.deadlineIsFixed}
+              onChange={(v) => setField('deadlineIsFixed', v)}
+              label={(
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                  Fixed date (never auto-reschedule)
+                </span>
+              )}
+            />
+          </div>
+        </Labelled>
 
         <div
           style={{
@@ -525,19 +393,11 @@ export default function TaskFieldGrid({
         <Section
           icon="align-left"
           title="Essentials"
-          hint="Status and description"
+          hint="Description"
           need={controller.missing.description ? 1 : 0}
           open={open.essentials}
           onToggle={() => onToggleSection('essentials')}
         >
-          <Labelled icon="circle-dot" label="Status">
-            <StatusPills
-              value={draft.status}
-              onChange={(v) => setField('status', v)}
-              lockedComplete={lockReason}
-            />
-          </Labelled>
-
           <Labelled
             icon="text"
             label="Description"
@@ -579,20 +439,12 @@ export default function TaskFieldGrid({
           <Labelled icon="user-circle" label="Assignee">
             <AssigneeField value={draft.assignee} onChange={(v) => setField('assignee', v)} />
           </Labelled>
-
-          <Labelled icon="tag" label="Tags">
-            <TagsEditor value={draft.tags} onChange={(v) => setField('tags', v)} />
-          </Labelled>
-
-          <Labelled icon="link-2" label="Links">
-            <LinksEditor value={draft.links} onChange={(v) => setField('links', v)} />
-          </Labelled>
         </Section>
 
         <Section
           icon="sliders-horizontal"
           title="Advanced"
-          hint={`${repeat ? describeRecurrenceRule(repeat) : 'No repeat'} · ${reminderLabel}`}
+          hint={repeat ? describeRecurrenceRule(repeat) : 'No repeat'}
           open={open.advanced}
           onToggle={() => onToggleSection('advanced')}
         >
@@ -605,34 +457,10 @@ export default function TaskFieldGrid({
             />
           </Labelled>
 
-          <Labelled icon="bell" label="Reminder">
-            <ReminderPicker
-              value={draft.reminderMinutes}
-              customMinutes={draft.customReminderMinutes}
-              onChange={(v) => setField('reminderMinutes', v)}
-              onCustomMinutesChange={(v) => setField('customReminderMinutes', v)}
-            />
-          </Labelled>
-
-          <Labelled icon="file-text" label="Notes" hint="Long-form. Never shown on the card.">
-            <Textarea
-              value={draft.notes}
-              onChange={(e) => setField('notes', e.target.value)}
-              rows={4}
-              aria-label="Notes"
-              placeholder="Research, context, links to dig into later."
-            />
-          </Labelled>
-
           <Labelled icon="image" label="Cover">
             <CoverImageField value={draft.imageUrl} onChange={(v) => setField('imageUrl', v)} />
           </Labelled>
 
-          <Hint>
-            Public links and the “hidden from shared links” toggle live on the task card — they
-            write to Firestore the moment you press them, which would break this page’s
-            “nothing saved until you say so” promise.
-          </Hint>
         </Section>
 
         <Section
@@ -643,31 +471,29 @@ export default function TaskFieldGrid({
             : 'Break it down as far as you need'}
           open={open.subtasks}
           onToggle={() => onToggleSection('subtasks')}
-          /* UI-9's reading, kept: this genuinely IS a fraction of a whole,
-             which is what `ProgressRing` is for. It moved into the header so
-             the section reads its own state without being opened. */
+          /* UI-9 put a `ProgressRing` here so the section reads its own state
+             without being opened; 29-1P9c made it the number, "40%" in
+             white, as on the task sheet (his call). */
           right={subtaskCounts.total > 0 ? (
-            <ProgressRing
-              value={subtaskCounts.done}
-              max={subtaskCounts.total}
-              size={36}
-              thickness={4}
-              tone="accent"
-              showValue={false}
-            >
-              <span
-                style={{
-                  font: 'var(--type-kicker)', color: 'var(--fg-2)',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {subtaskCounts.done}/{subtaskCounts.total}
-              </span>
-            </ProgressRing>
+            <StepPercent done={subtaskCounts.done} total={subtaskCounts.total} />
           ) : undefined}
         >
           <SubtaskTree value={draft.subtasks} onChange={(v) => setField('subtasks', v)} />
         </Section>
+
+        <OptionalSection
+          task={task}
+          controller={controller}
+          lockReason={lockReason}
+          open={open.optional}
+          onToggle={() => onToggleSection('optional')}
+          shareHint={(
+            <>
+              A live, read-only page anyone with the link can watch. Unlike the rest of this
+              page, it publishes the moment you press it, not on Save.
+            </>
+          )}
+        />
       </div>
     </div>
   );

@@ -5,13 +5,12 @@
  * A→B→A cannot be built in the first place. That guard, and the fact that it
  * considers the in-progress unsaved list, are unchanged.
  *
- * **An incomplete prerequisite is amber, not rose.** The old chips were red,
+ * **An incomplete prerequisite is a grey warning, not coral** (amber until
+ * 29-1P2c2, when warnings went quiet). The old chips were red,
  * which in this design system is `--status-overrun` — a live problem, the hue
  * the app spends on a session running over its allocation. A prerequisite that
- * is not done yet is nothing of the sort: the paragraph at the foot of this
- * field says so itself ("A soft warning only… It's never hidden or
- * reordered"). Amber is "needs a decision", which is the same call UI-9 made
- * for its "Needs …" pills and UI-8 for a failed tool chip.
+ * is not done yet is nothing of the sort: it is a soft warning only, never
+ * hidden or reordered. Its `circle-alert` glyph says so; the chip is `review`.
  *
  * A SEARCHABLE DROPDOWN — THE LIST IS STILL THERE, TYPING NARROWS IT (item 1)
  * --------------------------------------------------------------------------
@@ -52,6 +51,11 @@
  * that is the whole reason `PortalDropdown` exists, and every other picker in
  * this sheet already goes through it.
  *
+ * **No captions under it since OPT-5's follow-up**, his call: "Type a name,
+ * project or list to narrow it" and the "A soft warning only…" paragraph
+ * are gone. Only the empty-list sentence is left, because without it a task
+ * with nothing to depend on would show a bare label.
+ *
  * The field is an `Input` at the same `md` height, the same `--glass-well`
  * trough and the same `--r-control` radius as the pickers beside it: not a new
  * kind of control, just the one next to it with a magnifier in it.
@@ -59,7 +63,7 @@
 import { useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useStore, wouldCreateDependencyCycle } from '../../store/useStore';
-import { Icon, Input, MetaKicker } from '../../ui';
+import { Icon, Input, LitLine, litSafe, MetaKicker } from '../../ui';
 import { PickerEmpty, PickerList, PickerOption } from '../pickers';
 import { PortalDropdown } from '../PortalDropdown';
 import FieldChip from './FieldChip';
@@ -188,7 +192,7 @@ export default function DependencyPicker({ taskId, value, onChange }: Dependency
             />
           </div>
 
-          <PortalDropdown isOpen={isOpen} onClose={() => setIsOpen(false)} triggerRef={triggerRef}>
+          <PortalDropdown isOpen={isOpen} onClose={() => setIsOpen(false)} onOpen={() => setIsOpen(true)} triggerRef={triggerRef}>
             {/* `min(…)` rather than a flat 280px, for the reason every other
                 picker in the app gives: this panel is portalled to the
                 viewport, and a fixed pixel cap on a tablet in landscape is
@@ -204,29 +208,20 @@ export default function DependencyPicker({ taskId, value, onChange }: Dependency
                   </PickerOption>
                 ))
               ) : (
-                <PickerEmpty>No task matches that.</PickerEmpty>
+                <PickerEmpty>{query.trim() === '' ? 'No task matches that.' : `No task matches **“${litSafe(query.trim())}”**.`}</PickerEmpty>
               )}
             </PickerList>
           </PortalDropdown>
-
-          {/* One line. The field already answers "what is in the list?" by
-              opening it, so the only thing left to say is what typing does —
-              and the standing paragraph below is the other caption this field
-              carries, which two more lines here would bury. */}
-          <p style={CAPTION}>Type a name, project or list to narrow it.</p>
         </>
       ) : (
-        <p style={CAPTION}>
-          {value.length > 0
+        <LitLine
+          as="p"
+          text={value.length > 0
             ? 'No other tasks available to add as prerequisites.'
-            : 'No other tasks available to depend on yet.'}
-        </p>
+            : '**No other tasks** to wait on yet.'}
+          style={CAPTION}
+        />
       )}
-
-      <p style={CAPTION}>
-        A soft warning only — this task shows a &ldquo;Blocked by&rdquo; chip while any prerequisite is
-        incomplete. It&rsquo;s never hidden or reordered.
-      </p>
     </div>
   );
 }

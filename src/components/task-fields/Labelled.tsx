@@ -72,14 +72,16 @@ export function Labelled({ label, icon, hint, right, flash, needId, children }: 
         margin: 'calc(var(--sp-4) * -1)',
         padding: 'var(--sp-4)',
         borderRadius: 'var(--r-md)',
-        boxShadow: flash ? '0 0 0 1px var(--hue-amber), 0 0 22px -6px var(--hue-amber)' : 'none',
+        /* The field a "Needs …" chip points at: a warning, so the warning's
+           grey (29-1P2c2), bright enough to find. */
+        boxShadow: flash ? '0 0 0 1px var(--status-warn), 0 0 22px -6px var(--status-warn)' : 'none',
         transition: 'box-shadow var(--dur-base) var(--ease-glass)',
       }}
     >
       <FieldLabel
         icon={icon && <Icon name={icon} size={13} />}
         hint={right}
-        tone={flash ? 'var(--hue-amber)' : undefined}
+        tone={flash ? 'var(--fg-1)' : undefined}
       >
         {label}
       </FieldLabel>

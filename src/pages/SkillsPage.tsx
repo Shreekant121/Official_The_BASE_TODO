@@ -51,22 +51,26 @@
  * one place someone would go to check one. The sentence the mockup puts under
  * that row is true and is kept; the row itself is not.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Button, Icon, IconButton, Input, MetaKicker, MiniNav, MorphMenu, SegmentedControl, StatusPill,
-  Switch, Textarea, Toast, useMedia, WIDE, type IconName,
+  BlurAcross, Button, GelButton, Icon, IconButton, Input, LitLine, litSafe, MetaKicker, MiniNav, MorphMenu, SegmentedControl, SoftButton,
+  Bone, Skeleton, SoftToggle, StatusPill, Switch, Textarea, Toast, useArrival, useMedia, WhiteButton, WIDE, type IconName,
 } from '../ui';
+import { MemoryWaiting } from '../components/MemoryWaiting';
 import { RailMark } from '../components/BrandMark';
 import { useNavModel } from '../components/navModel';
 import { useAtlasStore } from '../lib/atlas/atlasStore';
 import {
+  loadSkill,
+  loadSkillFile,
+  loadSkills,
+  removeSkill,
+  storeSkill,
+  switchSkill,
+  useMemorySource,
+} from '../lib/atlas/memorySource';
+import {
   AtlasMemoryUnavailable,
-  deleteSkill as deleteSkillRequest,
-  fetchSkill,
-  fetchSkillFile,
-  fetchSkills,
-  saveSkill,
-  setSkillEnabled,
   type AtlasSkill,
   type AtlasSkillHeader,
   type AtlasSkillsIndex,
@@ -134,8 +138,9 @@ export default function SkillsPage() {
   const docked = useMedia(DOCKED);
 
   const status = useAtlasStore((s) => s.status);
-  const baseUrl = useAtlasStore((s) => s.baseUrl);
   const probe = useAtlasStore((s) => s.probe);
+  /* BIG-4: the laptop when it is awake, the cloud copy when it is asleep. */
+  const source = useMemorySource();
 
   const [index, setIndex] = useState<AtlasSkillsIndex | null>(null);
   const [loading, setLoading] = useState(true);
@@ -159,6 +164,14 @@ export default function SkillsPage() {
   const [toast, setToast] = useState<ToastPayload | null>(null);
 
   const fixture = useMemo(() => devSkillsFixture(), []);
+
+  /* 29-1P14d2, idea 116: `/catalog`'s waiting, for the same laptop and the
+     same reasons — placeholders while the probe or the read is on its way,
+     the skills fading in over them. */
+  const waiting =
+    problem === null && status !== 'unconfigured' && (status === 'unknown' || (source !== null && loading));
+  const arrived = useRef<HTMLDivElement>(null);
+  useArrival(arrived, index !== null);
 
   useEffect(() => {
     void probe();
@@ -187,13 +200,13 @@ export default function SkillsPage() {
       setLoading(false);
       return;
     }
-    if (baseUrl === null) {
+    if (source === null) {
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const next = await fetchSkills(baseUrl);
+      const next = await loadSkills(source);
       setIndex(next);
       setProblem(null);
       // Keep the selection where it still exists, so a reload after a save
@@ -211,7 +224,7 @@ export default function SkillsPage() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, fixture]);
+  }, [source, fixture]);
 
   /* Deferred out of the effect body for `/catalog`'s reason: `load` sets state
      before its first await, and a setState inside an effect is a second render
@@ -229,19 +242,19 @@ export default function SkillsPage() {
   /* The instructions, fetched only for the skill being looked at — the same
      rule Atlas itself follows, for the same reason. */
   useEffect(() => {
-    if (currentName === null || fixture !== null || baseUrl === null) return;
+    if (currentName === null || fixture !== null || source === null) return;
 
     const controller = new AbortController();
     void (async () => {
       try {
-        setFetched(await fetchSkill(baseUrl, currentName, controller.signal));
+        setFetched(await loadSkill(source, currentName, controller.signal));
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setFetched(null);
       }
     })();
     return () => controller.abort();
-  }, [baseUrl, currentName, fixture]);
+  }, [source, currentName, fixture]);
 
   const skill: AtlasSkill | null =
     currentName === null
@@ -265,19 +278,22 @@ export default function SkillsPage() {
      fixture is already in memory, so the render that needs it can simply read
      it. Only the real network path has anything to synchronise with. */
   useEffect(() => {
-    if (skill === null || openFileName === null || fixture !== null || baseUrl === null) return;
+    if (skill === null || openFileName === null || fixture !== null || source === null) return;
 
     const controller = new AbortController();
     void (async () => {
       try {
-        setFileText(await fetchSkillFile(baseUrl, skill.name, openFileName, controller.signal));
+        setFileText(await loadSkillFile(source, skill.name, openFileName, controller.signal));
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setFileText(null);
+        /* With the lid shut a file inside a folder (`scripts/`) is on the
+           laptop only; say so rather than a placeholder for ever — and say
+           any other failure too (29-1P14d2). */
+        setFileText({ file: openFileName, text: err instanceof Error ? err.message : String(err) });
       }
     })();
     return () => controller.abort();
-  }, [baseUrl, fixture, openFileName, skill]);
+  }, [source, fixture, openFileName, skill]);
 
   /* Keyed on the file it was fetched for, so the previous one is never shown
      for a frame while the next is in flight — `fetched` above does the same
@@ -335,7 +351,7 @@ export default function SkillsPage() {
   }, [skill, readOnly]);
 
   async function commitSave() {
-    if (skill === null || baseUrl === null || readOnly) return;
+    if (skill === null || source === null || readOnly) return;
     if (draftDescription.trim() === '') {
       /* Refused here as well as on the laptop, and the message says why rather
          than just "required": a skill with no description appears in the list,
@@ -350,14 +366,21 @@ export default function SkillsPage() {
     }
     setSaving(true);
     try {
-      const saved = await saveSkill(baseUrl, {
+      const saved = await storeSkill(source, {
         name: skill.name,
         description: draftDescription,
         body: draftBody,
       });
       setFetched(saved);
       setEditing(false);
-      setToast({ icon: 'check', title: 'Saved', detail: `${saved.name}/SKILL.md — plain text, on the laptop.` });
+      setToast({
+        icon: 'check',
+        title: 'Saved',
+        detail:
+          source.kind === 'cloud'
+            ? `${saved.name} — in the cloud copy. Atlas writes it to the laptop when it wakes.`
+            : `${saved.name}/SKILL.md — plain text, on the laptop.`,
+      });
       await load();
     } catch (err) {
       setToast({
@@ -371,9 +394,9 @@ export default function SkillsPage() {
   }
 
   async function toggle(name: string, enabled: boolean) {
-    if (baseUrl === null || readOnly) return;
+    if (source === null || readOnly) return;
     try {
-      await setSkillEnabled(baseUrl, name, enabled);
+      await switchSkill(source, name, enabled);
       setToast(
         enabled
           ? {
@@ -398,10 +421,10 @@ export default function SkillsPage() {
   }
 
   async function commitDelete() {
-    if (skill === null || baseUrl === null || readOnly) return;
+    if (skill === null || source === null || readOnly) return;
     const gone = skill;
     try {
-      await deleteSkillRequest(baseUrl, gone.name);
+      await removeSkill(source, gone.name);
       selectSkill(null);
       setFetched(null);
       setToast({
@@ -420,13 +443,13 @@ export default function SkillsPage() {
   }
 
   async function addSkill() {
-    if (baseUrl === null || readOnly) return;
+    if (source === null || readOnly) return;
     /* A stub with a real description, not an empty one. `skills.html` creates
        a folder whose description says "write the description first"; writing
        an empty one would create exactly the invisible folder this screen
        spends its header warning about, and Atlas's own route refuses it. */
     try {
-      const created = await saveSkill(baseUrl, {
+      const created = await storeSkill(source, {
         name: `new-skill-${skills.length + 1}`,
         description: 'Rewrite this line first — it is what decides when Atlas loads this skill.',
         body: '# What to do\n\n1. \n',
@@ -490,8 +513,10 @@ export default function SkillsPage() {
         iconLeft={<Icon name="search" size={16} />}
       />
 
+      {/* The soft pressed-in switch since 29-1P2, as every view switch. */}
       <SegmentedControl
         size="sm"
+        look="soft"
         options={FILTERS}
         value={filter}
         onChange={(next) => setFilter(next as FilterId)}
@@ -499,9 +524,11 @@ export default function SkillsPage() {
       />
 
       <div
-        className="ag-scroll"
+        className="ag-scroll ag-fade"
         style={{ overflowY: 'auto', overscrollBehavior: 'contain', display: 'grid', gap: 'var(--sp-2)', alignContent: 'start' }}
       >
+        {/* 29-1P5c, idea 60: a new filter blurs across. */}
+        <BlurAcross value={filter} index={FILTERS.findIndex((one) => one.value === filter)} style={{ display: 'grid', gap: 'var(--sp-2)', alignContent: 'start' }}>
         {visible.map((one) => (
           <SkillRow
             key={one.name}
@@ -514,10 +541,14 @@ export default function SkillsPage() {
           />
         ))}
         {visible.length === 0 && (
-          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-5)' }}>
-            {skills.length === 0 ? 'No skills yet.' : 'No skill matches that.'}
-          </span>
+          <LitLine
+            text={skills.length === 0
+              ? 'No skills yet.'
+              : query.trim() === '' ? 'No skill matches that.' : `No skill matches **“${litSafe(query.trim())}”**.`}
+            style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-5)' }}
+          />
         )}
+        </BlurAcross>
       </div>
     </div>
   );
@@ -532,7 +563,7 @@ export default function SkillsPage() {
               padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
             }}
           >
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -551,6 +582,8 @@ export default function SkillsPage() {
             <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 260 }}>
               <MetaKicker>How Atlas knows how to do things</MetaKicker>
               <h1
+                /* 29-1P5c, idea 57: shrinks and fades as the page scrolls. */
+                className="ag-tuck-title"
                 style={{
                   font: 'var(--type-display)', fontSize: 'var(--text-2xl)',
                   letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0,
@@ -583,6 +616,15 @@ export default function SkillsPage() {
                 boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
               }}
             >
+              {/* 29-1P14d2: while the skills are on their way, the count and its
+                  sentence wait too, rather than saying "0" and "No skills yet". */}
+              {unavailable && waiting ? (
+                <>
+                  <Bone width={72} height={30} radius="var(--r-md)" />
+                  <Bone width="86%" height={9} />
+                </>
+              ) : (
+              <>
               <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-3)' }}>
                 <span
                   style={{
@@ -600,17 +642,20 @@ export default function SkillsPage() {
                 {brokenCount > 0
                   ? `${brokenCount} ${brokenCount === 1 ? 'folder has' : 'folders have'} no description, so Atlas cannot see ${brokenCount === 1 ? 'it' : 'them'} at all.`
                   : skills.length === 0
-                    ? 'No skills yet. Atlas still has every tool — it just has no written procedure for anything.'
+                    ? <LitLine text="No skills yet. Atlas has **every tool** already; a skill is **a written how-to** for one job." />
                     : neverUsed > 0
                       ? `${neverUsed} automatic ${neverUsed === 1 ? 'skill has' : 'skills have'} never been loaded. A description that never matches is a folder Atlas cannot see.`
                       : enabledCount === 0
                         ? 'Nothing fires on its own. Every skill here waits for you to type / in the chat.'
                         : 'Every automatic skill here has been used at least once.'}
               </span>
+              </>
+              )}
             </div>
           </header>
 
           <div
+            ref={arrived}
             style={{
               width: '100%', maxWidth: COLUMN_PX, margin: 'var(--sp-9) auto 0', flex: 1, minHeight: 0,
               display: 'grid',
@@ -620,8 +665,16 @@ export default function SkillsPage() {
           >
             {showList && !unavailable && indexPanel}
 
-            {unavailable ? (
-              <Unavailable loading={loading} status={status} problem={problem} onRetry={() => void load()} />
+            {unavailable && waiting ? (
+              <MemoryWaiting docked={docked} label="Reading the skills" />
+            ) : unavailable ? (
+              <Unavailable
+                loading={loading}
+                status={status}
+                fromCloud={source?.kind === 'cloud'}
+                problem={problem}
+                onRetry={() => void load()}
+              />
             ) : skill === null ? (
               <EmptyDetail
                 hasSkills={skills.length > 0}
@@ -695,7 +748,7 @@ export default function SkillsPage() {
             }}
           >
             <span style={{ pointerEvents: 'auto' }}>
-              <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+              <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
             </span>
           </div>
         )}
@@ -735,7 +788,7 @@ function SkillRow({
       <span
         style={{
           display: 'flex', flex: '0 0 auto',
-          color: !skill.enabled ? 'var(--fg-4)' : selected ? 'var(--accent)' : 'var(--fg-3)',
+          color: !skill.enabled ? 'var(--fg-4)' : selected ? 'var(--job-lime)' : 'var(--fg-3)',
         }}
       >
         <Icon name={skill.valid ? 'wrench' : 'triangle-alert'} size={15} />
@@ -833,9 +886,9 @@ function SkillDetail({
             style={{
               display: 'grid', placeItems: 'center', width: 42, height: 42, flex: '0 0 auto',
               borderRadius: '50%',
-              backgroundImage: skill.enabled ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
+              backgroundImage: skill.enabled ? 'var(--glass-tint-violet)' : 'var(--glass-fill-1)',
               boxShadow: skill.enabled ? 'var(--glass-rim-2)' : 'var(--glass-rim-1)',
-              color: skill.enabled ? 'oklch(0.93 0.07 162)' : 'var(--fg-4)',
+              color: skill.enabled ? 'var(--job-violet-text)' : 'var(--fg-4)',
             }}
           >
             <Icon name="wrench" size={20} />
@@ -935,7 +988,7 @@ function SkillDetail({
             <span
               style={{
                 display: 'flex', flex: '0 0 auto', marginTop: 1,
-                color: skill.valid ? 'var(--accent)' : 'var(--status-review)',
+                color: skill.valid ? 'var(--job-violet)' : 'var(--status-warn)',
               }}
             >
               <Icon name={skill.valid ? 'key-round' : 'triangle-alert'} size={14} />
@@ -967,9 +1020,10 @@ function SkillDetail({
                 <Button size="sm" variant="ghost" onClick={onCancelEdit} disabled={saving}>
                   Cancel
                 </Button>
-                <Button size="sm" variant="tint" tone="accent" onClick={onSave} disabled={saving}>
+                {/* A form's Save: solid white since 29-1P2. */}
+                <WhiteButton size="sm" onClick={onSave} disabled={saving} aria-busy={saving || undefined}>
                   {saving ? 'Saving…' : 'Save'}
-                </Button>
+                </WhiteButton>
               </span>
             ) : (
               <Button
@@ -988,32 +1042,34 @@ function SkillDetail({
             <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
               {files.map((file, i) => {
                 const on = i === openFile;
+                /* Pick one, so the open file presses in (29-1P2), as
+                   every pick-one control does since the sheets. */
                 return (
-                  <button
+                  <SoftToggle
                     key={file}
-                    type="button"
+                    size="sm"
+                    pressed={on}
                     onClick={() => onOpenFile(i)}
-                    aria-pressed={on}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 32,
-                      flex: '0 0 auto', padding: '0 var(--sp-5)', border: 0, cursor: 'pointer',
-                      borderRadius: 'var(--r-pill)',
-                      backgroundImage: on ? 'var(--glass-fill-solid)' : 'var(--glass-fill-1)',
-                      boxShadow: on ? 'var(--glass-rim-3), var(--glass-cast-1)' : 'var(--glass-rim-1)',
-                      color: on ? 'var(--fg-on-light)' : 'var(--fg-2)',
-                      font: 'var(--type-numeric)', fontSize: 'var(--text-xs)',
-                      transition: 'var(--t-hover)',
-                    }}
+                    icon={<Icon name="file-text" size={12} />}
+                    style={{ flex: '0 0 auto', font: 'var(--type-numeric)', fontSize: 'var(--text-xs)' }}
                   >
-                    <Icon name="file-text" size={12} />
                     {file}
-                  </button>
+                  </SoftToggle>
                 );
               })}
             </div>
           )}
 
-          {editing ? (
+          {/* 29-1P14d2: a file on its way is lines of placeholder, not "Reading the laptop…". */}
+          {!editing && openFile > 0 && fileText === null ? (
+            <Skeleton
+              label="Reading the file"
+              lines={6}
+              height={10}
+              lastLineWidth="40%"
+              style={{ padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-sm)', backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)' }}
+            />
+          ) : editing ? (
             <Textarea
               rows={18}
               value={draftBody}
@@ -1032,7 +1088,7 @@ function SkillDetail({
                 whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
               }}
             >
-              {openFile === 0 ? skill.body.trim() : (fileText?.text.trim() ?? 'Reading the laptop…')}
+              {openFile === 0 ? skill.body.trim() : fileText?.text.trim()}
             </pre>
           )}
 
@@ -1087,16 +1143,17 @@ function EmptyDetail({
           maxWidth: '42ch', textAlign: 'center', textWrap: 'pretty',
         }}
       >
-        {loading
-          ? 'Reading the laptop…'
-          : hasSkills
+        {hasSkills
             ? 'Pick a skill from the list.'
-            : 'No skills. Atlas still has every tool — it just has no written procedure for anything.'}
+            : <LitLine text="No skills yet. Atlas has **every tool** already; a skill is **a written how-to** for one job." />}
       </span>
       {!loading && !hasSkills && !readOnly && (
-        <Button size="sm" variant="tint" tone="accent" iconLeft={<Icon name="folder-plus" size={14} />} onClick={onAdd}>
+        /* The empty pane's one action: a plain gel since 29-1P2, as an empty
+           New Session pane's Smart start is — violet, because a skill is
+           Atlas's. */
+        <GelButton tile={false} size="md" colour="violet" icon={<Icon name="folder-plus" size={16} />} onClick={onAdd}>
           Write the first skill
-        </Button>
+        </GelButton>
       )}
     </section>
   );
@@ -1112,16 +1169,25 @@ function EmptyDetail({
 function Unavailable({
   loading,
   status,
+  fromCloud,
   problem,
   onRetry,
 }: {
   loading: boolean;
   status: string;
+  /** Reading the cloud copy because the laptop is asleep (BIG-4). */
+  fromCloud: boolean;
   problem: { message: string; tooOld: boolean } | null;
   onRetry: () => void;
 }) {
   const body =
-    status === 'unconfigured'
+    fromCloud
+      ? {
+          icon: (problem !== null ? 'circle-alert' : 'book-open') as IconName,
+          title: problem !== null ? 'The laptop is asleep, and the cloud copy did not answer.' : 'Nothing to show yet.',
+          detail: problem?.message ?? '',
+        }
+      : status === 'unconfigured'
       ? {
           icon: 'server' as IconName,
           title: 'No Atlas is configured.',
@@ -1149,8 +1215,8 @@ function Unavailable({
               }
             : {
                 icon: 'wrench' as IconName,
-                title: loading ? 'Reading the laptop…' : 'Nothing to show yet.',
-                detail: loading ? '' : 'Atlas answered, but sent no skills.',
+                title: 'Nothing to show yet.',
+                detail: 'Atlas answered, but sent no skills.',
               };
 
   return (
@@ -1176,9 +1242,9 @@ function Unavailable({
         </span>
       )}
       {!loading && (
-        <Button size="sm" variant="glass" iconLeft={<Icon name="refresh-cw" size={14} />} onClick={onRetry}>
+        <SoftButton size="sm" icon={<Icon name="refresh-cw" size={14} />} onClick={onRetry}>
           Try again
-        </Button>
+        </SoftButton>
       )}
     </section>
   );

@@ -58,19 +58,9 @@ export function elapsedMinutes(focusLog: FocusLogEntry[], taskId: string): numbe
   return Math.round(seconds / 60);
 }
 
-/**
- * The deadline as the card says it. `urgent` is the mockup's own flag: it
- * gives an urgent due date an amber `StatusPill` and everything else a plain
- * mono `Fact`.
- */
-export function deadlineLabel(iso: string): { text: string; urgent: boolean } {
-  const diff = new Date(iso).getTime() - Date.now();
-  const h = diff / 3_600_000;
-  if (h < 0) return { text: 'Overdue', urgent: true };
-  if (h < 24) return { text: `${Math.round(h)}h left`, urgent: true };
-  if (h < 72) return { text: `${Math.floor(h / 24)}d left`, urgent: false };
-  return { text: new Date(iso).toLocaleDateString(), urgent: false };
-}
+/* `deadlineLabel` lived here until 29-1P7a: a due date is `readDue`
+   (`lib/dueDate.ts`) drawn by `task-fields/DueDate.tsx` now, one reader for
+   every row. */
 
 const RECURRENCE_LABELS: Record<string, string> = {
   daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly',

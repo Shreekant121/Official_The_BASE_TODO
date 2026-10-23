@@ -30,6 +30,25 @@
 /* V3 (V3-1) — last, so its scoped page and kicker rules outrank the ones
    above. Applies only inside `[data-v3]`; see the file's header. */
 @import './ui/tokens/v3.css';
+/* 29-1P1 — the design system's buttons: hover, press and hold states the
+   components cannot write inline. After v3.css, whose tokens they read. */
+@import './ui/actions/buttons.css';
+/* 29-1P5a — each screen's light and the Dashboard's sky. After v3.css,
+   whose page masses it colours. */
+@import './ui/tokens/screenLight.css';
+/* 29-1P5b — layered glass icons (the nav, the widget gallery) and the
+   nav's lit cell and its dot. After screenLight.css, whose light they wear. */
+@import './ui/core/layeredIcon.css';
+@import './ui/navigation/navLight.css';
+/* 29-1P5c — the gliding highlight, the tucking title, morphing icons. */
+@import './ui/core/motionPieces.css';
+/* 29-1P15a — Atlas at work: the thinking shimmer and the edge light. */
+@import './ui/feedback/atlasAtWork.css';
+@import './ui/feedback/atlasAtRest.css';
+/* Moving between screens (ScreenTransitions.tsx). */
+@import './ui/tokens/screenTransition.css';
+/* 29-1P8a — covers made for you, and "My tint"'s colour for them. */
+@import './components/projectCover.css';
 
 @tailwind base;
 @tailwind components;
@@ -254,20 +273,9 @@
     will-change: transform, backdrop-filter;
   }
 
-  /* ── Scroll fade: apply to a scroll container to fade content into its
-     rounded header instead of a hard clip line. Not part of the retired
-     system — `scroll-fade-y` is what masks both ends of Task Selection's
-     scroller (`components/TaskSelection.tsx`). `scroll-fade-top` has no
-     caller today; it is the same utility with one end open and is kept with
-     its pair rather than left as half a documented idea. ── */
-  .scroll-fade-top {
-    mask-image: linear-gradient(to bottom, transparent 0px, black 28px);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 28px);
-  }
-  .scroll-fade-y {
-    mask-image: linear-gradient(to bottom, transparent 0px, black 24px, black calc(100% - 24px), transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 24px, black calc(100% - 24px), transparent 100%);
-  }
+  /* The scroll fades that lived here (`scroll-fade-y`, `scroll-fade-top`)
+     became `.ag-fade` in `ui/screens.css` (OPT-10), which fades only the
+     end that has something past it. */
 }
 
 /*
@@ -337,6 +345,63 @@
   [style*="backdrop-filter"] {
     background: var(--surface-card) !important;
   }
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────
+ * Glass blur switched off on this device  (2026-09-28)
+ * ─────────────────────────────────────────────────────────────────────────
+ * Settings → App → Speed → "Glass blur" (`lib/speedPrefs.ts`) sets
+ * `data-ag-no-blur` on <html>. The panes keep their fill, which has been 92%
+ * opaque since 2026-09-24, so they read the same; only the frost behind them,
+ * recomputed on every scrolled frame, is gone.
+ *
+ * The doubled attribute is specificity, not a typo: it has to outrank the
+ * touch rule in `v3.css` (`[data-v3] [style*=...]`, `!important`). It was
+ * sized against the deleted lens rule (four parts) and is kept, harmlessly,
+ * with room to spare.
+ */
+:root[data-ag-no-blur][data-ag-no-blur] [style*="backdrop-filter"],
+:root[data-ag-no-blur][data-ag-no-blur] [data-v3] [style*="backdrop-filter"],
+:root[data-ag-no-blur][data-ag-no-blur] [data-v3][style*="backdrop-filter"] {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────
+ * No frost behind a card while it is being dragged  (2026-09-29)
+ * ─────────────────────────────────────────────────────────────────────────
+ * `SortableList` and `SortableBoard` set `data-sort-dragging` on their
+ * container for the length of a drag. A moving glass card makes the browser
+ * recompute its blur on every frame, and so does every card sliding out of its
+ * way: measured on the slow-GPU stand-in, Home's project drag ran at 20fps with
+ * the frost and 60fps with it gone from the cards alone, twice each. The fill
+ * is 92% opaque, so the frost barely shows — and it is back the moment the
+ * card lands. Only the rows of the grid being dragged lose it; the page, the
+ * rail and every other pane keep theirs.
+ *
+ * Doubled attribute for the same specificity reason as the switch above.
+ */
+:root [data-sort-dragging][data-sort-dragging] [data-drag-row] [style*="backdrop-filter"] {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* The card in the hand is solid (2026-09-29). Its glass is 92% opaque, and the
+   last 8% let the card it was hovering over read through it — a held card
+   shrunk over "Personal" showed Personal's "Add first list" in its own body.
+   Only the held row, only while it is held. */
+:root [data-sort-dragging] [data-drag-row][data-held] > [style*="backdrop-filter"] {
+  background-color: var(--void-1) !important;
+}
+
+/* 29-1P4c — a row whose dust is standing in for it (lib/dust.ts): as it
+   crumbles, and while an undo gathers it back. Important, and an attribute,
+   because Framer Motion writes `visibility` inline on every `layout` element
+   it projects and would show the row through its own dust. */
+[data-dust-hidden] {
+  visibility: hidden !important;
 }
 
 input[type='number']::-webkit-inner-spin-button,

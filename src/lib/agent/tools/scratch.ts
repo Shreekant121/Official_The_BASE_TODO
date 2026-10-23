@@ -21,7 +21,7 @@ const TIMEZONE = 'Asia/Kolkata';
 const NOW = new Date('2026-08-07T09:42:00.000Z');
 
 const PROJECTS: Project[] = [
-  { id: 'p-empire', name: 'Shreekant Empire', color: '#7c3aed', createdAt: 0, order: 0 },
+  { id: 'p-empire', name: 'Shreekant Empire', createdAt: 0, order: 0 },
 ];
 
 const LISTS: TaskList[] = [
@@ -221,6 +221,7 @@ function createHarness() {
     },
     captureList: () => {},
     captureProject: () => {},
+    captureEvent: () => {},
   };
 
   const handle: TurnHandle = { id: 'turn-scratch', label: 'scratch run', startedAt: NOW.getTime() };
@@ -295,7 +296,7 @@ async function main() {
 
   heading('create_task');
   const created = (await call('create_task', {
-    tasks: [{ title: 'Book the auditor call', deadline: 'tomorrow', estimatedTime: 30, priority: 'high' }],
+    tasks: [{ title: 'Book the auditor call', deadline: 'tomorrow', estimatedTime: 30, emergencyBoost: 2 }],
   })) as { tasks: { id: string }[] };
   await call('create_task', { tasks: [{ title: 'Draft Q3 plan', list: 'Build', deadline: '2026-08-20T09:30' }] });
   await call('create_task', { tasks: [{ title: 'Bad date', deadline: 'next thursday-ish' }] });
@@ -304,14 +305,14 @@ async function main() {
   await call('create_task', { tasks: ['Buy milk', { title: 'Buy bread', list: 'Backburner' }, { title: 'Nowhere', list: 'No Such List' }] });
 
   heading('update_task');
-  await call('update_task', { taskIds: ['t-invoices'], deadline: '2026-08-14', priority: 'urgent' });
+  await call('update_task', { taskIds: ['t-invoices'], deadline: '2026-08-14', emergencyBoost: 3 });
   await call('update_task', { taskIds: ['t-landing'], clear: ['deadline'] });
   await call('update_task', { taskIds: ['s-ca-docs'], title: 'Collect FY26 Q1 receipts', description: 'not storable on a subtask' });
   await call('update_task', { taskIds: ['t-invoices'] });
   await call('update_task', { taskIds: ['t-invoices'], status: 'completed' });
   // ITEM 13D - one change, a whole list of tasks. And a rename, which is the
   // one field a batch refuses because it would name them all the same thing.
-  await call('update_task', { taskIds: ['t-invoices', 't-landing'], priority: 'low' });
+  await call('update_task', { taskIds: ['t-invoices', 't-landing'], emergencyBoost: 0 });
   await call('update_task', { taskIds: ['t-invoices', 't-landing'], title: 'Same name for both' });
 
   heading('complete_task');
@@ -382,7 +383,7 @@ async function main() {
 
   heading('BUILD-3 — projects and lists');
   const launch = (await call('create_project', {
-    projects: [{ name: 'Studio Launch', lists: ['Research', 'Design', 'research'], color: 'violet' }, 'Shreekant Empire'],
+    projects: [{ name: 'Studio Launch', lists: ['Research', 'Design', 'research'] }, 'Shreekant Empire'],
   })) as { projects: { id: string; lists: { id: string }[] }[] };
   await call('create_list', { project: 'Studio Launch', titles: ['Ship', 'Design'] });
   await call('create_list', { project: 'Launch', titles: ['Nowhere'] });

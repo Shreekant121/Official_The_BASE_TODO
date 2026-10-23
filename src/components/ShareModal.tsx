@@ -44,7 +44,7 @@
  *
  * Emerald stays rationed: it marks the selected access mode, and a copy that
  * has just landed. The header tile is violet, and "Remove short link" — the
- * one destructive control here — is rose.
+ * one destructive control here — is coral (rose until 29-1P2c2).
  *
  * BUILD-14 made the switch three positions — View only, Client view,
  * Outsource — and added the link's end date. All three are one settings patch
@@ -55,7 +55,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Dialog, FieldLabel, Icon, IconButton, Input } from '../ui';
+import {
+  Button, Dialog, FieldLabel, HoldToConfirm, Icon, IconButton, Input, SoftButton, SoftIconButton,
+  SoftToggle, WhiteButton,
+} from '../ui';
 import type { IconName } from '../ui';
 import type { ShareSettings } from '../lib/publicShare';
 import { useAuth } from '../contexts/AuthContext';
@@ -104,7 +107,8 @@ function LinkRow({ children, actions }: { children: ReactNode; actions: ReactNod
 
 const NOTE = {
   accent: { fill: 'var(--glass-tint-accent)', ring: 'oklch(0.70 0.15 162 / 0.22)', ink: 'oklch(0.93 0.07 162)' },
-  rose:   { fill: 'var(--glass-tint-rose)',   ring: 'oklch(0.70 0.15  20 / 0.22)', ink: 'oklch(0.93 0.07 20)' },
+  /* A failed call: coral, the error colour since 29-1P2c2. */
+  rose:   { fill: 'var(--glass-tint-coral)',  ring: 'oklch(0.7 0.19 28 / 0.22)',   ink: 'var(--job-coral-text)' },
 } as const;
 
 /** A tinted consequence to read: what outsourcing means, or why a call failed. */
@@ -131,27 +135,24 @@ function Note({ tone, icon, children }: { tone: keyof typeof NOTE; icon: IconNam
   );
 }
 
-/** One position of the access-mode switch. Accent means *this is the live one*. */
+/** One position of the access-mode switch: pressed in while it is the live one (29-1P2). */
 function ModeOption({
   icon, title, blurb, on, onClick,
 }: { icon: IconName; title: string; blurb: string; on: boolean; onClick: () => void }) {
   return (
-    <button
-      type="button"
+    <SoftToggle
+      pressed={on}
       onClick={onClick}
-      aria-pressed={on}
       style={{
         display: 'grid',
         gap: 'var(--sp-3)',
         justifyItems: 'start',
+        alignContent: 'start',
         textAlign: 'left',
+        whiteSpace: 'normal',
+        height: 'auto',
         padding: 'var(--sp-5)',
-        border: 0,
-        cursor: 'pointer',
         borderRadius: 'var(--r-lg)',
-        background: on ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
-        boxShadow: on ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
-        transition: 'var(--t-hover)',
       }}
     >
       <span
@@ -161,14 +162,14 @@ function ModeOption({
           gap: 'var(--sp-3)',
           font: 'var(--type-label)',
           fontSize: 'var(--text-sm)',
-          color: on ? 'oklch(0.93 0.07 162)' : 'var(--fg-1)',
+          color: on ? 'var(--job-lime-text)' : 'var(--fg-1)',
         }}
       >
         <Icon name={icon} size={16} />
         {title}
       </span>
       <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>{blurb}</span>
-    </button>
+    </SoftToggle>
   );
 }
 
@@ -346,9 +347,9 @@ export default function ShareModal({
     || (short?.keyword ? `https://${short.domain || defaultDomain}/${short.keyword}` : null);
   const qrSrc = short?.keyword ? qrImageUrl(short, short.keyword, short.domain || defaultDomain) : null;
 
-  /** A copy button says so by turning accent and swapping to a tick for 1.6s. */
+  /** A copy button says so by turning lime (done) and swapping to a tick for 1.6s. */
   const copyTint = (field: string): CSSProperties | undefined =>
-    (copied === field ? { color: 'var(--accent)' } : undefined);
+    (copied === field ? { color: 'var(--job-lime)' } : undefined);
 
   return (
     /* The click swallower. `display: contents` so it adds no box of its own —
@@ -371,7 +372,7 @@ export default function ShareModal({
         style={{ gap: 0, padding: 0, gridTemplateColumns: 'minmax(0, 1fr)' }}
       >
         <div
-          className="ag-scroll"
+          className="ag-scroll ag-fade"
           style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1fr)',
@@ -395,9 +396,9 @@ export default function ShareModal({
                   height: 44,
                   flex: '0 0 auto',
                   borderRadius: '50%',
-                  backgroundImage: 'var(--glass-tint-violet)',
+                  backgroundImage: 'var(--glass-fill-2)',
                   boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
-                  color: 'oklch(0.93 0.07 296)',
+                  color: 'var(--fg-2)',
                 }}
               >
                 <Icon name="share-2" size={20} />
@@ -430,13 +431,13 @@ export default function ShareModal({
             <FieldLabel icon={<Icon name="globe" size={14} />}>Public link</FieldLabel>
             <LinkRow
               actions={
-                <IconButton
+                <SoftIconButton
                   label="Copy public link"
                   onClick={() => void copy(publicUrl, 'public')}
                   style={copyTint('public')}
                 >
                   <Icon name={copied === 'public' ? 'check' : 'copy'} size={16} />
-                </IconButton>
+                </SoftIconButton>
               }
             >
               <span style={{ ...LINK_TEXT, color: 'var(--fg-2)' }}>{publicUrl}</span>
@@ -557,9 +558,9 @@ export default function ShareModal({
                   width: 40,
                   height: 40,
                   borderRadius: '50%',
-                  backgroundImage: 'var(--glass-tint-violet)',
+                  backgroundImage: 'var(--glass-fill-2)',
                   boxShadow: 'var(--glass-rim-2)',
-                  color: 'oklch(0.93 0.07 296)',
+                  color: 'var(--fg-2)',
                 }}
               >
                 <Icon name="sparkles" size={18} />
@@ -580,16 +581,15 @@ export default function ShareModal({
                 <span style={{ color: 'var(--fg-2)' }}>go.base.co.in</span> if you like — with a QR
                 code and click analytics.
               </p>
-              <Button
-                variant="solid"
-                iconLeft={<Icon name="settings" size={16} />}
+              <WhiteButton
+                icon={<Icon name="settings" size={16} />}
                 /* The page is about to change under it, so this one closes
                    outright rather than dissolving over a screen that has
                    already gone. */
                 onClick={() => { onClose(); navigate('/settings'); }}
               >
                 Open Settings
-              </Button>
+              </WhiteButton>
             </div>
           ) : shortLink ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-7)' }}>
@@ -597,13 +597,13 @@ export default function ShareModal({
                 <FieldLabel icon={<Icon name="link-2" size={14} />}>Short link</FieldLabel>
                 <LinkRow
                   actions={
-                    <IconButton
+                    <SoftIconButton
                       label="Copy short link"
                       onClick={() => void copy(shortLink, 'short')}
                       style={copyTint('short')}
                     >
                       <Icon name={copied === 'short' ? 'check' : 'copy'} size={16} />
-                    </IconButton>
+                    </SoftIconButton>
                   }
                 >
                   <a
@@ -687,26 +687,35 @@ export default function ShareModal({
                     {clicks}
                   </span>
                 ) : (
-                  /* Glass, not ghost: a ghost pill inside a well reads as flat
+                  /* Soft, not ghost: a ghost pill inside a well reads as flat
                      text and nobody presses it. */
-                  <Button size="sm" loading={loadingAnalytics} onClick={() => void handleAnalytics()}>
-                    View
-                  </Button>
+                  <SoftButton
+                    size="sm"
+                    disabled={loadingAnalytics}
+                    aria-busy={loadingAnalytics || undefined}
+                    onClick={() => void handleAnalytics()}
+                  >
+                    {loadingAnalytics ? 'Loading…' : 'View'}
+                  </SoftButton>
                 )}
               </div>
 
               {error && <Note tone="rose" icon="circle-alert">{error}</Note>}
 
-              <Button
-                variant="tint"
-                tone="rose"
-                block
-                loading={working}
-                iconLeft={<Icon name="trash-2" size={16} />}
-                onClick={() => void handleDelete()}
+              {/* Held, not tapped (29-1P2): SimpleURL forgets the keyword for
+                  good, and every printed QR code that pointed at it breaks.
+                  Nothing in BASE can bring it back. */}
+              <HoldToConfirm
+                disabled={working}
+                onConfirm={() => void handleDelete()}
+                doneLabel="Removing…"
+                style={{ width: '100%' }}
               >
-                Remove short link
-              </Button>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--status-overrun)' }}>
+                  <Icon name="trash-2" size={16} />
+                  Hold to remove short link
+                </span>
+              </HoldToConfirm>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-5)' }}>
@@ -737,16 +746,15 @@ export default function ShareModal({
 
               {error && <Note tone="rose" icon="circle-alert">{error}</Note>}
 
-              <Button
-                variant="solid"
-                size="lg"
+              <WhiteButton
                 block
-                loading={working}
-                iconLeft={<Icon name="link-2" size={18} />}
+                disabled={working}
+                aria-busy={working || undefined}
+                icon={<Icon name="link-2" size={18} />}
                 onClick={() => void handleGenerate()}
               >
-                Generate short link + QR
-              </Button>
+                {working ? 'Generating…' : 'Generate short link + QR'}
+              </WhiteButton>
             </div>
           )}
         </div>

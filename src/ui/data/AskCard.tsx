@@ -46,8 +46,10 @@ import {
   type AskQuestion,
 } from '../../lib/askCard';
 
-const AMBER_RIM = '0 0 0 1px oklch(0.78 0.13 75 / 0.30), 0 0 36px -14px oklch(0.78 0.13 75 / 0.45)';
-const SUGGESTED_RING = 'inset 0 0 0 1.5px oklch(0.78 0.13 75 / 0.55)';
+/* Atlas waiting on him is Atlas's, so violet since 29-1P2c3 (it was amber,
+   which is gold's hue, and gold is rewards). */
+const WAIT_RIM = '0 0 0 1px oklch(0.7 0.19 300 / 0.30), 0 0 36px -14px oklch(0.7 0.19 300 / 0.45)';
+const SUGGESTED_RING = 'inset 0 0 0 1.5px oklch(0.7 0.19 300 / 0.55)';
 const ON = { fill: 'var(--glass-fill-solid)', rim: 'var(--glass-rim-3), var(--glass-cast-1)', ink: 'var(--fg-1)' };
 const OFF = { fill: 'var(--glass-fill-1)', rim: 'var(--glass-rim-1)', ink: 'var(--fg-2)' };
 
@@ -68,14 +70,17 @@ function WaitDot() {
     <span style={{ position: 'relative', width: 8, height: 8, flex: '0 0 auto' }} aria-hidden>
       <span
         style={{
-          position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--status-review)',
-          boxShadow: '0 0 10px var(--status-review)', animation: 'var(--kf-pulse) 1.4s var(--ease-glass) infinite',
+          position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--job-violet)',
+          boxShadow: '0 0 10px var(--job-violet)',
         }}
       />
+      {/* A still halo where the ripple was: the card waits as long as he does,
+          and a loop that never ends redraws the whole screen every frame
+          (StatusPill.tsx has the measurement). */}
       <span
         style={{
-          position: 'absolute', inset: 0, borderRadius: '50%', boxShadow: '0 0 0 1px var(--status-review)',
-          animation: 'var(--kf-ripple) 1.8s var(--ease-glass) infinite',
+          position: 'absolute', inset: -3, borderRadius: '50%', boxShadow: '0 0 0 1px var(--job-violet)',
+          opacity: 0.45,
         }}
       />
     </span>
@@ -126,7 +131,7 @@ function Pill({
       )}
       <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{children}</span>
       {suggested && (
-        <span title="Suggested" style={{ width: 6, height: 6, flex: '0 0 auto', borderRadius: '50%', boxShadow: 'inset 0 0 0 1.5px var(--status-review)' }} />
+        <span title="Suggested" style={{ width: 6, height: 6, flex: '0 0 auto', borderRadius: '50%', boxShadow: 'inset 0 0 0 1.5px var(--job-violet)' }} />
       )}
     </button>
   );
@@ -183,9 +188,9 @@ function Typed({
         aria-label="Use this answer"
         style={{
           display: 'grid', placeItems: 'center', width: 34, height: 34, flex: '0 0 auto', border: 0, borderRadius: '50%',
-          backgroundImage: ready ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
-          boxShadow: ready ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
-          color: ready ? 'oklch(0.95 0.07 162)' : 'var(--fg-4)', cursor: 'pointer', transition: 'var(--t-hover)',
+          backgroundImage: ready ? 'var(--glass-tint-violet)' : 'var(--glass-fill-1)',
+          boxShadow: ready ? 'var(--glass-rim-2), var(--job-violet-shine)' : 'var(--glass-rim-1)',
+          color: ready ? 'var(--job-violet-text)' : 'var(--fg-4)', cursor: 'pointer', transition: 'var(--t-hover)',
         }}
       >
         <Icon name="corner-down-left" size={15} />
@@ -333,10 +338,12 @@ export function AskCard({ card, live, compact = false, onSubmit }: AskCardProps)
       aria-label="Atlas is waiting on your answers"
       data-ask-card={single ? 'single' : 'multi'}
       style={{
-        display: 'grid', minWidth: 0, outline: 'none', borderRadius: 'var(--r-card)',
+        /* One fixed column, so a long word in a question wraps inside the
+           card instead of widening it past the screen (OPT-1). */
+        display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', minWidth: 0, outline: 'none', borderRadius: 'var(--r-card)',
         backgroundImage: 'var(--glass-fill-2)',
         WebkitBackdropFilter: 'var(--glass-bd-md)', backdropFilter: 'var(--glass-bd-md)',
-        boxShadow: `var(--glass-rim-2), var(--glass-cast-2)${open ? `, ${AMBER_RIM}` : ''}`,
+        boxShadow: `var(--glass-rim-2), var(--glass-cast-2)${open ? `, ${WAIT_RIM}` : ''}`,
         opacity: shown ? (open ? 1 : 0.72) : 0,
         transform: shown ? 'translateY(0)' : 'translateY(8px)',
         transition: 'opacity var(--dur-slow) var(--ease-glass), transform var(--dur-slow) var(--ease-glass), box-shadow var(--dur-base) var(--ease-glass)',
@@ -346,7 +353,7 @@ export function AskCard({ card, live, compact = false, onSubmit }: AskCardProps)
       <div style={{ display: 'grid', gap: 'var(--sp-3)', padding: `${compact ? 'var(--sp-5)' : 'var(--sp-6)'} ${px} ${single ? 'var(--sp-2)' : 'var(--sp-5)'}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', minWidth: 0 }}>
           {open && <WaitDot />}
-          <span style={{ ...KICKER, color: open ? 'var(--status-review)' : 'var(--fg-4)', whiteSpace: 'nowrap' }}>
+          <span style={{ ...KICKER, color: open ? 'var(--job-violet-tag-fg)' : 'var(--fg-4)', whiteSpace: 'nowrap' }}>
             {open ? 'Waiting on you' : sent ? 'Sent' : 'Asked'}
           </span>
           <span style={{ flex: 1 }} />
@@ -354,7 +361,7 @@ export function AskCard({ card, live, compact = false, onSubmit }: AskCardProps)
             {single ? '1 question' : `${answeredN} of ${qs.length}`}
           </span>
         </div>
-        <span style={{ font: 'var(--type-title)', fontSize: compact ? 'var(--text-md)' : 'var(--text-lg)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', textWrap: 'pretty' }}>
+        <span style={{ font: 'var(--type-title)', fontSize: compact ? 'var(--text-md)' : 'var(--text-lg)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', textWrap: 'pretty', overflowWrap: 'anywhere' }}>
           {title}
         </span>
       </div>
@@ -399,8 +406,8 @@ export function AskCard({ card, live, compact = false, onSubmit }: AskCardProps)
                     style={{
                       display: 'grid', placeItems: 'center', width: 22, height: 22, borderRadius: '50%',
                       background: done ? 'var(--fg-2)' : 'transparent',
-                      boxShadow: done ? 'none' : isOpen ? 'inset 0 0 0 1.5px var(--status-review)' : 'inset 0 0 0 1px var(--line-strong)',
-                      color: done ? 'var(--void-0)' : isOpen ? 'var(--status-review)' : 'var(--fg-4)',
+                      boxShadow: done ? 'none' : isOpen ? 'inset 0 0 0 1.5px var(--job-violet)' : 'inset 0 0 0 1px var(--line-strong)',
+                      color: done ? 'var(--void-0)' : isOpen ? 'var(--job-violet)' : 'var(--fg-4)',
                       font: 'var(--type-numeric)', fontSize: 10, transition: 'background-color var(--dur-base) var(--ease-glass)',
                     }}
                   >
@@ -437,7 +444,7 @@ export function AskCard({ card, live, compact = false, onSubmit }: AskCardProps)
                 <div style={{ overflow: 'hidden', minHeight: 0 }}>
                   <div
                     style={{
-                      display: 'grid', gap: 'var(--sp-4)',
+                      display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-4)',
                       padding: single ? `0 ${px} var(--sp-6)` : `0 ${px} var(--sp-6) calc(${px} + 22px + var(--sp-4))`,
                     }}
                   >
@@ -511,7 +518,7 @@ export function AskCard({ card, live, compact = false, onSubmit }: AskCardProps)
                     )}
 
                     {q.kind === 'scale' && (
-                      <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-3)' }}>
                         <div
                           role="radiogroup"
                           aria-label={q.question}
@@ -562,7 +569,7 @@ export function AskCard({ card, live, compact = false, onSubmit }: AskCardProps)
                         <span style={{ flex: '1 1 200px', display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
                           {q.why && (
                             <>
-                              <span style={{ flex: '0 0 auto', width: 6, height: 6, borderRadius: '50%', boxShadow: 'inset 0 0 0 1.5px var(--status-review)' }} />
+                              <span style={{ flex: '0 0 auto', width: 6, height: 6, borderRadius: '50%', boxShadow: 'inset 0 0 0 1.5px var(--job-violet)' }} />
                               {q.why}
                             </>
                           )}

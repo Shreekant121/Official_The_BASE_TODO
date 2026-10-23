@@ -7,19 +7,25 @@
  * one optional prop is the version of this change that does not collide with
  * theirs.
  *
- * **It matches Send exactly** — 34px, the same glass fills, the same rim and
- * the same transition — because they are two halves of one control: the two
- * ways to put a sentence into Atlas. A microphone drawn in a different idiom
- * beside it would read as a different kind of thing.
+ * **At rest it matches Send exactly** — 34px, the same glass fill, the same rim
+ * and the same transition — because they are two halves of one control: the
+ * two ways to put a sentence into Atlas. A microphone drawn in a different
+ * idiom beside it would read as a different kind of thing.
  *
- * `ag-ripple` is the design system's own animation for this, and its comment
- * in `tokens/motion.css` says so in as many words: *"Concentric rings leaving
- * a source (voice, sync, live)"*. The system anticipated voice; nothing here
- * needed inventing, and the ripple is therefore already covered by the
- * `prefers-reduced-motion` block at the bottom of that file.
+ * **Since 29-1P15d (idea 78) it becomes a timer while it listens**: it
+ * stretches into a pill with the minutes on one side, the seconds on the other
+ * and a glowing violet light between them, and when what he said lands in the
+ * field the light turns lime for a moment and the pill folds back into the
+ * mic. The face is `MicTimerFace` (`MicTimer.tsx`), shared with dock mode. The
+ * pill grows into the field's width, which gives the line of text a little
+ * less room while it listens; nobody types into a field they are talking to.
+ * The old ripple ring behind the button is gone — the light is what says it is
+ * listening now, and two signals for one state was one too many.
  */
-import { Icon } from '../../ui/core/Icon';
+import { useEffect, useState } from 'react';
 import type { DictationError } from '../../lib/voice/recognition';
+import { MicTimerFace, type MicFace } from './MicTimer';
+import { MIC_DONE_MS, secondsWords, useSecondsSince } from './micClock';
 
 export interface MicButtonProps {
   listening: boolean;
@@ -29,67 +35,60 @@ export interface MicButtonProps {
   onToggle: () => void;
   /** Atlas is mid-answer; dictating into a running turn is not a thing. */
   disabled?: boolean;
+  /** When the microphone opened, for the timer. `useDictation().startedAt`. */
+  startedAt?: number | null;
+  /** When a sentence last landed, for the lime "got it". `useDictation().landedAt`. */
+  landedAt?: number | null;
 }
 
-export function MicButton({ listening, heard, error, onToggle, disabled = false }: MicButtonProps) {
-  const label = listening ? 'Stop listening' : 'Speak instead of typing';
+export function MicButton({
+  listening,
+  heard,
+  error,
+  onToggle,
+  disabled = false,
+  startedAt = null,
+  landedAt = null,
+}: MicButtonProps) {
+  const seconds = useSecondsSince(startedAt, listening);
+  /* The lime holds for `MIC_DONE_MS` after a sentence lands, then folds. Kept
+     as "the last landing that has folded" rather than a flag set in an effect:
+     the timeout writes it, so nothing is set during render or in an effect body. */
+  const [folded, setFolded] = useState<number | null>(landedAt);
+  useEffect(() => {
+    if (landedAt === null) return;
+    const timer = window.setTimeout(() => setFolded(landedAt), MIC_DONE_MS);
+    return () => window.clearTimeout(timer);
+  }, [landedAt]);
+  const done = !listening && landedAt !== null && landedAt !== folded;
+  const face: MicFace = listening ? 'listening' : done ? 'done' : 'idle';
+
+  const label = listening ? `Stop listening, ${secondsWords(seconds)}` : 'Speak instead of typing';
 
   return (
-    <span style={{ position: 'relative', flex: '0 0 auto', display: 'grid', placeItems: 'center' }}>
-      {/*
-        The ripple sits *behind* the button and is purely decorative, so it is
-        hidden from assistive technology and takes no pointer events — the
-        button underneath must stay the whole target, including the moment a
-        ring happens to be drawn at its edge.
-      */}
-      {listening && (
-        <span
-          aria-hidden
-          style={{
-            position: 'absolute', width: 34, height: 34, borderRadius: '50%',
-            border: '1.5px solid oklch(0.85 0.12 162)',
-            animation: 'var(--kf-ripple) 1.6s ease-out infinite',
-            pointerEvents: 'none',
-          }}
-        />
-      )}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggle();
-        }}
-        disabled={disabled}
-        aria-label={label}
-        aria-pressed={listening}
-        /* The live transcript goes in the title so that hovering a stuck
-           microphone says what it last heard, which is the only clue there is
-           when a phrase is being misread rather than missed. */
-        title={error !== null ? error.message : listening && heard !== '' ? heard : label}
-        style={{
-          position: 'relative',
-          flex: '0 0 auto', display: 'grid', placeItems: 'center', width: 34, height: 34,
-          border: 0, borderRadius: '50%',
-          cursor: disabled ? 'default' : 'pointer',
-          backgroundImage: listening
-            ? 'var(--glass-tint-accent)'
-            : error !== null
-              ? 'var(--glass-fill-1)'
-              : 'var(--glass-fill-1)',
-          boxShadow: listening
-            ? 'var(--glass-rim-2), var(--glow-accent-sm)'
-            : 'var(--glass-rim-1)',
-          color: listening
-            ? 'oklch(0.95 0.07 162)'
-            : error !== null
-              ? 'var(--fg-danger, oklch(0.72 0.17 25))'
-              : 'var(--fg-4)',
-          opacity: disabled ? 0.45 : 1,
-          transition: 'var(--t-hover)',
-        }}
-      >
-        <Icon name={error !== null && !listening ? 'mic-off' : 'mic'} size={16} />
-      </button>
-    </span>
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={listening}
+      data-mic-button=""
+      /* The live transcript goes in the title so that hovering a stuck
+         microphone says what it last heard, which is the only clue there is
+         when a phrase is being misread rather than missed. */
+      title={error !== null ? error.message : listening && heard !== '' ? heard : label}
+      style={{
+        flex: '0 0 auto', display: 'grid', placeItems: 'center', padding: 0,
+        border: 0, borderRadius: 'var(--r-pill)', background: 'none',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.45 : 1,
+        transition: 'var(--t-hover)',
+      }}
+    >
+      <MicTimerFace face={face} seconds={seconds} error={error !== null && !listening} />
+    </button>
   );
 }

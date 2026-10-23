@@ -96,8 +96,8 @@ export function Stepper({
           // own middle, since the two are no longer in one row (port note 3).
           margin: vertical ? 'var(--sp-2) 0' : `${(CIRCLE - CONNECTOR) / 2}px var(--sp-3) 0`,
           borderRadius: 'var(--r-pill)',
-          background: done ? 'var(--accent)' : 'oklch(1 0 0 / 0.09)',
-          boxShadow: done ? '0 0 10px -2px var(--accent)' : 'none',
+          background: done ? 'var(--job-lime)' : 'oklch(1 0 0 / 0.09)',
+          boxShadow: done ? '0 0 10px -2px var(--job-lime)' : 'none',
           transition: 'background var(--dur-slow) var(--ease-glass), box-shadow var(--dur-slow) var(--ease-glass)',
         };
 
@@ -110,11 +110,11 @@ export function Stepper({
               display: 'grid',
               placeItems: 'center',
               borderRadius: 'var(--r-circle)',
-              backgroundImage: done || now ? 'var(--glass-tint-accent)' : 'var(--glass-well)',
+              backgroundImage: done || now ? 'var(--glass-tint-lime)' : 'var(--glass-well)',
               boxShadow: done
-                ? 'var(--glass-rim-2), var(--glow-accent-sm)'
+                ? 'var(--glass-rim-2), var(--job-lime-shine)'
                 : now
-                  ? 'var(--glass-rim-2), 0 0 0 3px oklch(0.70 0.15 162 / 0.22), var(--glow-accent-sm)'
+                  ? 'var(--glass-rim-2), 0 0 0 3px var(--job-lime-wash), var(--job-lime-shine)'
                   : 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
               color: done || now ? 'var(--fg-1)' : 'var(--fg-4)',
               font: 'var(--type-numeric)',

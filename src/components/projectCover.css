@@ -1,0 +1,223 @@
+/* ---------------------------------------------------------------
+   COVERS MADE FOR YOU (29-1P8a, idea 149). `lib/projectCover.ts` says
+   what each style is; `ProjectCover.tsx` draws them.
+
+   A cover in "My tint" reads its hue and chroma from here, keyed off the
+   same `<html data-dark-tint>` the dark greys are (`lib/darkTint.ts`), so a
+   change of tint recolours every such cover with no script and no render.
+   The chroma is far stronger than the greys' trace: this is a picture in
+   the tint's colour, not a tinted grey. Neutral is a cool grey-blue.
+   --------------------------------------------------------------- */
+
+:root {
+  --cover-tint-h: 260;
+  --cover-tint-c: 0.03;
+}
+:root[data-dark-tint='emerald'] { --cover-tint-h: 162; --cover-tint-c: 0.13; }
+:root[data-dark-tint='orange'] { --cover-tint-h: 45; --cover-tint-c: 0.15; }
+:root[data-dark-tint='violet'] { --cover-tint-h: 300; --cover-tint-c: 0.15; }
+:root[data-dark-tint='sky'] { --cover-tint-h: 240; --cover-tint-c: 0.12; }
+
+/* Every layer fills the cover; the caller's box is the frame. */
+.ag-gcover,
+.ag-gcover > * {
+  position: absolute;
+  inset: 0;
+}
+.ag-gcover {
+  overflow: hidden;
+  /* C's word is sized to the cover's own width. */
+  container-type: inline-size;
+}
+.ag-gcover svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* B — the icon, large, as a layered glass tile (idea 80). */
+.ag-gcover-icon {
+  display: grid;
+  place-items: center;
+}
+
+/* C — one word of the name, huge, cropped by the cover's edges. */
+.ag-gcover-name {
+  display: flex;
+  align-items: flex-end;
+  padding-left: 6cqw;
+}
+.ag-gcover-name span {
+  margin-bottom: 9cqw;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 30cqw;
+  line-height: 0.82;
+  letter-spacing: -0.06em;
+  white-space: nowrap;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* D — a glimpse of the lists. */
+.ag-gcover-glimpse {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 54px 18px 26px;
+}
+.ag-gcover-col {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 9px 8px;
+  border-radius: var(--r-sm);
+  background-color: oklch(1 0 0 / 0.035);
+  box-shadow: inset 0 0 0 1px var(--line-faint);
+}
+.ag-gcover-col > span {
+  font: 600 9.5px / 1.2 var(--font-sans);
+  letter-spacing: 0.02em;
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ag-gcover-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 14px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background-color: oklch(1 0 0 / 0.07);
+}
+.ag-gcover-row i {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.3);
+}
+.ag-gcover-row b {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background-color: oklch(1 0 0 / 0.18);
+}
+/* Done is lime: a ticked task, as on every board. */
+.ag-gcover-row[data-done] i {
+  background-color: var(--job-lime);
+  box-shadow: none;
+}
+.ag-gcover-row[data-done] b {
+  background-color: oklch(1 0 0 / 0.08);
+}
+.ag-gcover-col[data-slot] {
+  min-height: 78px;
+  place-items: center;
+  background-color: transparent;
+  box-shadow: none;
+  border: 1px dashed var(--line-strong);
+  color: var(--fg-4);
+}
+
+/* ---------------------------------------------------------------
+   A FOLDER'S UNFOLDED ROW (29-1P8c, idea 153, `FolderParts.tsx`): a small
+   card per project inside, and the tile that opens the folder itself.
+   Lit by hover and by the keyboard ring, the way a project card is.
+   --------------------------------------------------------------- */
+.ag-folder-tile {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  text-align: left;
+  color: var(--fg-1);
+  background-image: var(--glass-fill-1);
+  box-shadow: var(--glass-rim-1), var(--glass-cast-1);
+  transition: translate var(--dur-fast) var(--ease-glass);
+}
+.ag-folder-tile:hover {
+  background-image: var(--glass-fill-3);
+  translate: 0 -2px;
+}
+.ag-folder-tile-name {
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  font: var(--type-label);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The way into the folder itself: an arrow, its name, what it holds of its own. */
+.ag-folder-tile[data-open] {
+  align-content: center;
+  justify-items: start;
+  gap: var(--sp-1);
+  min-height: 88px;
+  padding: var(--sp-4);
+  background-image: var(--glass-fill-2);
+}
+.ag-folder-tile[data-open] .ag-folder-tile-name {
+  padding: 0;
+  max-width: 100%;
+}
+.ag-folder-tile-sub {
+  font: var(--type-caption);
+  color: var(--fg-3);
+}
+
+/* ---------------------------------------------------------------
+   JUMP BACK IN (29-1P8c, idea 154, `JumpBackRow.tsx`): a small card per
+   project he had open, at the top of Home. His pick D.
+   --------------------------------------------------------------- */
+.ag-jump-card {
+  flex: 0 0 184px;
+  display: grid;
+  align-content: start;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  text-align: left;
+  color: var(--fg-1);
+  background-image: var(--glass-fill-2);
+  box-shadow: var(--glass-rim-2), var(--glass-cast-1);
+  transition: translate var(--dur-fast) var(--ease-glass);
+}
+.ag-jump-card:hover {
+  background-image: var(--glass-fill-3);
+  translate: 0 -3px;
+}
+.ag-jump-card-text {
+  display: grid;
+  gap: var(--sp-1);
+  padding: calc(var(--sp-5) + 6px) var(--sp-4) var(--sp-4);
+}
+.ag-jump-card-name {
+  font: var(--type-label);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ag-jump-card-where {
+  font: var(--type-caption);
+  color: var(--fg-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ag-jump-card-when {
+  margin-top: var(--sp-1);
+  font: var(--type-caption);
+  color: var(--fg-4);
+}

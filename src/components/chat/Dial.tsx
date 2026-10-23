@@ -183,7 +183,7 @@ export function DialOption({
       <span
         aria-hidden="true"
         style={{
-          display: 'flex', color: 'var(--accent)',
+          display: 'flex', color: 'var(--job-lime)',
           opacity: selected ? 1 : 0,
           transition: 'opacity var(--dur-fast) var(--ease-glass)',
         }}

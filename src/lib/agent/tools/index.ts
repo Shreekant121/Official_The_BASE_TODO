@@ -4,8 +4,11 @@ import { queueTools } from './queueTools';
 import { shareTools } from './shareTools';
 import { subtaskTools } from './subtaskTools';
 import { moveTask } from './moveTools';
+import { sendToEvening } from './eveningTools';
+import { listUndated, scheduleTask } from './scheduleTools';
 import { listProjects, taskTools } from './taskTools';
 import { trashTools } from './trashTools';
+import { eventTools } from './eventTools';
 
 /**
  * The registry.
@@ -21,11 +24,10 @@ import { trashTools } from './trashTools';
  *   forty tools spends thousands of tokens before anything is said and a
  *   small model choosing among forty similar options picks wrong.
  * - **`fallbackTools` — the original eight**, for the in-browser agent that
- *   answers when the laptop is asleep. Deliberately *not* the full surface:
- *   that path is the labelled basic assistant, it has no drawer mechanism to
- *   keep the declaration small, and its whole job is that a task can still be
- *   added from a train. Widening it would spend the context it does not have
- *   on tools it was never the place for.
+ *   answered when the laptop was asleep. **Retired at BIG-12 (27A-5)** with
+ *   that agent, his call ("Retire it, Atlas for all"): Atlas now runs in the
+ *   page with the lid shut and takes `mcpTools` in drawers there too, through
+ *   the same handler (`toolServer/`). One consumer again, on two hosts.
  *
  * DECISION D3 IS REVERSED, AND ONLY HALF OF IT
  * ----------------------------------------------
@@ -60,9 +62,9 @@ import { trashTools } from './trashTools';
  * BUILD-17's `move_task` sits beside it for the other half of that reason: the
  * fallback keeps its eight, and moving a task is not what it is there for.
  */
-export const taskDrawerTools: ToolDef[] = [...taskTools, listProjects, moveTask, ...subtaskTools, ...trashTools];
+export const taskDrawerTools: ToolDef[] = [...taskTools, listProjects, moveTask, sendToEvening, scheduleTask, listUndated, ...subtaskTools, ...trashTools];
 
-export const allTools: ToolDef[] = [...taskDrawerTools, ...queueTools, ...boardTools, ...shareTools];
+export const allTools: ToolDef[] = [...taskDrawerTools, ...queueTools, ...boardTools, ...shareTools, ...eventTools];
 
 /**
  * Everything reachable over MCP. Identical to `allTools` today; kept as its
@@ -71,19 +73,11 @@ export const allTools: ToolDef[] = [...taskDrawerTools, ...queueTools, ...boardT
  */
 export const mcpTools: ToolDef[] = allTools;
 
-/**
- * What the in-browser fallback declares. The eight tools item 8 left it with —
- * see the note above for why this is not the full list.
- *
- * **The share tools are deliberately not here, and that is a safety property
- * rather than a scope decision.** The front door lives in Atlas: it is Atlas
- * that intercepts a `frontDoor` call, writes it to a tray that never expires,
- * and waits for a tap. The in-browser agent has none of that, so a
- * `publish_share_link` on this path would simply *publish* — the one act that
- * cannot be taken back, performed by the labelled basic assistant with nothing
- * standing in front of it.
+/*
+ * `fallbackTools`, the retired basic assistant's eight, lived here until BIG-12
+ * (27A-5, his call "Retire it, Atlas for all"). Every assistant turn is Atlas's
+ * now, and Atlas declares `mcpTools` in drawers.
  */
-export const fallbackTools: ToolDef[] = [...taskTools, ...queueTools];
 
 export const toolRegistry: Record<string, ToolDef> = Object.fromEntries(
   allTools.map((tool) => [tool.name, tool]),
@@ -102,7 +96,7 @@ export const DRAWERS: Record<string, { title: string; description: string; tools
     title: 'Tasks',
     description:
       'Everything about a task: finding one, reading it, creating, editing every field on its detail card, moving it ' +
-      'to another list or project and reordering it, its steps, completing it, deleting it and restoring it from the Trash.',
+      'to another list or project and reordering it, sending it to this evening, putting it on the calendar at a time and the tasks with no date, its steps, completing it, deleting it and restoring it from the Trash.',
     tools: taskDrawerTools.map((tool) => tool.name),
   },
   queue: {
@@ -131,6 +125,19 @@ export const DRAWERS: Record<string, { title: string; description: string; tools
    * serve the one that wants a link — and `find_tool` finds them when the
    * model does not know where to look.
    */
+  /*
+   * 29-2a. Its own drawer for §7.1's reason: events are a different thing from
+   * tasks, and four more tools in `tasks` would be paid for on every message
+   * about a deadline.
+   */
+  events: {
+    title: 'Events and countdowns',
+    description:
+      'Dates he counts down to, which are not tasks: a trip, a birthday, a race, a class. Listing them with the time ' +
+      'left, creating, changing (date, repeat, place, how the countdown counts) and deleting them. Also his calendar: ' +
+      'what is on a day or a week, events and tasks due together.',
+    tools: eventTools.map((tool) => tool.name),
+  },
   sharing: {
     title: 'Sharing',
     description:

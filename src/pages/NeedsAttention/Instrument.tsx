@@ -9,8 +9,8 @@
  * block, `screens/scoring.html:459`, and the entry for it said so.
  *
  * **The pane changes material on Red Alert, and nothing else does.** Inside
- * the danger zone the whole card lifts to `--glass-tint-amber` and the numeral
- * goes `--hue-amber`, on `--dur-slow` so it reads as the card warming rather
+ * the danger zone the whole card lifts to `--glass-tint-coral` and the numeral
+ * goes coral (amber until 29-1P2c2: Red Alert is coral's job), on `--dur-slow` so it reads as the card warming rather
  * than as a repaint.
  *
  * It used to cut at a score of 10 — the same 10 `ScoreDial` and `scoreTone`
@@ -56,8 +56,8 @@ import { formatScore } from '../../store/useStore';
 import { ScoreFactorBar } from '../../components/task-fields/ScoreFactorBar';
 import type { ScoreReading } from '../../components/task-fields/scoreReadings';
 
-/** The ink the source puts on amber glass — the hue lifted to label lightness. */
-const AMBER_INK = 'oklch(0.95 0.07 82)';
+/** The ink for coral glass — the hue lifted to label lightness. */
+const ALERT_INK = 'var(--job-coral-text)';
 
 export default function Instrument({ reading, peak, floorTitle }: {
   reading: ScoreReading;
@@ -75,7 +75,7 @@ export default function Instrument({ reading, peak, floorTitle }: {
            width and push a phone-sized page sideways; it wraps instead. */
         minWidth: 0,
         padding: 'var(--pad-card)', borderRadius: 'var(--r-card)',
-        backgroundImage: urgent ? 'var(--glass-tint-amber)' : 'var(--glass-fill-2)',
+        backgroundImage: urgent ? 'var(--glass-tint-coral)' : 'var(--glass-fill-2)',
         backdropFilter: 'var(--glass-bd-md)',
         WebkitBackdropFilter: 'var(--glass-bd-md)',
         boxShadow: 'var(--glass-shadow-pane)',
@@ -89,7 +89,7 @@ export default function Instrument({ reading, peak, floorTitle }: {
             font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
             textTransform: 'var(--kicker-transform)' as CSSProperties['textTransform'],
             whiteSpace: 'nowrap',
-            color: urgent ? AMBER_INK : 'var(--fg-3)',
+            color: urgent ? ALERT_INK : 'var(--fg-3)',
           }}
         >
           <Icon name="target" size={13} />
@@ -101,7 +101,7 @@ export default function Instrument({ reading, peak, floorTitle }: {
               font: 'var(--font-mono)', fontWeight: 'var(--weight-light)',
               fontSize: 'var(--text-4xl)', lineHeight: 'var(--leading-tight)',
               letterSpacing: 'var(--tracking-display)', fontVariantNumeric: 'tabular-nums',
-              color: urgent ? 'var(--hue-amber)' : 'var(--fg-1)',
+              color: urgent ? 'var(--job-coral-tag-fg)' : 'var(--fg-1)',
               transition: 'color var(--dur-slow) var(--ease-glass)',
             }}
           >

@@ -40,18 +40,19 @@ const TINT = {
   cyan:   'var(--glass-tint-cyan)',
   violet: 'var(--glass-tint-violet)',
   amber:  'var(--glass-tint-amber)',
-  rose:   'var(--glass-tint-rose)',
+  rose:   'var(--glass-tint-coral)', /* an error's tone: coral since 29-1P2c2 */
   frost:  'var(--glass-frost)',
 } as const;
 
 export type IconButtonSize = keyof typeof SIZE;
 export type IconButtonTone = keyof typeof TINT;
-export type IconButtonVariant = 'glass' | 'ghost' | 'tint';
+export type IconButtonVariant = 'glass' | 'ghost' | 'tint' | 'plain';
 
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** 34 / 44 / 54 / 64px. `sm` is desktop-toolbar only. */
   size?: IconButtonSize;
-  /** `glass` default · `ghost` for dense toolbars · `tint` for a hued or frost pane. */
+  /** `glass` default · `ghost` for dense toolbars · `tint` for a hued or frost pane ·
+   *  `plain` for the glyph alone: no circle at rest, on hover or on release. */
   variant?: IconButtonVariant;
   /** Hue when `variant="tint"`. */
   tone?: IconButtonTone;
@@ -93,6 +94,10 @@ export function IconButton({
     fill = hover ? 'var(--glass-fill-1)' : 'transparent';
     color = hover ? 'var(--fg-1)' : 'var(--fg-3)';
     shadow = 'none';
+  } else if (variant === 'plain') {
+    fill = 'transparent';
+    color = hover ? 'var(--fg-1)' : 'var(--fg-3)';
+    shadow = 'none';
   } else if (variant === 'tint' && tone) {
     fill = TINT[tone];
     color = tone === 'frost' ? 'var(--fg-on-light)' : 'var(--fg-1)';
@@ -116,8 +121,8 @@ export function IconButton({
     borderRadius: square ? 'var(--r-tile)' : 'var(--r-circle)',
     color,
     background: fill,
-    backdropFilter: variant === 'ghost' ? undefined : 'var(--glass-bd-md)',
-    WebkitBackdropFilter: variant === 'ghost' ? undefined : 'var(--glass-bd-md)',
+    backdropFilter: variant === 'ghost' || variant === 'plain' ? undefined : 'var(--glass-bd-md)',
+    WebkitBackdropFilter: variant === 'ghost' || variant === 'plain' ? undefined : 'var(--glass-bd-md)',
     boxShadow: shadow,
     transform: press ? 'scale(0.93)' : hover ? 'scale(1.04)' : 'scale(1)',
     opacity: disabled ? 0.42 : 1,
@@ -149,7 +154,7 @@ export function IconButton({
       style={composed}
       {...rest}
     >
-      {v3 && <PressBloom k={bloom} />}
+      {v3 && variant !== 'plain' && <PressBloom k={bloom} />}
       {children}
       {badge != null && (
         <span
@@ -169,7 +174,7 @@ export function IconButton({
             font: 'var(--type-kicker)',
             fontSize: 'var(--text-2xs)',
             fontWeight: 'var(--weight-medium)',
-            boxShadow: 'var(--glow-rose-md), inset 0 1px 0 oklch(1 0 0 / 0.3)',
+            boxShadow: 'var(--job-coral-shine), inset 0 1px 0 oklch(1 0 0 / 0.3)',
             fontVariantNumeric: 'tabular-nums',
           }}
         >

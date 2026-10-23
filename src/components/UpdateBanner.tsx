@@ -26,7 +26,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useUIStore } from '../store/useUIStore';
 import { applyUpdate } from '../lib/appUpdate';
-import { Button, Icon, NotificationCard } from '../ui';
+import { Icon, NotificationCard, SoftButton } from '../ui';
 
 export default function UpdateBanner() {
   const updateReady = useUIStore((s) => s.updateReady);
@@ -51,14 +51,13 @@ export default function UpdateBanner() {
                it off. `SyncStatusBanner`'s header has the full argument. */
             style={{ animation: 'none' }}
             actions={
-              <Button
+              <SoftButton
                 size="sm"
-                variant="tint"
                 onClick={applyUpdate}
-                iconLeft={<Icon name="refresh-cw" size={14} />}
+                icon={<Icon name="refresh-cw" size={14} />}
               >
                 Reload now
-              </Button>
+              </SoftButton>
             }
           />
         </motion.div>

@@ -1,9 +1,9 @@
-/* The cards a turn can end in — a plan, held writes and the two spending
-   ceilings — plus the interrupted-turn card the page draws under the
+/* The cards a turn can end in — a plan and held writes — plus the
+   interrupted-turn card the page draws under the
    transcript. Moved out of `pages/ChatPage.tsx`, unchanged, when it was split
    (BUILD-7). The front door is not one of these; it is `ApprovalCard.tsx`. The
    question card was one until BUILD-16 and is `ui/data/AskCard.tsx` now. */
-import { Button, Icon } from '../../ui';
+import { Button, Icon, WhiteButton } from '../../ui';
 import { relativeWhen } from '../../lib/atlas/relativeWhen';
 import type { AtlasHeldCall, AtlasMode, AtlasResumableTurn } from '../../lib/atlas/client';
 
@@ -82,16 +82,16 @@ export function PlanCard({
       </ol>
 
       {owns ? (
-        <Button
-          variant="tint"
-          tone="accent"
+        /* Every card's yes in this file is solid white since 29-1P2, as a
+           dialog's is; the ghost beside one stays ghost. */
+        <WhiteButton
           size="sm"
-          iconLeft={<Icon name="play" size={14} />}
+          icon={<Icon name="play" size={14} />}
           onClick={onGo}
           style={{ justifySelf: 'start' }}
         >
           Go ahead
-        </Button>
+        </WhiteButton>
       ) : (
         /*
          * Three reasons there is no button, and they must not be collapsed
@@ -105,177 +105,6 @@ export function PlanCard({
             : superseded
               ? 'This plan is no longer the last thing in the conversation.'
               : 'Still working…'}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/**
- * The writes a mode stopped (item 12).
- *
- * Planning and Ask-first hold every mutating call: it runs nowhere, and its
- * arguments are kept exactly as the model asked for them. This is where they
- * are shown, and the arguments are the content — *"add a deadline of Thursday
- * 6pm to `Shortlist the CA`"* is a thing that can be agreed to; *"Atlas would
- * like to change something"* is not.
- *
- * **This is deliberately NOT item 13's approval, and the difference is a
- * safety rule.** §5.2's front door — sending mail, publishing a link — has no
- * undo and gets a heavier surface of its own that item 13 builds. Everything
- * held here is inside the undoable set: it goes to the Trash, or it can be
- * asked back. So this card is calm on purpose, and the loud one stays loud.
- */
-/**
- * A turn that stopped because it had spent its ceiling (item 13A, DESIGN.md §3.4).
- *
- * WHY THIS IS THE CALM CARD AND NOT THE LOUD ONE
- * ------------------------------------------------
- * Same call `HeldCard` makes, for the same reason. §5.2's front door is loud
- * because what is behind it cannot be undone; this is a turn that stopped
- * *before* doing anything more, which is the safest state a turn can be in.
- * Nothing here is irreversible and nothing is waiting to go wrong, so it takes
- * the well-and-button shape rather than the door's.
- *
- * WHAT A TAP BUYS, WHICH IS SHREEKANT'S CALL
- * --------------------------------------------
- * **Another ceiling's worth, then it asks again** — not an uncapped run to the
- * end. Put to him against the alternatives; the reasoning is that one tap
- * meaning "finish the job whatever it costs" gives a genuinely stuck turn no
- * limit at all, which is the case §3.4 says the ceiling exists for. It needs
- * no machinery: the resumed turn is a new turn whose spending starts at zero.
- *
- * And it **carries on** rather than starting again — no message is sent, Atlas
- * reads the ask out of its log and continues from the results already there.
- * A turn that had created two tasks before it stopped would otherwise create
- * them twice.
- */
-export function CeilingStopCard({
-  stop,
-  live,
-  superseded,
-  onCarryOn,
-}: {
-  stop: { rupees: number | null; logTurnId: string | null };
-  live: boolean;
-  superseded: boolean;
-  onCarryOn: () => void;
-}) {
-  return (
-    <div
-      style={{
-        display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)',
-        borderRadius: 'var(--r-card)',
-        backgroundImage: 'var(--glass-fill-2)',
-        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
-        boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
-      }}
-    >
-      <span
-        className="ag-kicker"
-        style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--fg-3)' }}
-      >
-        <Icon name="indian-rupee" size={14} />
-        {stop.rupees === null ? 'stopped at the ceiling' : `stopped at ₹${stop.rupees} for this turn`}
-      </span>
-
-      <span style={{ font: 'var(--type-body)', color: 'var(--fg-2)', textWrap: 'pretty' }}>
-        Everything above actually happened — this stopped before spending more, not before doing
-        anything.
-      </span>
-
-      {/* The button is drawn only when Atlas has somewhere to carry on *from*.
-          `logTurnId` is null on a host keeping no action log, and offering to
-          continue from nothing would be a lie about what a tap does. */}
-      {live && stop.logTurnId !== null ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-          <Button variant="tint" tone="accent" size="sm" iconLeft={<Icon name="play" size={14} />} onClick={onCarryOn}>
-            Carry on
-          </Button>
-          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-            Picks up from the last step rather than starting again
-            {stop.rupees === null ? '.' : `, and stops again at another ₹${stop.rupees}.`}
-          </span>
-        </div>
-      ) : (
-        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-          {superseded
-            ? 'Not carried on — the conversation moved on.'
-            : stop.logTurnId === null
-              ? 'This Atlas keeps no action log, so there is no record to carry on from. Ask again to start over.'
-              : 'Still working…'}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/**
- * The month has reached its ceiling, and this turn has not run (item 13A, §3.4).
- *
- * WHY THIS ASKS RATHER THAN REFUSES
- * -----------------------------------
- * §3.4, in his words: *"he would rather be asked than have Atlas quietly
- * decline"* — which is §3.5's rule about battery pointed at money. An
- * assistant that silently stops working is the worst failure available to it,
- * so the ceiling is a question with a button and never an error.
- *
- * **Nothing has happened when this is drawn.** No model was called, no tool
- * ran, nothing was spent — which is exactly why it is not the front door's
- * tray. That tray is for acts that cannot be undone and it never expires; this
- * is a question about one turn, asked now, and it goes away when the
- * conversation moves on.
- *
- * The tap is good for **one turn**. §3.4 asks that at the limit *every* hosted
- * turn asks, so nothing is remembered — a flag Atlas kept would turn "ask
- * every time" into "ask once", which is the ceiling switching itself off.
- */
-export function MonthlyCeilingCard({
-  stop,
-  live,
-  superseded,
-  onRunAnyway,
-}: {
-  stop: { spent: number; limit: number; turns: number; model: string };
-  live: boolean;
-  superseded: boolean;
-  onRunAnyway: () => void;
-}) {
-  return (
-    <div
-      style={{
-        display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)',
-        borderRadius: 'var(--r-card)',
-        backgroundImage: 'var(--glass-fill-2)',
-        backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
-        boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
-      }}
-    >
-      <span
-        className="ag-kicker"
-        style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', color: 'var(--fg-3)' }}
-      >
-        <Icon name="indian-rupee" size={14} />
-        this month ₹{stop.spent.toFixed(2)} of ₹{stop.limit}
-      </span>
-
-      <span style={{ font: 'var(--type-body)', color: 'var(--fg-2)', textWrap: 'pretty' }}>
-        Nothing has run yet. {stop.model} is a hosted model, and this month has reached the ceiling
-        you set — {stop.turns} {stop.turns === 1 ? 'turn has' : 'turns have'} gone to it so far.
-      </span>
-
-      {live ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-          <Button variant="tint" tone="accent" size="sm" iconLeft={<Icon name="play" size={14} />} onClick={onRunAnyway}>
-            Run it anyway
-          </Button>
-          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-            For this turn only. Pick a model on your laptop instead and it costs nothing.
-          </span>
-        </div>
-      ) : (
-        <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-          {superseded ? 'Not run — the conversation moved on.' : 'Still working…'}
         </span>
       )}
     </div>
@@ -308,9 +137,8 @@ export function MonthlyCeilingCard({
  *
  * DRAWN IN THE APP'S OWN IDIOM, AND OWED A DESIGN PASS
  * -----------------------------------------------------
- * This is the one surface in item 13A that is not in the bundle — both ceiling
- * sliders, the spend meter and the battery pill are all drawn in
- * `atlas-host.html` and `atlas.html`. §7A's rule is that Atlas's screens are
+ * This is the one surface in item 13A that is not in the bundle — the battery
+ * pill is drawn in `atlas-host.html` and `atlas.html`. §7A's rule is that Atlas's screens are
  * designed in Claude Design first, and its other rule is not to stall on the
  * dead connector. Shreekant's call: build it in the chat's existing calm-card
  * shape — the same well, kicker and single button `HeldCard` uses, no new
@@ -361,9 +189,9 @@ export function ResumeCard({
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-        <Button variant="tint" tone="accent" size="sm" iconLeft={<Icon name="play" size={14} />} onClick={onCarryOn}>
+        <WhiteButton size="sm" icon={<Icon name="play" size={14} />} onClick={onCarryOn}>
           Carry on
-        </Button>
+        </WhiteButton>
         <Button variant="ghost" size="sm" onClick={onDismiss}>
           Leave it
         </Button>
@@ -378,6 +206,21 @@ export function ResumeCard({
   );
 }
 
+/**
+ * The writes a mode stopped (item 12).
+ *
+ * Planning and Ask-first hold every mutating call: it runs nowhere, and its
+ * arguments are kept exactly as the model asked for them. This is where they
+ * are shown, and the arguments are the content — *"add a deadline of Thursday
+ * 6pm to `Shortlist the CA`"* is a thing that can be agreed to; *"Atlas would
+ * like to change something"* is not.
+ *
+ * **This is deliberately NOT item 13's approval, and the difference is a
+ * safety rule.** §5.2's front door — sending mail, publishing a link — has no
+ * undo and gets a heavier surface of its own that item 13 builds. Everything
+ * held here is inside the undoable set: it goes to the Trash, or it can be
+ * asked back. So this card is calm on purpose, and the loud one stays loud.
+ */
 export function HeldCard({
   held,
   live,
@@ -459,9 +302,9 @@ export function HeldCard({
 
       {live ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-          <Button variant="tint" tone="accent" size="sm" iconLeft={<Icon name="check" size={14} />} onClick={onGo}>
+          <WhiteButton size="sm" icon={<Icon name="check" size={14} />} onClick={onGo}>
             Go ahead
-          </Button>
+          </WhiteButton>
           <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
             Or say what to change instead — nothing has happened yet.
           </span>

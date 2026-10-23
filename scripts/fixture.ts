@@ -18,7 +18,7 @@
  * exercise: an empty project and a busy one, all three hardcoded default lists,
  * nested subtasks, a subtask proxy in today's queue, task dependencies (D2), a
  * custom repeat rule, tasks that satisfy `taskNeedsAttention` and tasks that
- * don't, ₹ values that roll up, tags, links, a focus log with recorded hours,
+ * don't, ₹ values that roll up, links, a focus log with recorded hours,
  * and all three kinds of Trash entry at different points in their thirty days.
  */
 import type { FocusLogEntry, Project, Task, TaskList } from '../src/store/useStore.ts';
@@ -36,7 +36,7 @@ export const LOCALE = 'en-GB';
 
 /** Zustand `persist` key and schema version — must track `useStore.ts`. */
 export const STORAGE_KEY = 'mutineer-os-storage';
-const STORAGE_VERSION = 9;
+const STORAGE_VERSION = 10;
 
 /**
  * The two share ids the public `/s/:shareId` shots open.
@@ -88,7 +88,10 @@ export const PROJECTS: Project[] = [
     id: 'p-empire',
     name: 'Shreekant Empire',
     description: 'The holding company — incorporation, compliance, and the first two revenue lines.',
-    color: '#8b5cf6',
+    // 29-1P9b (idea 156): the coral line on its chart. One task done in the
+    // last two weeks puts the finish weeks after it, so the button reads late.
+    finishBy: '2026-04-15',
+   
     createdAt: 1_740_000_000_000,
     order: 0,
   },
@@ -96,14 +99,14 @@ export const PROJECTS: Project[] = [
     id: 'p-studio',
     name: 'Studio Launch',
     description: 'Everything that has to be true before the studio opens its doors.',
-    color: '#f59e0b',
+   
     createdAt: 1_740_100_000_000,
     order: 1,
   },
   {
     id: 'p-personal',
     name: 'Personal',
-    color: '#22d3ee',
+   
     createdAt: 1_740_200_000_000,
     order: 2,
   },
@@ -137,8 +140,10 @@ export const BACKLOG_TASKS: Task[] = [
     deadline: '2026-03-13T18:00',
     estimatedTime: 90,
     humanOverride: 9,
-    tags: ['legal', 'blocking'],
     valueINR: 25_000,
+    // 29-1P9b (idea 155): the line's first milestone, and the next one. Not a
+    // scoring field — it moves nothing in Smart Start or the score.
+    milestone: true,
     createdAt: 1_740_300_000_000,
     order: 0,
     subtasks: [
@@ -170,7 +175,8 @@ export const BACKLOG_TASKS: Task[] = [
     humanOverride: 6,
     // D2 — the blocker Session 6's Smart Start has to reason about.
     dependsOn: ['t-incorporate'],
-    tags: ['banking'],
+    // 29-1P9b: the second milestone, waiting on the first through that link.
+    milestone: true,
     valueINR: 10_000,
     createdAt: 1_740_310_000_000,
     order: 0,
@@ -224,7 +230,6 @@ export const BACKLOG_TASKS: Task[] = [
     seriesId: 'series-landing',
     occurrence: 3,
     seriesAnchor: '2026-01-16T18:00',
-    tags: ['writing', 'web'],
     links: [
       { id: 'lk-landing-1', title: 'Current draft', url: 'https://example.com/draft' },
       { id: 'lk-landing-2', title: 'Competitor teardown', url: 'https://example.com/teardown' },
@@ -283,7 +288,6 @@ export const BACKLOG_TASKS: Task[] = [
     recurrence: 'custom',
     recurrenceRule: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH;COUNT=8',
     reminderMinutes: 60,
-    tags: ['compliance'],
     createdAt: 1_740_340_000_000,
     order: 2,
     subtasks: [],
@@ -310,7 +314,6 @@ export const BACKLOG_TASKS: Task[] = [
     listId: 'l-studio-space',
     listName: 'The Space',
     dependsOn: ['t-lease'],
-    tags: ['vendors'],
     createdAt: 1_740_360_000_000,
     order: 1,
     subtasks: [],
@@ -348,7 +351,6 @@ export const BACKLOG_TASKS: Task[] = [
     status: 'needsAction',
     listId: 'backburner',
     listName: 'Backburner',
-    tags: ['marketing'],
     createdAt: 1_740_390_000_000,
     order: 0,
     subtasks: [],
@@ -399,7 +401,6 @@ export const FOCUS_LOG: FocusLogEntry[] = [
     taskTitle: 'File the incorporation paperwork',
     projectId: 'p-empire',
     listId: 'l-empire-ops',
-    tags: ['legal', 'blocking'],
     seconds: 3300,
     startedAt: 1_773_120_000_000,
     endedAt: 1_773_123_300_000,
@@ -410,7 +411,6 @@ export const FOCUS_LOG: FocusLogEntry[] = [
     taskTitle: 'Rewrite the landing page copy',
     projectId: 'p-empire',
     listId: 'l-empire-build',
-    tags: ['writing', 'web'],
     seconds: 5400,
     startedAt: 1_773_210_000_000,
     endedAt: 1_773_215_400_000,
@@ -545,7 +545,7 @@ export const TRASH_ENTRIES = [
         id: 'p-consulting',
         name: 'Consulting side line',
         description: 'Wound down in February.',
-        color: '#ec4899',
+       
         createdAt: 1_739_000_000_000,
         order: 3,
       },
@@ -680,7 +680,7 @@ export const ARCHIVE_ENTRIES = [
         id: 'p-diwali',
         name: 'Diwali gift boxes 2025',
         description: 'Forty boxes for clients and suppliers.',
-        color: '#f59e0b',
+       
         icon: '🪔',
         createdAt: 1_756_814_400_000,
         order: 4,
@@ -748,7 +748,7 @@ export const ARCHIVE_ENTRIES = [
       {
         id: 'p-podcast',
         name: 'Podcast pilot',
-        color: '#8b5cf6',
+       
         createdAt: 1_759_752_000_000,
         order: 5,
       },
@@ -818,5 +818,38 @@ export function serializedArchive(): string {
   return JSON.stringify({
     state: { entries: ARCHIVE_ENTRIES },
     version: ARCHIVE_STORAGE_VERSION,
+  });
+}
+
+// ─── The Dashboard's hours (BIG-6, 29-1b) ────────────────────────────────────
+
+/** `src/store/useDashboardStore.ts`'s persist key and version. */
+export const DASHBOARD_STORAGE_KEY = 'base-dashboard';
+const DASHBOARD_STORAGE_VERSION = 2;
+
+/**
+ * Only the hours and one hand-logged entry; the layout is left to the store's
+ * default, as it was before this seed existed.
+ *
+ * **The override is load-bearing.** Today's hours and `sessionDuration` are
+ * one number since 29-1b, and `sessionDuration` is mirrored from the
+ * Dashboard's hours on every open. Without an override for `FROZEN_NOW`'s day
+ * (a Thursday), the mirror would put the work session at his weekday default
+ * of 12 hours, and every Set Deadlines and New Session baseline — taken
+ * against the 4-hour window above — would move, some losing the overrun
+ * they exist to photograph.
+ */
+export function serializedDashboard(): string {
+  return JSON.stringify({
+    state: {
+      hours: {
+        weekly: [21_600, 43_200, 43_200, 43_200, 43_200, 43_200, 21_600],
+        overrides: { '2026-03-12': 14_400 },
+      },
+      timeLog: [
+        { id: 'h-1', day: '2026-03-12', seconds: 2_700, label: 'Calls with the accountant', projectId: 'p-empire', at: 1_773_287_000_000 },
+      ],
+    },
+    version: DASHBOARD_STORAGE_VERSION,
   });
 }

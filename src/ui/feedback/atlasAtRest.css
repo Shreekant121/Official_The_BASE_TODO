@@ -1,0 +1,208 @@
+/* ---------------------------------------------------------------
+   ATLAS AT REST (29-1P15b, ideas 83, 88 and 94). The other half of
+   `atlasAtWork.css`: how Atlas looks when it is not working. Nothing
+   here loops. The horizon and the glow are still shadows painted
+   once; turning them up is an opacity fade on a layer that is
+   already there, so the compositor does it and nothing repaints.
+
+   Violet, Atlas's one colour (29-1P2c3). The cards used a blue-violet
+   horizon and a rainbow under the ask box; one colour, one job, so
+   both are violet's own shades, as the edge light is (29-1P15a).
+
+   Literal values on `:root` rather than `--job-violet`: the command
+   palette and the side panel are portals, and `--job-violet` exists
+   only inside `[data-v3]`.
+   --------------------------------------------------------------- */
+
+:root {
+  /* 83: the ground under the light, and the light at rest and lit. */
+  --horizon-ground: oklch(0.075 0.02 295 / 0.9);
+  --horizon-rest:
+    0 -1.5px 0 oklch(0.84 0.09 300),
+    0 -6px 26px 2px oklch(0.62 0.19 292 / 0.62),
+    0 -30px 90px 18px oklch(0.5 0.19 296 / 0.3),
+    inset 0 14px 40px -12px oklch(0.6 0.19 296 / 0.5);
+  --horizon-lit:
+    0 -2px 0 oklch(0.93 0.07 300),
+    0 -10px 36px 6px oklch(0.68 0.2 300 / 0.75),
+    0 -50px 120px 34px oklch(0.56 0.21 305 / 0.42),
+    inset 0 18px 50px -12px oklch(0.66 0.2 300 / 0.6);
+  /* 88: the light under the box, its rim, and the palette's line. */
+  --ask-glow:
+    0 8px 34px 14px oklch(0.64 0.2 296 / 0.72),
+    0 16px 70px 22px oklch(0.55 0.21 305 / 0.42);
+  --ask-rim: inset 0 0 0 1px oklch(0.8 0.12 300 / 0.5);
+  --ask-line: oklch(0.78 0.16 300);
+  /* The empty chat's three openers, liquid glass (his ask, 2026-10-20:
+     "make the 3 pills liquid glass on the AI page"). The one place the
+     opaque-glass rule of 2026-09-24 is lifted, by him, and only here: the
+     horizon shows through them, blurred, and catches a violet light along
+     their foot. A clear top edge, a faint sheen from the top-left, a hairline
+     rim; brighter under the pointer. */
+  --liquid-fill:
+    radial-gradient(120% 160% at 18% -60%, oklch(1 0 0 / 0.13), transparent 55%),
+    linear-gradient(180deg, oklch(1 0 0 / 0.09), oklch(1 0 0 / 0.03) 60%, oklch(1 0 0 / 0.05));
+  --liquid-fill-hover:
+    radial-gradient(120% 160% at 18% -60%, oklch(1 0 0 / 0.18), transparent 55%),
+    linear-gradient(180deg, oklch(1 0 0 / 0.13), oklch(1 0 0 / 0.05) 60%, oklch(1 0 0 / 0.07));
+  --liquid-rim:
+    inset 0 1px 0 oklch(1 0 0 / 0.26),
+    inset 0 -1px 0 oklch(1 0 0 / 0.06),
+    inset 0 0 0 1px oklch(1 0 0 / 0.11),
+    inset 0 -12px 22px -16px oklch(0.7 0.19 300 / 0.45),
+    0 10px 26px -14px oklch(0 0 0 / 0.8);
+  --liquid-rim-hover:
+    inset 0 1px 0 oklch(1 0 0 / 0.34),
+    inset 0 -1px 0 oklch(1 0 0 / 0.08),
+    inset 0 0 0 1px oklch(1 0 0 / 0.17),
+    inset 0 -12px 24px -14px oklch(0.7 0.19 300 / 0.6),
+    0 14px 32px -14px oklch(0 0 0 / 0.85);
+  --liquid-blur: blur(14px) saturate(170%);
+  /* 94: the chip. */
+  --remembered-ink: oklch(0.86 0.1 300);
+  --remembered-fill: oklch(0.24 0.06 300 / 0.85);
+  --remembered-rim: inset 0 0 0 1px oklch(0.7 0.19 300 / 0.38);
+}
+
+/* ── 83 A HORIZON OF LIGHT ──────────────────────────────────────
+   A planet's edge of violet light under Atlas's screen. Two circles
+   in one place: the ground with its light at rest, and a second set
+   of light over it that fades in while Atlas listens. Fills its
+   positioned parent; `--horizon-top` is where the curve peaks.
+   `data-fade` dims the sides to nothing, for a horizon narrower than
+   the window (the chat's column), so it ends softly, never at a cut. */
+.ag-horizon {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ag-horizon[data-fade] {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+}
+.ag-horizon > i {
+  position: absolute;
+  left: -35%;
+  width: 170%;
+  top: var(--horizon-top, 70%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+.ag-horizon > i:first-child {
+  background-color: var(--horizon-ground);
+  box-shadow: var(--horizon-rest);
+}
+.ag-horizon > i:last-child {
+  box-shadow: var(--horizon-lit);
+  opacity: 0;
+  transition: opacity 800ms var(--ease-glass);
+}
+.ag-horizon[data-lit] > i:last-child {
+  opacity: 1;
+}
+
+/* ── 88 AN ASK BOX THAT GLOWS ───────────────────────────────────
+   While he types into a box that asks Atlas, a violet light rises
+   under it and its rim lights; when the box empties or loses the
+   caret, both fade. `.ag-ask` wraps the box: the glow sits before it
+   (under), the rim after it (over, taking `--ask-r` as its corners).
+   The light comes off a 1px line at the box's foot, never a box inside
+   it: a shadow is not painted inside its own box, and through a
+   see-through field (the side panel's well) that box showed as a dark
+   oval ringed with violet.
+   `data-line` is the palette's form, a box with no edge of its own:
+   a violet line along its foot, lit from below. */
+.ag-ask {
+  position: relative;
+}
+.ag-ask > .ag-ask-glow {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -1px;
+  height: 1px;
+  border-radius: 50%;
+  box-shadow: var(--ask-glow);
+  pointer-events: none;
+  opacity: 0;
+  scale: 0.5 1;
+  transition: opacity 500ms var(--ease-glass), scale 700ms var(--ease-glass);
+}
+.ag-ask > .ag-ask-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--ask-r, 0);
+  box-shadow: var(--ask-rim);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms var(--ease-glass);
+}
+.ag-ask[data-typed]:focus-within > .ag-ask-glow {
+  opacity: 1;
+  scale: 1 1;
+}
+.ag-ask[data-typed]:focus-within > .ag-ask-rim {
+  opacity: 1;
+}
+.ag-ask[data-line] > .ag-ask-glow {
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  border-radius: 0;
+  background-image: linear-gradient(90deg, transparent, var(--ask-line) 30%, var(--ask-line) 70%, transparent);
+  box-shadow: 0 0 14px 1px oklch(0.62 0.2 296 / 0.55);
+}
+.ag-ask[data-line] > .ag-ask-rim {
+  display: none;
+}
+
+/* ── 94 "REMEMBERED" ────────────────────────────────────────────
+   A small violet chip under a reply in which Atlas saved a note.
+   It lands once the reply has finished writing itself out. */
+@keyframes ag-remembered-in {
+  from { opacity: 0; translate: 0 6px; scale: 0.9; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+.ag-remembered {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  font: var(--type-caption);
+  font-weight: 500;
+  color: var(--remembered-ink);
+  background-color: var(--remembered-fill);
+  box-shadow: var(--remembered-rim);
+  animation: ag-remembered-in 450ms var(--ease-springy, cubic-bezier(0.34, 1.3, 0.64, 1)) both;
+  transition: background-color var(--dur-fast) var(--ease-glass);
+}
+.ag-remembered:hover {
+  background-color: oklch(0.29 0.08 300 / 0.9);
+}
+.ag-remembered > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ag-remembered > span:last-child {
+  color: var(--fg-3);
+}
+
+/* 29-1P15c, idea 74: the Ask Atlas bar (`ui/overlay/AskAtlasBar.tsx`). At
+   rest it is the nav's glass; under the pointer its rim brightens and its
+   words come up a step, a still change on hover only. */
+.ag-ask-bar:hover {
+  box-shadow: var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-2) !important;
+}
+.ag-ask-bar:hover [data-ask-bar-face] > span:last-child {
+  color: var(--fg-2) !important;
+}

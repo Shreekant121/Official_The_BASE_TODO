@@ -23,6 +23,7 @@
  * a reference. That is a settled scope decision, not an oversight.
  */
 import type { Project, Task, TaskList } from '../store/useStore';
+import { buildProjectTree } from './projectTree';
 
 /** The store slices a deletion can touch. */
 export interface DeletableState {
@@ -222,7 +223,18 @@ export function planProjectDeletion(state: DeletableState, projectId: string): D
   const project = state.projects.find((p) => p.id === projectId);
   if (!project) return noMatch('project', state);
 
-  const lists = state.taskLists.filter((l) => l.projectId === projectId);
+  // BIG-2, his call: a project goes with everything inside it, at any depth,
+  // as one Trash (or Archive) entry — so Restore brings the tree back whole.
+  // Each keeps its own `parentId`, which is all a restore needs to rebuild
+  // the nesting below it. The project it sat in is snapshotted as its
+  // ancestor, exactly as a list remembers its project: the Trash row can say
+  // where it was, and a restore rebuilds that parent if it has gone since.
+  const tree = buildProjectTree(state.projects);
+  const parentId = tree.parentOf(projectId);
+  const parent = parentId ? state.projects.find((p) => p.id === parentId) : undefined;
+  const subtree = new Set(tree.subtreeIds(projectId));
+  const projects = [project, ...state.projects.filter((p) => p.id !== projectId && subtree.has(p.id))];
+  const lists = state.taskLists.filter((l) => !!l.projectId && subtree.has(l.projectId));
   const listIds = new Set(lists.map((l) => l.id));
   const tasks = state.backlogTasks.filter((t) => !!t.listId && listIds.has(t.listId));
 
@@ -230,7 +242,7 @@ export function planProjectDeletion(state: DeletableState, projectId: string): D
     kind: 'project',
     title: project.name,
     matched: true,
-    ancestors: {},
-    ...applyRemoval(state, [project], lists, tasks),
+    ancestors: parent ? { project: parent } : {},
+    ...applyRemoval(state, projects, lists, tasks),
   };
 }

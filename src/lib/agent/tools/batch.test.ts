@@ -41,7 +41,7 @@ const TASKS: Array<[id: string, title: string, listId: string]> = [
 
 function harness() {
   const state: AgentStoreState = {
-    projects: [{ id: 'p-level', name: 'Level Ai', color: '#22d3ee', createdAt: 1, order: 0 } as Project],
+    projects: [{ id: 'p-level', name: 'Level Ai', createdAt: 1, order: 0 } as Project],
     taskLists: [
       { id: 'l-selfcare', title: 'Self Care', order: 0 } as TaskList,
       { id: 'l-admin', title: 'Admin', order: 1 } as TaskList,
@@ -105,6 +105,7 @@ function harness() {
       captureTask: (_handle, taskId) => captured.push(taskId),
       captureList: () => {},
       captureProject: () => {},
+      captureEvent: () => {},
     },
   };
 
@@ -256,7 +257,7 @@ describe('a batch with bad ids does the rest and says which failed', () => {
     const { ctx } = harness();
     const results = [
       await completeTask.execute({ taskIds: ['t-oil', 'secret-id-1'] }, ctx),
-      await updateTask.execute({ taskIds: ['t-ca', 'secret-id-2'], priority: 'high' }, ctx),
+      await updateTask.execute({ taskIds: ['t-ca', 'secret-id-2'], emergencyBoost: 3 }, ctx),
       await deleteTask.execute({ taskIds: ['t-books', 'secret-id-3'] }, ctx),
       await addToToday.execute({ taskIds: ['t-repair', 'secret-id-4'] }, ctx),
       await getTask.execute({ taskIds: ['t-website', 'secret-id-5'] }, ctx),
@@ -383,6 +384,10 @@ describe('every tool that names things takes a list of them', () => {
      * being moved, and they travel as one block beside ONE task — "put these
      * beside those" has no meaning. They end in `Id` rather than being called
      * `before`/`after` so `mcp/consistency.ts`'s `idsIn` guards them.
+     *
+     * 29-2d1 made it four: `update_task`'s `eventId`. The many-things are the
+     * tasks, and "these are due before the marathon" names one event for all
+     * of them. It keeps the name every event tool gives that id.
      */
     const singularIds = (allowed: Set<string>): string[] =>
       allTools.flatMap((tool) =>
@@ -391,11 +396,11 @@ describe('every tool that names things takes a list of them', () => {
           .map(([key]) => `${tool.name}.${key}`),
       );
 
-    expect(singularIds(new Set(['parentId', 'beforeTaskId', 'afterTaskId']))).toEqual([]);
+    expect(singularIds(new Set(['parentId', 'beforeTaskId', 'afterTaskId', 'eventId']))).toEqual([]);
     // …and the check can actually fail: allow nothing and the one deliberate
     // exception is what it finds. Without this line a broken pattern would
     // pass this test silently for ever.
-    expect(singularIds(new Set())).toEqual(['move_task.beforeTaskId', 'move_task.afterTaskId', 'add_subtask.parentId']);
+    expect(singularIds(new Set())).toEqual(['update_task.eventId', 'move_task.beforeTaskId', 'move_task.afterTaskId', 'add_subtask.parentId']);
   });
 
   it('gives every batching tool the same failure vocabulary', async () => {
@@ -445,3 +450,122 @@ describe('a batch captures every item it touched, into one turn', () => {
     expect(bench.captured).toEqual([]);
   });
 });
+
+// ── Fields beside the list (FIX-13) ─────────────────────────────────────────
+
+describe('fields sent beside the list rather than inside an entry', () => {
+  /*
+   * gemma4:e4b's call from FIX-12's check, verbatim but for the title. Before
+   * FIX-13 this was refused with "Accepted parameters: tasks", and the retry
+   * that refusal invited was the bare title — a task made with no deadline.
+   */
+  const GEMMA_CALL = {
+    deadline: '2026-09-09T17:00',
+    emergencyBoost: 3,
+    estimatedTime: 20,
+    humanOverride: 6,
+    tasks: [{ title: 'Call the plumber' }],
+  };
+
+  it('reads them as the one task\'s, and says so', async () => {
+    const { ctx, state } = harness();
+    const result = await createTask.execute(GEMMA_CALL, ctx);
+
+    expect(result.ok).toBe(true);
+    const made = state.backlogTasks.find((task) => task.title === 'Call the plumber');
+    expect(made).toMatchObject({ deadline: '2026-09-09T17:00', emergencyBoost: 3, estimatedTime: 20, humanOverride: 6 });
+    expect(result.summary).toContain('"deadline", "emergencyBoost", "estimatedTime" and "humanOverride" were sent beside "tasks"');
+    expect(dataOf<{ movedIntoEntry: string[] }>(result).movedIntoEntry).toEqual(['deadline', 'emergencyBoost', 'estimatedTime', 'humanOverride']);
+  });
+
+  it('does the same for a bare-string entry, a singular, and no list at all', async () => {
+    const { ctx, state } = harness();
+
+    expect((await createTask.execute({ tasks: 'Buy milk', list: 'Admin' }, ctx)).ok).toBe(true);
+    expect((await createTask.execute({ task: { title: 'Buy bread' }, deadline: '2026-09-10' }, ctx)).ok).toBe(true);
+    expect((await createTask.execute({ title: 'Buy eggs', estimatedTime: 5 }, ctx)).ok).toBe(true);
+
+    expect(state.backlogTasks.find((task) => task.title === 'Buy milk')?.listId).toBe('l-admin');
+    expect(state.backlogTasks.find((task) => task.title === 'Buy bread')?.deadline).toContain('2026-09-10');
+    expect(state.backlogTasks.find((task) => task.title === 'Buy eggs')?.estimatedTime).toBe(5);
+  });
+
+  it('refuses them beside several tasks, makes nothing, and says where they go', async () => {
+    /*
+     * The safer half of the decision. A deadline beside three tasks may be one
+     * task's or all three's; copying it onto each invents two deadlines, and a
+     * refusal costs one round trip.
+     */
+    const { ctx, state } = harness();
+    const before = state.backlogTasks.length;
+
+    const result = await createTask.execute({ deadline: '2026-09-09', tasks: ['Buy milk', 'Buy bread', 'Buy eggs'] }, ctx);
+
+    expect(result.ok).toBe(false);
+    expect(state.backlogTasks).toHaveLength(before);
+    expect(refusalParts(result.summary)).toEqual({ names: true, counts: true, nests: true });
+  });
+
+  it('refuses the same field sent twice with two values rather than picking one', async () => {
+    const { ctx, state } = harness();
+    const before = state.backlogTasks.length;
+
+    const result = await createTask.execute({ deadline: '2026-09-09', tasks: [{ title: 'Buy milk', deadline: '2026-09-12' }] }, ctx);
+
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain('"deadline" was sent twice');
+    expect(state.backlogTasks).toHaveLength(before);
+    // The same value twice is not a contradiction.
+    expect((await createTask.execute({ deadline: '2026-09-09', tasks: [{ title: 'Buy milk', deadline: '2026-09-09' }] }, ctx)).ok).toBe(true);
+  });
+
+  it('closes the same hole in add_subtask\'s steps', async () => {
+    const { ctx, state } = harness();
+
+    const one = await addSubtask.execute({ parentId: 't-ca', deadline: '2026-09-09T17:00', allocatedTime: 15, steps: ['Collect receipts'] }, ctx);
+    expect(one.ok).toBe(true);
+    expect(one.summary).toContain('sent beside "steps"');
+    const steps = () => state.backlogTasks.find((task) => task.id === 't-ca')?.subtasks ?? [];
+    expect(steps()[0]).toMatchObject({ title: 'Collect receipts', deadline: '2026-09-09T17:00', allocatedTime: 15 });
+
+    const several = await addSubtask.execute({ parentId: 't-ca', allocatedTime: 15, steps: ['Sign form', 'Post it'] }, ctx);
+    expect(several.ok).toBe(false);
+    expect(several.summary).toContain('nothing was made');
+    expect(steps()).toHaveLength(1);
+  });
+
+  it('reads a null inside an entry as left out, as it is at the top level', async () => {
+    // gemma's two-task call, run 3 of FIX-13's check.
+    const { ctx, state } = harness();
+    const result = await createTask.execute(
+      { tasks: [{ title: 'Buy printer ink', estimatedTime: 10 }, { title: 'Renew the domain', estimatedTime: null, humanOverride: 7 }] },
+      ctx,
+    );
+    expect(result.ok).toBe(true);
+    expect(dataOf<{ done: number }>(result).done).toBe(2);
+    expect(state.backlogTasks.find((task) => task.title === 'Renew the domain')?.humanOverride).toBe(7);
+  });
+
+  it('still refuses a key that is no task field at all', async () => {
+    const { ctx } = harness();
+    const result = await createTask.execute({ dead_line: '2026-09-09', tasks: ['Buy milk'] }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain('has no parameter "dead_line"');
+  });
+
+  it('leaves the tools that apply one change to many ids alone', async () => {
+    // update_task's fields ARE top-level; only a creator's list opts in.
+    const { ctx, state } = harness();
+    expect((await updateTask.execute({ taskIds: ['t-oil'], estimatedTime: 10 }, ctx)).summary).not.toContain('sent beside');
+    expect(state.backlogTasks.find((task) => task.id === 't-oil')?.estimatedTime).toBe(10);
+  });
+});
+
+/** What a several-entries refusal has to say: the field, why it cannot be placed, and the shape that works. */
+function refusalParts(summary: string) {
+  return {
+    names: summary.includes('"deadline"'),
+    counts: summary.includes('3 entries'),
+    nests: summary.includes('{"tasks": [{"title": "…", "deadline": …}'),
+  };
+}

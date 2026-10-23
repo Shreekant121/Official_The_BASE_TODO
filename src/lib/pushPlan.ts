@@ -48,6 +48,8 @@ import { toZonedDayString, zonedParts } from './agent/dates';
 import { planStartNow } from './smartStart';
 import type { FiringRow } from './firingToday';
 import type { Task } from '../store/useStore';
+import { alertWhenWords, eventAlertKey, eventLogSubject, type EventAlertRow } from './events/eventAlerts';
+import { describeWhen } from './events/events';
 
 /** A row first seen later than this after its instant is missed, not fired. */
 export const LATE_LIMIT_MS = 10 * 60_000;
@@ -59,6 +61,7 @@ export const LOG_KEEP_MS = 36 * 60 * 60_000;
 export const SUMMARY_LINES = 6;
 
 export interface PushLogEntry {
+  /** The subject: a task's id, or `event:<id>` for an event's alert (29-2c2). */
   taskId: string;
   /** The fire instant this entry is about — the block's start. */
   at: number;
@@ -74,6 +77,9 @@ export interface PushLogEntry {
   snoozeUntil?: number;
   /** When the last call went out. */
   lastCallAt?: number;
+  /** 29-2c2, an event's alert: the event, and which of its alerts (minutes before). */
+  eventId?: string;
+  minutesBefore?: number;
 }
 
 export interface PushLog {
@@ -99,7 +105,7 @@ export interface PushAction {
  * small icon, title, body, actions — and the icon is fixed in the worker.
  */
 export interface PushMessage {
-  kind: 'fire' | 'lastCall' | 'summary' | 'reconnect';
+  kind: 'fire' | 'lastCall' | 'summary' | 'reconnect' | 'event';
   title: string;
   body: string;
   tag: string;
@@ -120,6 +126,8 @@ export interface PushPlanInput {
   log: PushLog;
   now: number;
   timeZone: string;
+  /** 29-2c2: `eventAlertsToday`'s rows, merged like `rows` around midnight. */
+  events?: EventAlertRow[];
 }
 
 export interface PushPlan {
@@ -215,6 +223,28 @@ function summaryMessage(missedToday: PushLogEntry[], now: number, timeZone: stri
 }
 
 /**
+ * An event's alert (29-2c2): when it is, then what. "Tomorrow — Mumbai
+ * Marathon", "In 30 min — Dentist", "Today — Asha's birthday"; the body says
+ * the day and time and the place. Tapping opens the event's sheet over the
+ * Dashboard. No snooze: the alert is about a date, not a block of work that
+ * has to start, and a later alert of the same event (an hour before, after a
+ * day before) is already the second ring. One tag per event, so that later
+ * alert replaces this one rather than stacking.
+ */
+function eventMessage(row: EventAlertRow, timeZone: string): PushMessage {
+  const when = describeWhen(row.occurrence, row.allDay, new Date(row.at), timeZone);
+  return {
+    kind: 'event',
+    title: `${alertWhenWords(row.minutes, row.allDay)} — ${row.event.title}`,
+    body: row.event.location ? `${when} · ${row.event.location}` : when,
+    tag: `base-event-${row.event.id}`,
+    url: `/dashboard?event=${encodeURIComponent(row.event.id)}`,
+    actions: [],
+    timestamp: row.at,
+  };
+}
+
+/**
  * "BASE lost Google Calendar, tap to reconnect" — BUILD-15.
  *
  * The one alert here that is not about a task. It exists because the failure
@@ -246,7 +276,7 @@ export function reconnectMessage(now: number): PushMessage {
  * writes the log **before** sending, inside a transaction, so two knocks that
  * overlap cannot both send the same alert.
  */
-export function planPushes({ rows, backlog, log, now, timeZone }: PushPlanInput): PushPlan {
+export function planPushes({ rows, backlog, log, now, timeZone, events = [] }: PushPlanInput): PushPlan {
   const entries: Record<string, PushLogEntry> = {};
   let changed = false;
   for (const [key, entry] of Object.entries(log.entries)) {
@@ -315,9 +345,46 @@ export function planPushes({ rows, backlog, log, now, timeZone }: PushPlanInput)
     changed = true;
   }
 
+  /* 29-2c2, the events' alerts, on the same three rules: never early, sent on
+     the first knock after, and one first seen past the late limit is missed,
+     never sent late. A missed one is logged, so the screen says so, but is
+     not in the summary, which counts work that started without him. */
+  const alertOf = (eventId: string | undefined, minutes: number | undefined) => `${eventId}|${minutes}`;
+  const sentEventAlertsToday = new Set(
+    Object.values(entries)
+      .filter((e) => e.eventId && e.outcome === 'sent' && toZonedDayString(new Date(e.at), timeZone) === today)
+      .map((e) => alertOf(e.eventId, e.minutesBefore)),
+  );
+  const orderedEvents = [...events].sort((a, b) => a.at - b.at || a.event.id.localeCompare(b.event.id));
+  for (const row of orderedEvents) {
+    const key = eventAlertKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (entries[key] || row.at > now) continue;
+    const base = {
+      taskId: eventLogSubject(row.event.id),
+      eventId: row.event.id,
+      minutesBefore: row.minutes,
+      at: row.at,
+      title: row.event.title,
+      estimateMinutes: 0,
+    };
+    if (now - row.at <= LATE_LIMIT_MS) {
+      messages.push(eventMessage(row, timeZone));
+      entries[key] = { ...base, outcome: 'sent', sentAt: now };
+      sentEventAlertsToday.add(alertOf(row.event.id, row.minutes));
+      changed = true;
+      continue;
+    }
+    /* The event was moved after this alert went out: done with, not missed. */
+    if (sentEventAlertsToday.has(alertOf(row.event.id, row.minutes))) continue;
+    entries[key] = { ...base, outcome: 'missed' };
+    changed = true;
+  }
+
   if (newlyMissed) {
     const missedToday = Object.values(entries).filter(
-      (e) => e.outcome === 'missed' && toZonedDayString(new Date(e.at), timeZone) === today,
+      (e) => !e.eventId && e.outcome === 'missed' && toZonedDayString(new Date(e.at), timeZone) === today,
     );
     if (missedToday.length > 0) messages.push(summaryMessage(missedToday, now, timeZone));
   }

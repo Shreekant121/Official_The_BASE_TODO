@@ -6,7 +6,7 @@ import { liveAgentStore, liveSnapshotCapture } from '../src/lib/agent/liveContex
 import { completeTask, createTask, updateTask } from '../src/lib/agent/tools/taskTools';
 import { deleteTask } from '../src/lib/agent/tools/trashTools';
 import type { ToolContext } from '../src/lib/agent/types';
-import { applyUndo, beginCapture, endCapture, type UndoPayload } from './undo.ts';
+import { applyUndo, beginCapture, endCapture, type UndoPayload } from '../src/lib/agent/toolServer/undo';
 
 /**
  * ONE INSTRUCTION, ONE UNDO (item 13D).
@@ -106,22 +106,22 @@ describe('one call, one token', () => {
 
   it('reverses a batched edit field by field, back to what each task had', async () => {
     useStore.setState({
-      backlogTasks: backlog().map((task) => (task.id === 't-ca' ? { ...task, priority: 'low' as const } : task)),
+      backlogTasks: backlog().map((task) => (task.id === 't-ca' ? { ...task, emergencyBoost: 1 } : task)),
     });
 
     const ctx = contextFor('update_task');
-    await updateTask.execute({ taskIds: ['t-oil', 't-ca', 't-web'], priority: 'urgent' }, ctx);
+    await updateTask.execute({ taskIds: ['t-oil', 't-ca', 't-web'], emergencyBoost: 4 }, ctx);
     const payload = endCapture(ctx.snapshotHandle);
 
-    expect(backlog().filter((task) => task.priority === 'urgent')).toHaveLength(3);
+    expect(backlog().filter((task) => task.emergencyBoost === 4)).toHaveLength(3);
 
     applyUndo(overTheWire(payload));
 
     // The one that had a value gets that value back; the two that had none go
-    // back to having none. A blanket "clear it" would have lost the `low`.
-    expect(backlog().find((task) => task.id === 't-ca')?.priority).toBe('low');
-    expect(backlog().find((task) => task.id === 't-oil')?.priority).toBeUndefined();
-    expect(backlog().find((task) => task.id === 't-web')?.priority).toBeUndefined();
+    // back to having none. A blanket "clear it" would have lost the 1.
+    expect(backlog().find((task) => task.id === 't-ca')?.emergencyBoost).toBe(1);
+    expect(backlog().find((task) => task.id === 't-oil')?.emergencyBoost).toBeUndefined();
+    expect(backlog().find((task) => task.id === 't-web')?.emergencyBoost).toBeUndefined();
   });
 
   it('takes back every task a batched create made', async () => {

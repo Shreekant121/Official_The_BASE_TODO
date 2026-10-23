@@ -1,0 +1,41 @@
+/* ---------------------------------------------------------------
+   MOVING BETWEEN SCREENS (2026-10-07, his ask). `ScreenTransitions.tsx`
+   runs the browser's view transition; this is how it looks: the screen
+   being left fades out over the new one as it fades in, in 200ms. The
+   two screens are pictures here, not the page, so nothing inside them is
+   laid out again while they cross.
+
+   A CROSSFADE, NOT A SLIDE, MEASURED. On the tablet stand-in (4x CPU,
+   software GPU) a slide with a scale drew 8-12 frames a second and took
+   the new screen from ~0.8s to ~1.8s to settle; this fade settles in the
+   same ~0.8s as no transition at all, and only replaces the stutter of a
+   screen being shown with three or four frames of fade. Anything that
+   moves or scales the pictures goes back on the stand-in before it ships.
+
+   THE NAV FADES WITH ITS SCREEN, ON PURPOSE. Both screens draw their nav
+   in the same place, so the crossfade only shows the lit icon changing,
+   while the new nav's dot stretches live underneath. It was lifted out of
+   the pictures as its own named layer at first, and that layer drew a
+   faint square-cornered box behind the rounded nav for the length of the
+   fade, on every tap (his report, 2026-10-07; the nav's glass is not
+   captured cleanly on its own). Do not name it again.
+   --------------------------------------------------------------- */
+
+:root {
+  --screen-cross: 200ms;
+}
+
+::view-transition-old(root) {
+  animation: var(--screen-cross) ease both screen-out;
+}
+::view-transition-new(root) {
+  animation: var(--screen-cross) ease both screen-in;
+}
+@keyframes screen-out { to { opacity: 0; } }
+@keyframes screen-in { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}

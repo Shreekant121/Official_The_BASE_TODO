@@ -46,18 +46,17 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import {
-  Button, Icon, IconButton, Input, MetaKicker, MiniNav, MorphMenu, SegmentedControl, StatusPill,
-  Toast, useMedia, WIDE, type IconName,
+  BlurAcross, Button, Icon, IconButton, Input, MetaKicker, MiniNav, MorphMenu, SegmentedControl, SoftButton, StatusPill,
+  Toast, useArrival, useMedia, WhiteButton, WIDE, type IconName,
 } from '../ui';
 import { RailMark } from '../components/BrandMark';
+import { MemoryWaiting } from '../components/MemoryWaiting';
 import { useNavModel } from '../components/navModel';
 import { useAtlasStore } from '../lib/atlas/atlasStore';
+import { loadCatalog, loadNote, removeNote, storeNote, useMemorySource } from '../lib/atlas/memorySource';
 import {
-  deleteNote as deleteNoteRequest,
-  fetchCatalog,
-  fetchNote,
-  saveNote,
   AtlasMemoryUnavailable,
   type CatalogIndex,
   type CatalogNote,
@@ -126,8 +125,12 @@ export default function CatalogPage() {
   const docked = useMedia(DOCKED);
 
   const status = useAtlasStore((s) => s.status);
-  const baseUrl = useAtlasStore((s) => s.baseUrl);
   const probe = useAtlasStore((s) => s.probe);
+  /* BIG-4: the laptop when it is awake, the cloud copy when it is asleep. */
+  const source = useMemorySource();
+  /* With the cloud copy on, the files on the laptop are a backup and this
+     screen is where a note is edited (his call, 2026-09-29). */
+  const cloudOn = useAtlasStore((s) => s.health?.memory?.cloud?.on === true) || source?.kind === 'cloud';
 
   const [index, setIndex] = useState<CatalogIndex | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,6 +157,20 @@ export default function CatalogPage() {
   const [toast, setToast] = useState<ToastPayload | null>(null);
 
   const fixture = useMemo(() => devCatalogFixture(), []);
+  /* 29-1P15b, idea 94: "Remembered" under a reply opens the note it saved,
+     as `/catalog?note=people/rahul.md`. Read when the list lands; a note
+     that is not in it falls back to the first, as before. */
+  const [params] = useSearchParams();
+  const asked = params.get('note');
+
+  /* 29-1P14d2, idea 116: while the probe or the read is on its way, the
+     screen waits in the shape of what is coming, and the notes fade in over
+     it. A failure, a shut lid with no cloud copy and no Atlas at all still
+     say so in words (`Unavailable`). */
+  const waiting =
+    problem === null && status !== 'unconfigured' && (status === 'unknown' || (source !== null && loading));
+  const arrived = useRef<HTMLDivElement>(null);
+  useArrival(arrived, index !== null);
 
   useEffect(() => {
     void probe();
@@ -176,22 +193,30 @@ export default function CatalogPage() {
   const load = useCallback(async () => {
     if (fixture !== null) {
       setIndex(fixture.index);
-      setCurrentPath((cur) => cur ?? fixture.index.notes[0]?.path ?? null);
+      setCurrentPath(
+        (cur) => cur ?? (fixture.index.notes.some((n) => n.path === asked) ? asked : null) ?? fixture.index.notes[0]?.path ?? null,
+      );
       setLoading(false);
       return;
     }
-    if (baseUrl === null) {
+    if (source === null) {
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const next = await fetchCatalog(baseUrl);
+      const next = await loadCatalog(source);
       setIndex(next);
       setProblem(null);
       // Pick the first note only when nothing is chosen, so a reload after a
       // save does not throw him back to the top of the list.
-      setCurrentPath((cur) => (cur !== null && next.notes.some((n) => n.path === cur) ? cur : next.notes[0]?.path ?? null));
+      setCurrentPath((cur) =>
+        cur !== null && next.notes.some((n) => n.path === cur)
+          ? cur
+          : next.notes.some((n) => n.path === asked)
+            ? asked
+            : next.notes[0]?.path ?? null,
+      );
     } catch (err) {
       setIndex(null);
       setProblem(
@@ -202,7 +227,7 @@ export default function CatalogPage() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, fixture]);
+  }, [source, fixture, asked]);
 
   /*
    * `load` sets state before its first await, so it is deferred out of the
@@ -225,19 +250,19 @@ export default function CatalogPage() {
   /* The note's body, fetched only for the one being looked at — the same rule
      the model follows, for the same reason. */
   useEffect(() => {
-    if (currentPath === null || fixture !== null || baseUrl === null) return;
+    if (currentPath === null || fixture !== null || source === null) return;
 
     const controller = new AbortController();
     void (async () => {
       try {
-        setFetched(await fetchNote(baseUrl, currentPath, controller.signal));
+        setFetched(await loadNote(source, currentPath, controller.signal));
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setFetched(null);
       }
     })();
     return () => controller.abort();
-  }, [baseUrl, currentPath, fixture]);
+  }, [source, currentPath, fixture]);
 
   const note: CatalogNote | null =
     currentPath === null
@@ -279,13 +304,20 @@ export default function CatalogPage() {
   const readOnly = fixture !== null;
 
   async function commitSave() {
-    if (note === null || baseUrl === null || readOnly) return;
+    if (note === null || source === null || readOnly) return;
     setSaving(true);
     try {
-      const saved = await saveNote(baseUrl, { path: note.path, body: draft });
+      const saved = await storeNote(source, { path: note.path, body: draft });
       setFetched(saved);
       setEditing(false);
-      setToast({ icon: 'check', title: 'Saved', detail: `${saved.path} — plain text, on the laptop.` });
+      setToast({
+        icon: 'check',
+        title: 'Saved',
+        detail:
+          source.kind === 'cloud'
+            ? `${saved.path} — in the cloud copy. Atlas takes it when the laptop wakes.`
+            : `${saved.path} — plain text, on the laptop.`,
+      });
       await load();
     } catch (err) {
       setToast({
@@ -299,10 +331,10 @@ export default function CatalogPage() {
   }
 
   async function commitDelete() {
-    if (note === null || baseUrl === null || readOnly) return;
+    if (note === null || source === null || readOnly) return;
     const gone = note;
     try {
-      await deleteNoteRequest(baseUrl, gone.path);
+      await removeNote(source, gone.path);
       selectNote(null);
       setFetched(null);
       setToast({
@@ -332,7 +364,7 @@ export default function CatalogPage() {
               padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
             }}
           >
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -349,6 +381,8 @@ export default function CatalogPage() {
               <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 260 }}>
                 <MetaKicker>What Atlas remembers</MetaKicker>
                 <h1
+                  /* 29-1P5c, idea 57: shrinks and fades as the page scrolls. */
+                  className="ag-tuck-title"
                   style={{
                     font: 'var(--type-display)', fontSize: 'var(--text-2xl)',
                     letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0,
@@ -362,8 +396,9 @@ export default function CatalogPage() {
                     margin: 0, maxWidth: '62ch', textWrap: 'pretty',
                   }}
                 >
-                  Plain text files on your laptop. Nothing loads on its own — the file names tell Atlas
-                  what exists, and it opens only what the question needs. Edit any of them in Notepad.
+                  {cloudOn
+                    ? 'Plain text, kept in the cloud and backed up on your laptop. Nothing loads on its own — the file names tell Atlas what exists, and it opens only what the question needs. Edit any of them here, even with the laptop shut.'
+                    : 'Plain text files on your laptop. Nothing loads on its own — the file names tell Atlas what exists, and it opens only what the question needs. Edit any of them in Notepad.'}
                 </p>
                 {index !== null && index.root !== '' && (
                   <MetaKicker tone="var(--fg-4)">{index.root}</MetaKicker>
@@ -384,10 +419,13 @@ export default function CatalogPage() {
               )}
             </header>
 
-            {index === null ? (
+            {index === null && waiting ? (
+              <MemoryWaiting docked={docked} label="Reading the catalog" />
+            ) : index === null ? (
               <Unavailable
                 loading={loading}
                 status={status}
+                fromCloud={source?.kind === 'cloud'}
                 problem={problem}
                 onRetry={() => {
                   void probe();
@@ -398,6 +436,7 @@ export default function CatalogPage() {
               <EmptyCatalog />
             ) : (
               <div
+                ref={arrived}
                 style={{
                   display: 'grid',
                   gridTemplateColumns: docked ? '300px minmax(0,1fr)' : 'minmax(0,1fr)',
@@ -493,7 +532,7 @@ export default function CatalogPage() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}
@@ -539,12 +578,14 @@ function Budget({
               style={{
                 font: 'var(--type-metric)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-3xl)',
                 letterSpacing: 'var(--tracking-display)',
-                color: tight ? 'var(--status-review)' : 'var(--fg-1)',
+                color: tight ? 'var(--status-warn)' : 'var(--fg-1)',
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
               {used}
             </span>
+            {/* Tight is a warning: grey with its icon (29-1P2c2). */}
+            {tight && <Icon name="triangle-alert" size={16} style={{ color: 'var(--status-warn)', alignSelf: 'center' }} />}
             <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>
               / {budget}
             </span>
@@ -566,12 +607,12 @@ function Budget({
         <span
           style={{
             position: 'absolute', inset: '0 auto 0 0', width: `${pct}%`, borderRadius: 'var(--r-pill)',
+            /* A meter, lime like every meter; grey once it is tight (29-1P2c2:
+               emerald is only for running now, and a warning is quiet). */
             background: tight
-              ? 'linear-gradient(90deg, oklch(0.75 0.15 82 / 0.5), var(--status-review))'
-              : 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.5), var(--accent))',
-            boxShadow: tight
-              ? '0 0 14px -2px oklch(0.75 0.15 82 / 0.6)'
-              : '0 0 14px -2px oklch(0.70 0.15 162 / 0.6)',
+              ? 'linear-gradient(90deg, oklch(0.82 0.006 260 / 0.4), var(--status-warn))'
+              : 'linear-gradient(90deg, oklch(0.84 0.17 130 / 0.5), var(--job-lime))',
+            boxShadow: tight ? 'none' : 'var(--job-lime-shine)',
             transition: 'width var(--dur-base) var(--ease-glass)',
           }}
         />
@@ -647,8 +688,10 @@ function NoteIndex({
         iconLeft={<Icon name="search" size={16} />}
       />
 
+      {/* The soft pressed-in switch since 29-1P2, as every view switch. */}
       <SegmentedControl
         size="sm"
+        look="soft"
         options={SORTS}
         value={sort}
         onChange={(value) => setSort(value as SortId)}
@@ -656,7 +699,7 @@ function NoteIndex({
       />
 
       <div
-        className="ag-scroll"
+        className="ag-scroll ag-fade"
         style={{
           overflowY: 'auto', overscrollBehavior: 'contain',
           display: 'grid', gap: 'var(--sp-6)', alignContent: 'start',
@@ -666,6 +709,8 @@ function NoteIndex({
           maxHeight: docked ? '58vh' : undefined,
         }}
       >
+        {/* 29-1P5c, idea 60: a new order blurs across. */}
+        <BlurAcross value={sort} index={SORTS.findIndex((one) => one.value === sort)} style={{ display: 'grid', gap: 'var(--sp-6)', alignContent: 'start' }}>
         {folders.map((folder) => {
           const inFolder = visible.filter((n) => n.folder === folder);
           if (inFolder.length === 0) return null;
@@ -691,6 +736,7 @@ function NoteIndex({
             No file matches that.
           </span>
         )}
+        </BlurAcross>
       </div>
 
       {staleOnly && (
@@ -722,7 +768,7 @@ function FileRow({ note, on, onPick }: { note: CatalogNoteHeader; on: boolean; o
       <span
         style={{
           display: 'flex', flex: '0 0 auto',
-          color: note.stale ? 'var(--fg-4)' : on ? 'var(--accent)' : 'var(--fg-3)',
+          color: note.stale ? 'var(--fg-4)' : on ? 'var(--job-lime)' : 'var(--fg-3)',
         }}
       >
         <Icon name="file-text" size={15} />
@@ -864,20 +910,21 @@ function NotePane({
                 <Button size="sm" variant="ghost" onClick={onCancel} disabled={saving}>
                   Cancel
                 </Button>
-                <Button
+                {/* A form's Save is solid white since 29-1P2; Edit is soft. */}
+                <WhiteButton
                   size="sm"
-                  variant="tint"
-                  iconLeft={<Icon name="check" size={14} />}
+                  icon={<Icon name="check" size={14} />}
                   onClick={onSave}
                   disabled={saving}
+                  aria-busy={saving || undefined}
                 >
                   {saving ? 'Saving…' : 'Save'}
-                </Button>
+                </WhiteButton>
               </>
             ) : (
-              <Button size="sm" variant="glass" iconLeft={<Icon name="pencil" size={14} />} onClick={onStartEdit}>
+              <SoftButton size="sm" icon={<Icon name="pencil" size={14} />} onClick={onStartEdit}>
                 Edit
-              </Button>
+              </SoftButton>
             )}
 
             {/* The destructive action confirms inside the object that offered
@@ -932,7 +979,7 @@ function NotePane({
           backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
         }}
       >
-        <span style={{ display: 'flex', flex: '0 0 auto', color: note.stale ? 'var(--fg-4)' : 'var(--accent)' }}>
+        <span style={{ display: 'flex', flex: '0 0 auto', color: note.stale ? 'var(--fg-4)' : 'var(--job-violet)' }}>
           <Icon name={note.stale ? 'wind' : 'key-round'} size={15} />
         </span>
         <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
@@ -1027,16 +1074,25 @@ function EmptyCatalog() {
 function Unavailable({
   loading,
   status,
+  fromCloud,
   problem,
   onRetry,
 }: {
   loading: boolean;
   status: string;
+  /** Reading the cloud copy because the laptop is asleep (BIG-4). */
+  fromCloud: boolean;
   problem: { message: string; tooOld: boolean } | null;
   onRetry: () => void;
 }) {
   const body =
-    status === 'unconfigured'
+    fromCloud
+      ? {
+          icon: (problem !== null ? 'circle-alert' : 'book-open') as IconName,
+          title: problem !== null ? 'The laptop is asleep, and the cloud copy did not answer.' : 'Nothing to show yet.',
+          detail: problem?.message ?? '',
+        }
+      : status === 'unconfigured'
       ? {
           icon: 'server' as IconName,
           title: 'No Atlas is configured.',
@@ -1064,8 +1120,8 @@ function Unavailable({
               }
             : {
                 icon: 'book-open' as IconName,
-                title: loading ? 'Reading the laptop…' : 'Nothing to show yet.',
-                detail: loading ? '' : 'Atlas answered, but sent no catalog.',
+                title: 'Nothing to show yet.',
+                detail: 'Atlas answered, but sent no catalog.',
               };
 
   return (
@@ -1091,9 +1147,9 @@ function Unavailable({
         </span>
       )}
       {!loading && (
-        <Button size="sm" variant="glass" iconLeft={<Icon name="refresh-cw" size={14} />} onClick={onRetry}>
+        <SoftButton size="sm" icon={<Icon name="refresh-cw" size={14} />} onClick={onRetry}>
           Try again
-        </Button>
+        </SoftButton>
       )}
     </section>
   );

@@ -2,9 +2,20 @@
    out of `pages/ChatPage.tsx` when it was split (BUILD-7); the
    panel itself is `Tray.tsx`. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { decideApproval, fetchApprovals, type AtlasApproval } from '../../lib/atlas/client';
+import { decideApproval, type AtlasApproval } from '../../lib/atlas/client';
+import { loadApprovals, type MemorySource } from '../../lib/atlas/memorySource';
+import { tabletAtlas } from '../../lib/atlas/engine/tabletAtlas';
 
-export function useApprovalTray(atlasBase: string | null, showToast: (message: string) => void) {
+export function useApprovalTray(
+  showToast: (message: string) => void,
+  /**
+   * Where the tray is read from (BIG-4): the laptop, or with the lid shut the
+   * cloud copy — so what is waiting is visible on the train. Since BIG-12
+   * (27A-3) a tap with the lid shut runs here too, on Atlas in this page, and
+   * the laptop takes the decision when it wakes.
+   */
+  source: MemorySource | null,
+) {
   /*
    * ITEM 13 — THE "WAITING FOR YOU" TRAY (DESIGN.md §5.2).
    *
@@ -36,6 +47,10 @@ export function useApprovalTray(atlasBase: string | null, showToast: (message: s
    */
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [decidedHere, setDecidedHere] = useState<string[]>([]);
+  /* 29-1P6b (idea 126): cards he flicked out of the tray. A receipt flicked
+     away is gone; a waiting card flicked away is discarded, and its receipt
+     is not put back in the space it just flew out of. */
+  const [thrown, setThrown] = useState<string[]>([]);
 
   /* Read by `decide` to choose between the card and the toast, without making
      every decision callback change identity when the tray opens. */
@@ -43,7 +58,7 @@ export function useApprovalTray(atlasBase: string | null, showToast: (message: s
   const setTrayOpen = useCallback((open: boolean) => {
     trayOpenRef.current = open;
     setTrayOpenState(open);
-    if (!open) setDecidedHere([]);
+    if (!open) { setDecidedHere([]); setThrown([]); }
   }, []);
 
   /** What is still waiting for a tap. Everything else in the tray is history. */
@@ -51,8 +66,8 @@ export function useApprovalTray(atlasBase: string | null, showToast: (message: s
 
   /** What the tray draws: everything waiting, plus the receipts for what was answered in it. */
   const trayItems = useMemo(
-    () => tray.filter((item) => item.state === 'waiting' || decidedHere.includes(item.id)),
-    [tray, decidedHere],
+    () => tray.filter((item) => item.state === 'waiting' || (decidedHere.includes(item.id) && !thrown.includes(item.id))),
+    [tray, decidedHere, thrown],
   );
 
   const failureOf = useCallback((id: string): string | null => failures[id] ?? null, [failures]);
@@ -89,14 +104,14 @@ export function useApprovalTray(atlasBase: string | null, showToast: (message: s
    * that nothing waiting is ever lost.
    */
   const refreshTray = useCallback(async () => {
-    if (atlasBase === null) return;
+    if (source === null) return;
     try {
-      const index = await fetchApprovals(atlasBase);
+      const index = await loadApprovals(source);
       setTray(index.approvals);
     } catch {
       // See above: no tray is a state, not an error.
     }
-  }, [atlasBase]);
+  }, [source]);
 
   /* The on-mount read, and again when the laptop's address changes. The same
      request as `refreshTray`, written out rather than called: the lint rule
@@ -104,15 +119,15 @@ export function useApprovalTray(atlasBase: string | null, showToast: (message: s
      the effect's own body. Nothing is reset here, and nothing should be — a
      tray that outlives the laptop dropping off is the promise above. */
   useEffect(() => {
-    if (atlasBase === null) return;
+    if (source === null) return;
     const controller = new AbortController();
-    void fetchApprovals(atlasBase, controller.signal)
+    void loadApprovals(source, controller.signal)
       .then((index) => setTray(index.approvals))
       .catch(() => {
         // As in `refreshTray`: no tray is a state, not an error.
       });
     return () => controller.abort();
-  }, [atlasBase]);
+  }, [source]);
 
   /**
    * The tap, and the one place in this app that performs something with no
@@ -130,12 +145,23 @@ export function useApprovalTray(atlasBase: string | null, showToast: (message: s
    */
   const decide = useCallback(
     async (id: string, choice: 'approve' | 'discard') => {
-      if (atlasBase === null) return;
+      if (source === null) return;
       setDeciding(id);
       let message: string;
       let failed: boolean;
       try {
-        const result = await decideApproval(atlasBase, id, choice);
+        let result: { summary: string; approval: { state: string } | null };
+        if (source.kind === 'cloud') {
+          /* BIG-12 (27A-3): the laptop is shut, so Atlas in this page decides —
+             with the laptop's own approve/discard, the app's tools as the
+             server — and the queued cloud write is waited for, or the re-read
+             below would still find it waiting. */
+          const atlas = await tabletAtlas(source.uid);
+          result = choice === 'approve' ? await atlas.approve(id) : await atlas.discard(id);
+          await atlas.flush();
+        } else {
+          result = await decideApproval(source.baseUrl, id, choice);
+        }
         await refreshTray();
         message = result.summary;
         failed = result.approval?.state === 'waiting';
@@ -156,8 +182,22 @@ export function useApprovalTray(atlasBase: string | null, showToast: (message: s
          would only repeat it half-hidden behind the panel. */
       if (!trayOpenRef.current) showToast(message);
     },
-    [atlasBase, refreshTray, showToast],
+    [refreshTray, showToast, source],
   );
 
-  return { trayOpen, setTrayOpen, deciding, waiting, trayItems, failureOf, approvalStateOf, refreshTray, decide };
+  /**
+   * A card flicked out of the tray (29-1P6b, his call): a receipt just goes;
+   * a card still waiting is Discarded — nothing is sent, the safe answer. If
+   * the discard fails the card is still waiting, so it is drawn again with
+   * the reason on it, as a pressed Discard's would be.
+   */
+  const throwAway = useCallback(
+    (id: string) => {
+      setThrown((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      if (tray.find((item) => item.id === id)?.state === 'waiting') void decide(id, 'discard');
+    },
+    [decide, tray],
+  );
+
+  return { trayOpen, setTrayOpen, deciding, waiting, trayItems, failureOf, approvalStateOf, refreshTray, decide, throwAway };
 }

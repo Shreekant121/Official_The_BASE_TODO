@@ -60,7 +60,6 @@
  *    rather than a `<label>`.
  */
 import { useState } from 'react';
-import type { CSSProperties } from 'react';
 import {
   dateInputToUntil,
   formatRRule,
@@ -71,7 +70,7 @@ import {
 } from '../lib/recurrence';
 import { useOverlayDismiss } from '../lib/useOverlayDismiss';
 import { Z } from '../lib/zLayers';
-import { Button, Dialog, FieldLabel, Icon, IconButton, Input } from '../ui';
+import { Button, Dialog, FieldLabel, Icon, IconButton, Input, SoftToggle, WhiteButton } from '../ui';
 import CustomDropdown from './CustomDropdown';
 
 interface RecurrenceModalProps {
@@ -223,7 +222,7 @@ function Radio({
           height: 18,
           flex: '0 0 auto',
           borderRadius: '50%',
-          boxShadow: checked ? '0 0 0 1px var(--accent)' : '0 0 0 1px var(--line-strong)',
+          boxShadow: checked ? '0 0 0 1px var(--job-lime)' : '0 0 0 1px var(--line-strong)',
           transition: 'box-shadow var(--dur-fast) var(--ease-glass)',
         }}
       >
@@ -232,7 +231,7 @@ function Radio({
             width: 9,
             height: 9,
             borderRadius: '50%',
-            background: checked ? 'var(--accent)' : 'transparent',
+            background: checked ? 'var(--job-lime)' : 'transparent',
             transform: checked ? 'scale(1)' : 'scale(0.4)',
             transition: 'background var(--dur-fast) var(--ease-glass), transform var(--dur-fast) var(--ease-glass)',
           }}
@@ -241,25 +240,6 @@ function Radio({
       {label}
     </button>
   );
-}
-
-function chipStyle(active: boolean): CSSProperties {
-  return {
-    display: 'grid',
-    placeItems: 'center',
-    width: 38,
-    height: 38,
-    flex: '0 0 auto',
-    border: 0,
-    borderRadius: '50%',
-    backgroundImage: active ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
-    boxShadow: active ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
-    font: 'var(--type-label)',
-    color: active ? 'var(--fg-1)' : 'var(--fg-4)',
-    cursor: 'pointer',
-    transition:
-      'background-image var(--dur-fast) var(--ease-glass), box-shadow var(--dur-base) var(--ease-glass), color var(--dur-fast) var(--ease-glass)',
-  };
 }
 
 export default function RecurrenceModal({ isOpen, initialRule, onClose, onSave }: RecurrenceModalProps) {
@@ -385,16 +365,16 @@ export default function RecurrenceModal({ isOpen, initialRule, onClose, onSave }
             {WEEKDAYS.map((d) => {
               const active = chosenDays.includes(d.value);
               return (
-                <button
+                <SoftToggle
                   key={d.value}
-                  type="button"
-                  aria-pressed={active}
+                  round
+                  size="sm"
+                  pressed={active}
                   aria-label={d.name}
                   onClick={() => toggleWeekday(d.value)}
-                  style={chipStyle(active)}
                 >
                   {d.label}
-                </button>
+                </SoftToggle>
               );
             })}
           </div>
@@ -520,9 +500,9 @@ export default function RecurrenceModal({ isOpen, initialRule, onClose, onSave }
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-3)' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button variant="tint" tone="accent" onClick={handleSave} iconLeft={<Icon name="check" size={16} />}>
+        <WhiteButton onClick={handleSave} icon={<Icon name="check" size={16} />}>
           Done
-        </Button>
+        </WhiteButton>
       </div>
     </Dialog>
   );

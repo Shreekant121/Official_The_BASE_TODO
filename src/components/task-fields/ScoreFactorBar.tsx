@@ -191,7 +191,9 @@ export function ScoreFactorBar({ reading, floorTitle, spread = false }: ScoreFac
           >
             {reading.compounding && (
               <Row
-                tone="var(--hue-amber)"
+                /* 29-1P2c2: inside the danger zone is Red Alert, coral; on its
+                   way there is a warning, grey. */
+                tone={reading.redAlert ? 'var(--job-coral)' : 'var(--status-warn)'}
                 hatched
                 label={reading.redAlert ? 'Danger zone — compounding' : 'Approaching the danger zone'}
                 total={reading.compounding.score}
@@ -200,7 +202,7 @@ export function ScoreFactorBar({ reading, floorTitle, spread = false }: ScoreFac
             )}
             {reading.floor && (
               <Row
-                tone="var(--hue-rose)"
+                tone="var(--job-coral)"
                 label={floorTitle ? `Blocking "${floorTitle}"` : 'Blocking something worth more'}
                 total={reading.floor.score}
                 right={`×${reading.floor.coefficient.toFixed(1)}`}

@@ -13,6 +13,7 @@ import {
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { useSnapshotStore } from '../store/useSnapshotStore';
+import { useUndoStore } from '../store/useUndoStore';
 import { requestCalendarToken, type CalendarTokenResult } from '../lib/googleTokenClient';
 import {
   isBackendCalendarConfigured,
@@ -649,6 +650,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Agent undo history is per-account: reverting a turn captured under
         // one uid would write that user's task data into the next one's store.
         useSnapshotStore.getState().clearTurns();
+        // His own undo too (29-1P4a), for the same reason.
+        useUndoStore.getState().clear();
         setHasEverConnectedCalendarFlag(false);
         silentRefreshBlockedRef.current = false;
         silentFailureCountRef.current = 0;

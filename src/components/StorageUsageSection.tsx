@@ -25,8 +25,10 @@
  * selectors, same `measureSyncDoc`, same thresholds. What moved is the
  * presentation: the figure is now a large light mono numeral, the composition
  * of the record is a proportion bar over a Well, and the ok/warn/critical
- * colours are `--accent` / `--status-review` / `--status-overrun` rather than
- * hardcoded emerald/amber/red hex.
+ * colours are lime / `--status-warn` / `--status-overrun` rather than
+ * hardcoded emerald/amber/red hex (29-1P2c2: plenty of room is a meter
+ * reading, lime like every meter; filling up is a quiet grey warning with its
+ * triangle; almost full is coral).
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -38,8 +40,8 @@ import { formatBytes, measureSyncDoc, type SyncDocUsage } from '../lib/syncDocSi
 
 /** Bar, figure and warning band, keyed off how full the document is. */
 const LEVEL_TOKEN = {
-  ok: 'var(--accent)',
-  warn: 'var(--status-review)',
+  ok: 'var(--job-lime)',
+  warn: 'var(--status-warn)',
   critical: 'var(--status-overrun)',
 } as const;
 
@@ -156,7 +158,7 @@ export default function StorageUsageSection() {
                   width: `max(8px, ${Math.min(100, Math.max(percent, 1.5))}%)`,
                   borderRadius: 'var(--r-pill)',
                   background: tone,
-                  boxShadow: usage.level === 'ok' ? 'var(--glow-accent-sm)' : 'none',
+                  boxShadow: usage.level === 'ok' ? 'var(--job-lime-shine)' : 'none',
                   transition: 'width var(--dur-slow) var(--ease-glass)',
                 }}
               />
@@ -264,6 +266,18 @@ export default function StorageUsageSection() {
               Trash
             </Link>
             , which keeps its own record apart from this one — so emptying it does not move the bar above.
+          </span>
+        </div>
+
+        {/* 2026-09-30 — covers left this record (lib/covers/). Said here because
+            until then they were most of it, and he asked where they went. */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' }}>
+          <span aria-hidden="true" style={{ display: 'flex', color: 'var(--fg-4)', marginTop: 1, flex: '0 0 auto' }}>
+            <Icon name="image" size={16} />
+          </span>
+          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+            Cover pictures are not in this figure either. Each one is kept in a record of its own, so adding covers
+            never fills this one, and a cover you replace or remove is deleted straight away.
           </span>
         </div>
 

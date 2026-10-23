@@ -15,14 +15,19 @@ import { useV3 } from './v3Context';
 type Bezier = readonly [number, number, number, number];
 
 export interface MotionTokens {
-  ease: { glass: Bezier; morph: Bezier; spring: Bezier; inOut: Bezier; exit: Bezier; settle: Bezier; silk: Bezier };
+  ease: {
+    glass: Bezier; morph: Bezier; spring: Bezier; inOut: Bezier; exit: Bezier; settle: Bezier; silk: Bezier;
+    /** 29-1P1's three (`--ease-springy`, `--ease-pop`, `--ease-glide`): a little overshoot, more, none. */
+    springy: Bezier; pop: Bezier; glide: Bezier;
+  };
   dur: { instant: number; fast: number; base: number; slow: number; morph: number; sheet: number };
   /** Delay between list items. */
   stagger: number;
 }
 
 /* tokens/motion.css. It has no `--ease-settle` or `--ease-silk`; the nearest
-   existing curve stands in so a caller never gets `undefined`. */
+   existing curve stands in so a caller never gets `undefined`. 29-1P1's three
+   are the same numbers in both tables: they are new, so nothing old moves. */
 export const LEGACY: MotionTokens = {
   ease: {
     glass: [0.16, 1, 0.3, 1],
@@ -32,6 +37,9 @@ export const LEGACY: MotionTokens = {
     exit: [0.4, 0, 1, 0.6],
     settle: [0.34, 1.56, 0.64, 1],
     silk: [0.45, 0.05, 0.55, 0.95],
+    springy: [0.34, 1.3, 0.64, 1],
+    pop: [0.34, 1.56, 0.64, 1],
+    glide: [0.2, 0.8, 0.2, 1],
   },
   dur: { instant: 0.09, fast: 0.16, base: 0.26, slow: 0.42, morph: 0.56, sheet: 0.68 },
   stagger: 0.044,
@@ -48,6 +56,9 @@ export const V3: MotionTokens = {
     exit: [0.4, 0, 1, 1],
     settle: [0.34, 1.32, 0.64, 1],
     silk: [0.65, 0, 0.35, 1],
+    springy: [0.34, 1.3, 0.64, 1],
+    pop: [0.34, 1.56, 0.64, 1],
+    glide: [0.2, 0.8, 0.2, 1],
   },
   dur: { instant: 0.08, fast: 0.14, base: 0.2, slow: 0.28, morph: 0.24, sheet: 0.32 },
   stagger: 0.024,

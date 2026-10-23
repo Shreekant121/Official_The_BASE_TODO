@@ -16,7 +16,7 @@
  * **A row states one of three things**, in the source's order of precedence: a
  * `check` in `--accent` once it needs nothing (`--status-done` is a task that
  * is finished; this task is *scored*, which is the session's own live state),
- * an amber dot with a glow while it is still short, or a blank 7px gutter so
+ * a grey warning triangle while it is still short (an amber dot until 29-1P2c2), or a blank 7px gutter so
  * nothing shifts sideways between the two.
  *
  * The deadline badge went with them. It was UI-9's, and at 46px beside a title
@@ -26,7 +26,7 @@
  *
  * The current row is raised, not tinted: `--glass-fill-3` and `--glass-rim-2`,
  * which is the source's and also the app's — a hue here would be a fourth
- * colour competing with the amber dot for meaning.
+ * colour competing with the triangle for meaning.
  *
  * Rows stay 46px and titles stay visible text, which is also what the
  * screenshot harness waits for (`scripts/screenshots.ts` opens `/scoring` on
@@ -42,6 +42,7 @@ import { Icon, ScoreDial } from '../../ui';
 import { taskNeedsAttention, type Task } from '../../store/useStore';
 import { countNeeds } from '../../components/task-fields/needs';
 import type { PriorityScores } from '../../store/usePriorityScores';
+import { peekAttr } from '../../lib/peek';
 
 interface QueueStripProps {
   sessionIds: string[];
@@ -60,7 +61,7 @@ interface QueueStripProps {
   lockedIds: ReadonlySet<string>;
 }
 
-/** What the strip's amber dot counts, from the stored task rather than a draft. */
+/** What the strip's warning triangle counts, from the stored task rather than a draft. */
 function shortfall(task: Task): number {
   return countNeeds({
     score: task.humanOverride === undefined,
@@ -109,6 +110,8 @@ export default function QueueStrip({ sessionIds, tasksById, cursor, onJump, scor
           <button
             key={id}
             ref={isCurrent ? activeRef : undefined}
+            /* 29-1P6b: hold a task here to peek at it. */
+            {...peekAttr(id)}
             type="button"
             onClick={() => onJump(index)}
             title={task.title}
@@ -130,15 +133,17 @@ export default function QueueStrip({ sessionIds, tasksById, cursor, onJump, scor
             }}
           >
             {handled ? (
-              <Icon name="check" size={15} style={{ color: 'var(--accent)', flex: '0 0 auto' }} />
+              <Icon name="check" size={15} style={{ color: 'var(--job-lime)', flex: '0 0 auto' }} />
             ) : short > 0 ? (
+              /* Fields still needed: a warning, so the grey triangle rather
+                 than a yellow dot (29-1P2c2; yellow is gold's). */
               <span
+                role="img"
                 aria-label={`${short} fields needed`}
-                style={{
-                  width: 7, height: 7, flex: '0 0 auto', borderRadius: '50%',
-                  background: 'var(--hue-amber)', boxShadow: '0 0 8px var(--hue-amber)',
-                }}
-              />
+                style={{ display: 'flex', flex: '0 0 auto', color: 'var(--status-warn)' }}
+              >
+                <Icon name="triangle-alert" size={13} />
+              </span>
             ) : (
               <span style={{ width: 7, flex: '0 0 auto' }} />
             )}

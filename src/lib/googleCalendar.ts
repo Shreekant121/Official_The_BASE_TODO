@@ -22,6 +22,8 @@ export interface GoogleCalendarEvent {
   start: { dateTime?: string; date?: string; timeZone?: string };
   end: { dateTime?: string; date?: string; timeZone?: string };
   colorId?: string;
+  /** An event's place (29-2c1); task blocks have none. */
+  location?: string;
   /**
    * The event's own `RRULE:` line(s), and any `EXDATE`/`RDATE` Google added
    * when somebody edited a single instance in its UI. Present only on the
@@ -482,7 +484,8 @@ export async function listCalendarEvents(
  */
 export interface CalendarWrite {
   key: string;
-  method: 'POST' | 'PATCH' | 'DELETE';
+  /** `PUT` is a whole event, which is how BASE's events are written (`lib/events/eventCalendar.ts`). */
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   /** Path under `/calendar/v3` — e.g. `/calendars/{id}/events/{eventId}`. */
   path: string;
   body?: unknown;

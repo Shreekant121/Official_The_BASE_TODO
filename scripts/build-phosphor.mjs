@@ -75,6 +75,10 @@ const DESIGN = {
 const OURS = {
   'alarm-clock': 'alarm', 'archive': 'archive', 'archive-restore': 'box-arrow-up', 'library': 'books',
   'activity': 'pulse', 'align-left': 'text-align-left',
+  /* 29-1P14d1 (idea 114): back online, every change synced. */
+  'cloud-check': 'cloud-check',
+  /* 29-1P7c (idea 159): the three densities. */
+  'rows-2': 'rows', 'align-justify': 'text-align-justify', 'equal': 'equals',
   'arrow-down-left': 'arrow-down-left', 'arrow-down-right': 'arrow-down-right',
   'arrow-down-up': 'arrows-down-up', 'arrow-down-wide-narrow': 'sort-descending',
   'arrow-up-left': 'arrow-up-left', 'award': 'medal', 'badge-check': 'seal-check',
@@ -86,12 +90,14 @@ const OURS = {
   'folder-plus': 'folder-plus', 'grid-2x2': 'grid-four', 'hand': 'hand', 'hard-drive': 'hard-drive',
   'indian-rupee': 'currency-inr', 'key-round': 'key', 'list-tree': 'tree-structure',
   'loader': 'spinner', 'loader-2': 'spinner-gap', 'message-square-plus': 'chat-circle-dots',
-  'palette': 'palette', 'panel-right-open': 'sidebar-simple', 'pin': 'push-pin',
+  'palette': 'palette', 'map-pin': 'map-pin', 'panel-right-open': 'sidebar-simple', 'panel-top': 'browser', 'pin': 'push-pin',
   'pipette': 'eyedropper', 'plus-circle': 'plus-circle', 'qr-code': 'qr-code',
   'rotate-cw': 'arrow-clockwise', 'scaling': 'resize', 'scissors': 'scissors',
   'search-x': 'magnifying-glass-minus', 'shield-alert': 'shield-warning', 'sigma': 'sigma',
   'sliders': 'sliders', 'stethoscope': 'stethoscope', 'text': 'text-t', 'unlink': 'link-break',
   'user-circle': 'user-circle', 'wifi-off': 'wifi-slash', 'wind': 'wind', 'wrench': 'wrench',
+  /* 29-1P8a (idea 149): Shuffle a project's cover. */
+  'shuffle': 'shuffle',
 };
 
 /* `Icon.jsx`'s BOLD list, plus the marks of the same kind the app also draws. */
@@ -101,6 +107,8 @@ const BOLD = new Set([
   'ellipsis', 'search', 'external-link',
   'arrow-down-left', 'arrow-down-right', 'arrow-up-left', 'corner-down-left', 'corner-up-left',
   'more-horizontal', 'search-x',
+  /* 29-1P8a: Shuffle on a project's cover — two crossing arrows, a mark. */
+  'shuffle',
   /* The drag grip, like the ellipsis: `dots-six-vertical-fill` is a grey tile
      with the dots cut out of it, and he asked (V3-6) for bare dots, no tile. */
   'grip-vertical',

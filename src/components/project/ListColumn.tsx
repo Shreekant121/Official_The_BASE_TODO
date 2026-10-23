@@ -25,10 +25,8 @@
  *   header row. Ours showed how far in as `3/8` and never said how much work
  *   was left, which is the number that decides whether a column is worth
  *   opening today.
- * - **The hue dot is 4px and flat.** Ours was 8px under a `0 0 6px` glow, and
- *   the mockup says why in as many words: the project's identity hue *"is
- *   rationed to a 4px dot and a hairline — never a card glow, because emerald
- *   has to stay the only colour that means anything."*
+ * - **No hue dot.** The mockup's 4px project-colour dot went when projects
+ *   lost their colour (OPT-4).
  * - **The grip hides at rest.** `.ag-card-grip`, the mockup's `.grip`:
  *   revealed on hover, on focus, and unconditionally on a touch screen. Ours
  *   was a permanent glyph in every column header.
@@ -80,9 +78,9 @@
  * button, and the ⋯ menu's restated header. None of it exists in the
  * prototype and all of it is wired.
  */
-import { useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Button, Icon, IconButton, MorphMenu, Well, type MorphMenuItem } from '../../ui';
+import { askInk, Button, Icon, IconButton, LitLine, MorphMenu, Well, WhiteButton, type MorphMenuItem } from '../../ui';
 import BulkAddInput from '../BulkAddInput';
 import TaskRow from './TaskRow';
 import { Meter } from './parts';
@@ -90,8 +88,15 @@ import { doneCount, minutesLabel, workLeftMinutes } from './derive';
 import { SortableGroup, SortableRow, type DragHandleProps } from '../SortableList';
 import { parseBulkLines } from '../../lib/bulkAdd';
 import { Z } from '../../lib/zLayers';
+import { dustAttr } from '../../lib/dust';
 import { getListTitle, taskListValueINR, formatINR, type Task, type TaskList } from '../../store/useStore';
 import { AI_SUBJECT_RIM } from '../../ui/overlay/AIPanel';
+import { usePriorityScores } from '../../store/usePriorityScores';
+import { IgnoredMark } from '../task-fields/TaskMarks';
+import { useIgnoreItems } from '../task-fields/ignoreMenu';
+import { useWorkedItems } from '../task-fields/workedMenu';
+import { ignoreSentence, isOwnSwitch } from '../../lib/ignoredWork';
+import { usePlusDrop } from '../../store/usePlusDrop';
 
 /** Shared by the rename field and the add-task field — a line of glass with a
  *  hairline under it, never a boxed input inside a pane that is already one. */
@@ -124,6 +129,10 @@ export const LIST_PANE_FLOOR = 'color-mix(in oklch, var(--void-1) 92%, transpare
  *  half strength with no splay, a 16% edge, and the cast underneath. */
 export const LIST_PANE_FILL =
   'linear-gradient(135deg, oklch(1 0 0 / 0.05) 0%, oklch(1 0 0 / 0.01) 50%, oklch(1 0 0 / 0.03) 100%)';
+/** 29-1P6c, idea 91: a project's Backburner pulled into view wears a faint
+ *  indigo wash over the same pane, rest's colour (his call). */
+export const PARKED_WASH =
+  'linear-gradient(180deg, color-mix(in oklab, var(--job-indigo) 13%, transparent), color-mix(in oklab, var(--job-indigo) 5%, transparent))';
 /** A task hovering over the list: one step up, still no splay. */
 const LIST_PANE_FILL_RECEIVING =
   'linear-gradient(135deg, oklch(1 0 0 / 0.09) 0%, oklch(1 0 0 / 0.025) 50%, oklch(1 0 0 / 0.05) 100%)';
@@ -141,7 +150,6 @@ const MONO = {
 export interface ListColumnProps {
   listId: string;
   listTitle: string;
-  listColor: string;
   /** All lists in the project — used to resolve a shared task's primary list name live (never the stale denormalized `task.listName`). */
   taskLists: TaskList[];
   tasks: Task[];
@@ -156,7 +164,8 @@ export interface ListColumnProps {
   onDeleteTask: (task: Task) => void;
   /** A row's `Tick`. Straight through to `updateBacklogTask`. */
   onToggleTaskDone: (task: Task) => void;
-  onAddTask: (listId: string, titles: string[]) => void;
+  /** `beforeTaskId`: where the floating + was dropped (29-1c1); absent = the end. */
+  onAddTask: (listId: string, titles: string[], beforeTaskId?: string) => void;
   onDeleteList: (listId: string) => void;
   onRenameList: (listId: string, title: string) => void;
   onShareList: (listId: string) => void;
@@ -174,18 +183,107 @@ export interface ListColumnProps {
   onAskTask?: (task: Task) => void;
   /** What the open AI panel is about, if it is in this column. */
   askSubject?: { kind: 'list' | 'task'; id: string } | null;
+  /**
+   * 29-1P6c, idea 91: this is the project's own Backburner, pulled down into
+   * view above the board. Tinted indigo, no grip (it is not one of the
+   * board's lists to reorder), and a button that tucks it away again.
+   */
+  onTuck?: () => void;
+  /**
+   * 29-1P9a (idea 157, Trello): folded into a thin spine — its name written
+   * sideways, its count and an upright lime bar — and the lists beside it
+   * widen into the room. Flat, one line, where the board is one column.
+   * A task held over a folded list opens it for as long as it is held.
+   */
+  folded?: boolean;
+  onToggleFold?: (listId: string) => void;
 }
 
+/**
+ * The folded list (157): a button the whole spine, which opens it again.
+ * Its shape — upright beside other lists, a flat bar in one column — is all
+ * CSS (`.ag-spine` in `screens.css`), so nothing here measures the board.
+ */
+export function Spine({ listId, listTitle, done, total, pct, onOpen }: {
+  listId: string; listTitle: string; done: number; total: number; pct: number; onOpen: (listId: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="ag-spine"
+      aria-expanded={false}
+      aria-label={`Open ${listTitle}, ${done} of ${total} done`}
+      title={`Open ${listTitle}`}
+      onClick={() => onOpen(listId)}
+    >
+      <Icon name="chevron-right" size={16} className="ag-spine__arrow" />
+      <span className="ag-spine__name">{listTitle}</span>
+      <span className="ag-spine__count" style={MONO}>{done}/{total}</span>
+      <span className="ag-spine__meter" aria-hidden>
+        <i style={{ '--spine-pct': `${pct}%` } as CSSProperties} />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Idea 37: the gap the floating + opens where it would land — a dashed lime
+ * slot, as this system draws an empty place, sliding the rows under it down.
+ * It opens by a Web Animation from a layout effect, once; it never loops.
+ */
+function PlusGap() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate([{ height: '0px', opacity: 0 }, { height: `${PLUS_GAP_PX}px`, opacity: 1 }], {
+      duration: 180, easing: 'cubic-bezier(.2, .8, .2, 1)',
+    });
+  }, []);
+  return (
+    <div
+      ref={ref}
+      data-plus-gap=""
+      aria-hidden="true"
+      style={{
+        height: PLUS_GAP_PX, borderRadius: 'var(--r-md)', overflow: 'hidden',
+        border: '1.5px dashed var(--job-lime-line)', backgroundColor: 'var(--job-lime-wash)',
+        display: 'grid', placeItems: 'center', color: 'var(--job-lime-text)',
+      }}
+    >
+      <Icon name="plus" size={16} />
+    </div>
+  );
+}
+
+const PLUS_GAP_PX = 44;
+
 export default function ListColumn({
-  listId, listTitle, listColor, taskLists, tasks, repeatCounts,
+  listId, listTitle, taskLists, tasks, repeatCounts,
   selectedIds, selectMode, onSelectTask, onOpenTask, onDeleteTask, onToggleTaskDone,
   onAddTask, onDeleteList, onRenameList, onShareList, hasShortLink, hidden, onToggleHidden,
   listDragHandleProps, isListDragActive, isReceivingDrop,
-  onAskList, onAskTask, askSubject,
+  onAskList, onAskTask, askSubject, onTuck, folded = false, onToggleFold,
 }: ListColumnProps) {
   const isAskSubject = askSubject?.kind === 'list' && askSubject.id === listId;
   const [addingTask, setAddingTask] = useState(false);
+  /* 29-1c1: the row the add field sits in front of, when the floating + was
+     dropped there; `null` is the foot of the list, where it always was. */
+  const [addBefore, setAddBefore] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  /* Idea 37: where the floating + is pointing in this list right now
+     (`undefined` = not here; `null` = its end), and where it was let go. */
+  const plusAim = usePlusDrop((s) => (s.aim?.listId === listId ? s.aim.beforeTaskId : undefined));
+  useEffect(() => usePlusDrop.subscribe(({ landed, clearLanded }) => {
+    if (landed?.listId !== listId) return;
+    clearLanded();
+    setAddBefore(landed.beforeTaskId);
+    setNewTaskTitle('');
+    setAddingTask(true);
+  }), [listId]);
+  const openAdd = () => { setAddBefore(null); setAddingTask(true); };
+  /* A row it was to go in front of that has gone since sits it at the end. */
+  const formBefore = addingTask && addBefore && tasks.some((t) => t.id === addBefore) ? addBefore : null;
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(listTitle);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -193,7 +291,7 @@ export default function ListColumn({
   /** Bulk-capable: one title per line creates one task each, in order. */
   const handleAddTaskLines = (lines: string[]) => {
     if (lines.length === 0) { setAddingTask(false); return; }
-    onAddTask(listId, lines);
+    onAddTask(listId, lines, formBefore ?? undefined);
     setNewTaskTitle('');
     setAddingTask(false);
   };
@@ -216,6 +314,15 @@ export default function ListColumn({
      cross-link on the ones shared in from elsewhere — so those rows survive
      the delete and must not be counted in what it costs. */
   const ownedCount = tasks.filter((t) => t.listId === listId).length;
+  /* 29-1P9a (157): folded — unless a task is held over it, which opens it
+     until the task is let go or carried on, so a folded list still takes one. */
+  const spine = folded && !!onToggleFold && !isReceivingDrop;
+
+  /* BIG-3. The list's own switch is marked on its head; a project that ignores
+     it says so on the project's own head instead. */
+  const ignoreReason = usePriorityScores().ignored.listReason(listId);
+  const ignoreItems = useIgnoreItems({ kind: 'list', id: listId }, listTitle);
+  const workedItems = useWorkedItems({ kind: 'list', id: listId });
 
   const menuItems: MorphMenuItem[] = [
     {
@@ -224,34 +331,26 @@ export default function ListColumn({
       icon: <Icon name="square-pen" size={18} />,
       onSelect: () => { setRenameValue(listTitle); setRenaming(true); },
     },
-    {
-      value: 'add',
-      label: 'Add task',
-      icon: <Icon name="plus" size={18} />,
-      onSelect: () => setAddingTask(true),
-    },
-    ...(onAskList
-      ? [{
-        value: 'ask',
-        label: 'Ask AI about this list',
-        icon: <Icon name="sparkles" size={18} />,
-        onSelect: () => onAskList(listId),
-      } satisfies MorphMenuItem]
-      : []),
+    /* No "Add task" (the + beside the menu is it) and no "Ask AI" (the
+       sparkles beside the + is it) — his BASE list, 2026-10-06. */
     {
       value: 'share',
-      label: 'Share list',
+      label: 'Share',
       icon: <Icon name="share-2" size={18} />,
+      /* Share and Hide, two boxes in one row (OPT-10, his ask). */
+      beside: true,
       // A short link already exists for this list — `ProjectCard`'s cue.
       meta: hasShortLink ? <Icon name="link" size={14} /> : undefined,
       onSelect: () => onShareList(listId),
     },
     {
       value: 'hidden',
-      label: hidden ? 'Show in shares' : 'Hide from shares',
+      label: hidden ? 'Show' : 'Hide',
       icon: <Icon name={hidden ? 'eye' : 'eye-off'} size={18} />,
       onSelect: () => onToggleHidden(listId),
     },
+    ...ignoreItems,
+    ...workedItems,
     { divider: true },
     {
       value: 'delete',
@@ -268,8 +367,69 @@ export default function ListColumn({
     },
   ];
 
+  /* Inline add — the same Well, field and button pair as New Session's two
+     forms (UI-15), so the three agree about what adding looks like. At the foot
+     of the list, or in front of the row the floating + was dropped on. */
+  const addForm = (
+    <motion.div
+      key="plus-add-form"
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      style={{ overflow: 'hidden' }}
+      /* The self-dismiss guard rides the wrapper rather than the field,
+         so pressing "Add" — which blurs the textarea — does not throw
+         the form away before the click lands. */
+      tabIndex={-1}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget) && !newTaskTitle.trim()) {
+          setAddingTask(false);
+        }
+      }}
+    >
+      <Well pad="var(--sp-4) var(--sp-5)" style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <Icon name="circle" size={16} style={{ color: 'var(--fg-4)' }} />
+          <BulkAddInput
+            autoFocus
+            ariaLabel={`New task in ${listTitle}`}
+            value={newTaskTitle}
+            onChange={setNewTaskTitle}
+            onSubmitLines={handleAddTaskLines}
+            onCancel={() => { setAddingTask(false); setNewTaskTitle(''); }}
+            placeholder="Task title… paste multiple lines to bulk-add"
+            className="ag-field"
+            style={{ ...INLINE_FIELD, fontSize: 'var(--text-sm)' }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-3)' }}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => { setAddingTask(false); setNewTaskTitle(''); }}
+          >
+            Cancel
+          </Button>
+          {/* The form's confirm: solid white since 29-1P2, as the board's own. */}
+          <WhiteButton
+            size="sm"
+            disabled={!newTaskTitle.trim()}
+            onClick={() => handleAddTaskLines(parseBulkLines(newTaskTitle))}
+            icon={<Icon name="plus" size={14} />}
+          >
+            Add task
+          </WhiteButton>
+        </div>
+      </Well>
+    </motion.div>
+  );
+
   return (
     <motion.div
+      {...dustAttr('list', listId)}
+      data-spine={spine ? '' : undefined}
+      /* Idea 37: a list the floating + can be dropped into (`QuickCaptureFab`). */
+      data-plus-list={spine ? undefined : listId}
       // `layout` off while a list is being dragged: the grid card is inside a
       // wrapper that dnd-kit transforms, and layout projection would measure
       // that transform and animate the card back out of it.
@@ -280,7 +440,7 @@ export default function ListColumn({
         flexDirection: 'column',
         overflow: 'hidden',
         borderRadius: 'var(--r-card)',
-        backgroundImage: isReceivingDrop ? LIST_PANE_FILL_RECEIVING : LIST_PANE_FILL,
+        backgroundImage: [onTuck ? PARKED_WASH : null, isReceivingDrop ? LIST_PANE_FILL_RECEIVING : LIST_PANE_FILL].filter(Boolean).join(', '),
         /* A near-solid floor under the glass (Shreekant, 2026-09-23: the
            page's green glow through V3's clear glass "looks really really
            bad on the task list"). The fill and rim still draw the pane;
@@ -300,6 +460,9 @@ export default function ListColumn({
         transition: 'background-image var(--dur-fast) var(--ease-glass), box-shadow var(--dur-fast) var(--ease-glass)',
       }}
     >
+      {spine && onToggleFold ? (
+        <Spine listId={listId} listTitle={listTitle} done={completedCount} total={totalCount} pct={pct} onOpen={onToggleFold} />
+      ) : (<>
       {/* ── Header ─────────────────────────────────────────────────── */}
       {/* The same glass as the card — no fill of its own, no hairline under
           it. Two rows: who and how big, then how far in and what is left. */}
@@ -329,6 +492,7 @@ export default function ListColumn({
               (`SortableList.isInteractiveTarget`), so a button here could not be
               grabbed at all. dnd-kit's own `attributes` carry the role and
               tabIndex that make it reachable from the keyboard. */}
+          {!onTuck && (
           <span
             {...listDragHandleProps}
             className="ag-card-grip"
@@ -340,14 +504,22 @@ export default function ListColumn({
           >
             <Icon name="grip-vertical" size={16} />
           </span>
+          )}
 
-          <span
-            aria-hidden="true"
-            style={{
-              width: 4, height: 4, flex: '0 0 auto', borderRadius: 'var(--r-circle)',
-              background: listColor,
-            }}
-          />
+          {/* 29-1P9a (157): fold it away into a spine, Trello's arrow. */}
+          {onToggleFold && (
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label={`Fold ${listTitle} away`}
+              title="Fold this list away"
+              aria-expanded
+              onClick={() => onToggleFold(listId)}
+              style={{ flex: '0 0 auto', marginLeft: onTuck ? 0 : -4 }}
+            >
+              <Icon name="chevron-left" size={16} />
+            </IconButton>
+          )}
 
           {renaming ? (
             <input
@@ -366,7 +538,7 @@ export default function ListColumn({
               style={{
                 ...INLINE_FIELD,
                 fontSize: 'var(--text-md)',
-                borderBottom: '1px solid var(--accent-hairline)',
+                borderBottom: '1px solid var(--job-lime-line)',
                 paddingBottom: 2,
               }}
             />
@@ -376,7 +548,7 @@ export default function ListColumn({
                 minWidth: 0,
                 display: 'flex', alignItems: 'center', gap: 'var(--sp-3)',
                 font: 'var(--type-title)', fontSize: 'var(--text-md)',
-                letterSpacing: 'var(--tracking-ui)', color: 'var(--fg-1)',
+                letterSpacing: 'var(--tracking-ui)', color: onTuck ? 'var(--job-indigo)' : 'var(--fg-1)',
               }}
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -389,6 +561,9 @@ export default function ListColumn({
                   title="Hidden from shared links"
                   style={{ flex: '0 0 auto', color: 'var(--fg-4)' }}
                 />
+              )}
+              {ignoreReason && isOwnSwitch(ignoreReason, { kind: 'list', id: listId }) && (
+                <IgnoredMark title={ignoreSentence(ignoreReason, { kind: 'list', id: listId })} />
               )}
             </h2>
           )}
@@ -423,11 +598,29 @@ export default function ListColumn({
               mockup DOES hide, because it moves the whole column rather than
               acting on what is in it. */}
           <span style={{ display: 'flex', flex: '0 0 auto', gap: 2 }}>
+            {onTuck && (
+              <IconButton size="sm" variant="ghost" label="Tuck the Backburner away" onClick={onTuck}>
+                <Icon name="chevron-up" size={16} />
+              </IconButton>
+            )}
+            {/* The list's Ask, as a task row has its own (his BASE list). */}
+            {onAskList && (
+              <IconButton
+                size="sm"
+                variant="plain"
+                label={`Ask AI about ${listTitle}`}
+                aria-pressed={isAskSubject ? true : undefined}
+                onClick={() => onAskList(listId)}
+                style={askInk(isAskSubject)}
+              >
+                <Icon name="sparkles" size={16} />
+              </IconButton>
+            )}
             <IconButton
               size="sm"
               variant="ghost"
               label={`Add a task to ${listTitle}`}
-              onClick={() => setAddingTask(true)}
+              onClick={openAdd}
             >
               <Icon name="plus" size={16} />
             </IconButton>
@@ -516,10 +709,14 @@ export default function ListColumn({
           alignContent: 'start',
           padding: '0 var(--sp-5)',
         }}
+        /* Idea 37: the rows the floating + aims between (`QuickCaptureFab`). */
+        data-plus-rows=""
       >
         <SortableGroup id={listId}>
           <AnimatePresence>
-            {tasks.map((task) => (
+            {tasks.flatMap((task) => [
+              ...(plusAim === task.id ? [<PlusGap key="plus-gap" />] : []),
+              ...(formBefore === task.id ? [addForm] : []),
               <SortableRow key={task.id} id={task.id}>
                 {({ isDragging, isAnyDragging }) => (
                   <TaskRow
@@ -540,75 +737,24 @@ export default function ListColumn({
                     repeatCount={repeatCounts?.[task.id]}
                   />
                 )}
-              </SortableRow>
-            ))}
+              </SortableRow>,
+            ])}
           </AnimatePresence>
         </SortableGroup>
+        {plusAim === null && <PlusGap />}
 
-        {/* Inline add — the same Well, field and button pair as New Session's
-            two forms (UI-15), so the three agree about what adding looks like. */}
         <AnimatePresence>
-          {addingTask && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              style={{ overflow: 'hidden' }}
-              /* The self-dismiss guard rides the wrapper rather than the field,
-                 so pressing "Add" — which blurs the textarea — does not throw
-                 the form away before the click lands. */
-              tabIndex={-1}
-              onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget) && !newTaskTitle.trim()) {
-                  setAddingTask(false);
-                }
-              }}
-            >
-              <Well pad="var(--sp-4) var(--sp-5)" style={{ display: 'grid', gap: 'var(--sp-4)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
-                  <Icon name="circle" size={16} style={{ color: 'var(--fg-4)' }} />
-                  <BulkAddInput
-                    autoFocus
-                    ariaLabel={`New task in ${listTitle}`}
-                    value={newTaskTitle}
-                    onChange={setNewTaskTitle}
-                    onSubmitLines={handleAddTaskLines}
-                    onCancel={() => { setAddingTask(false); setNewTaskTitle(''); }}
-                    placeholder="Task title… paste multiple lines to bulk-add"
-                    className="ag-field"
-                    style={{ ...INLINE_FIELD, fontSize: 'var(--text-sm)' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-3)' }}>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => { setAddingTask(false); setNewTaskTitle(''); }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="tint"
-                    tone="accent"
-                    disabled={!newTaskTitle.trim()}
-                    onClick={() => handleAddTaskLines(parseBulkLines(newTaskTitle))}
-                    iconLeft={<Icon name="plus" size={14} />}
-                  >
-                    Add task
-                  </Button>
-                </div>
-              </Well>
-            </motion.div>
-          )}
+          {addingTask && formBefore === null && addForm}
         </AnimatePresence>
 
         {tasks.length === 0 && !addingTask && !isReceivingDrop && (
           /* One sentence, not a placeholder card. The footer below is already
              the thing to press. */
-          <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-6) var(--sp-2)' }}>
-            Nothing here.
-          </p>
+          <LitLine
+            as="p"
+            text="Nothing here yet. **Drag a task in**, or add one below."
+            style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-6) var(--sp-2)' }}
+          />
         )}
       </div>
 
@@ -622,7 +768,7 @@ export default function ListColumn({
         <button
           type="button"
           className="ag-addrow"
-          onClick={() => setAddingTask(true)}
+          onClick={openAdd}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-3)',
             width: '100%', minHeight: 44, borderRadius: 'var(--r-pill)',
@@ -633,6 +779,7 @@ export default function ListColumn({
           Add task
         </button>
       </div>
+      </>)}
     </motion.div>
   );
 }

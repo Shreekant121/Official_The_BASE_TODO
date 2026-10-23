@@ -46,7 +46,8 @@
  * be finished on time and the date cannot move"* is a real answer and the one
  * thing the app could not previously give. Its own date still propagates
  * downstream unchanged, because its date is still the fact everything after it
- * has to live with.
+ * has to live with. **A task linked to an event is fixed too** (29-2d1,
+ * `eventId`): its date is the event's, which no prerequisite can move.
  *
  * **Nothing is silent.** Every move and every conflict comes back in the plan
  * so the caller can name it. The store hands them to a dismissible banner; see
@@ -78,6 +79,8 @@ export interface DeadlineTask {
   deadline?: string;
   originalDeadline?: string;
   deadlineIsFixed?: boolean;
+  /** 29-2d1: due before an event — fixed, like `deadlineIsFixed`. */
+  eventId?: string;
   dependsOn?: string[];
 }
 
@@ -150,7 +153,16 @@ export interface DeadlineOptions {
   timeZone: string;
   /** Overridable for tests and for anyone who wants a wider gap. */
   gapDays?: number;
+  /**
+   * Ignored work (BIG-3), from `lib/ignoredWork.ts`. **No deadline maths**, his
+   * call: an ignored task is never pushed by a prerequisite, and it pushes
+   * nothing downstream either — it is read exactly as a finished task is, which
+   * contributes no date. Its own date stays what he typed.
+   */
+  ignored?: ReadonlySet<string>;
 }
+
+const NOTHING_IGNORED: ReadonlySet<string> = new Set();
 
 const EMPTY: DeadlinePlan = { moves: [], conflicts: [], patches: [] };
 
@@ -187,10 +199,10 @@ function addDaysInZone(instant: Date, days: number, timeZone: string): Date {
  */
 export function planDeadlineCascade(
   tasks: readonly DeadlineTask[],
-  { timeZone, gapDays = DEADLINE_GAP_DAYS }: DeadlineOptions,
+  { timeZone, gapDays = DEADLINE_GAP_DAYS, ignored = NOTHING_IGNORED }: DeadlineOptions,
 ): DeadlinePlan {
   const byId = new Map(tasks.map((t) => [t.id, t]));
-  const active = (task: DeadlineTask): boolean => task.status !== 'completed';
+  const active = (task: DeadlineTask): boolean => task.status !== 'completed' && !ignored.has(task.id);
 
   /** Resolved deadline per task, as an instant. `null` means "contributes nothing". */
   const resolved = new Map<string, Date | null>();
@@ -210,7 +222,7 @@ export function planDeadlineCascade(
 
     const own = storedInstant(task);
     if (own === null) {
-      // Completed, or undated. Either way it neither moves nor pushes.
+      // Completed, ignored, or undated. Either way it neither moves nor pushes.
       resolved.set(task.id, null);
       return null;
     }
@@ -248,7 +260,7 @@ export function planDeadlineCascade(
     const requiredString = toTaskDateString(required, timeZone);
     const ownString = toTaskDateString(own, timeZone);
 
-    if (task.deadlineIsFixed) {
+    if (task.deadlineIsFixed || task.eventId) {
       conflicts.push({
         taskId: task.id,
         title: task.title,
@@ -311,6 +323,7 @@ export function isQuietPlan(plan: DeadlinePlan): boolean {
 export function affectsDeadlines(before: DeadlineTask, updates: Partial<DeadlineTask>): boolean {
   if ('deadline' in updates && updates.deadline !== before.deadline) return true;
   if ('deadlineIsFixed' in updates && !!updates.deadlineIsFixed !== !!before.deadlineIsFixed) return true;
+  if ('eventId' in updates && !!updates.eventId !== !!before.eventId) return true;
   if ('status' in updates && updates.status !== before.status) return true;
   if ('dependsOn' in updates) {
     const next = updates.dependsOn ?? [];

@@ -113,13 +113,13 @@ describe('completing a repeating task', () => {
   });
 
   it('carries the work over and leaves the doing behind', () => {
-    seed([repeating({ notes: 'Rainwater only' })]);
+    seed([repeating({ description: 'Rainwater only' })]);
 
     setStatus('t1', 'completed');
 
     const next = backlog()[1];
     expect(next.title).toBe('Water the plants');
-    expect(next.notes).toBe('Rainwater only');
+    expect(next.description).toBe('Rainwater only');
     expect(next.listId).toBe('l1');
     expect(next.estimatedTime).toBe(15);
     expect(next.completedAt).toBeUndefined();

@@ -376,6 +376,12 @@ function toUtcRRuleTime(instant: Date): string {
 export function calendarRRuleOf(
   task: RecurrenceSource & Pick<Task, 'occurrence'>,
   timeZone: string,
+  /**
+   * 29-2c1: an all-day event's series starts on a date, and RFC 5545 wants
+   * `UNTIL` to be a date beside one — so it keeps the rule's own day rather
+   * than becoming an instant.
+   */
+  allDay = false,
 ): string | null {
   const rule = resolveRule(task);
   if (!rule) return null;
@@ -388,7 +394,9 @@ export function calendarRRuleOf(
     forGoogle.count = remaining;
   }
 
-  if (rule.until) {
+  if (rule.until && allDay) {
+    forGoogle.until = rule.until.slice(0, 8);
+  } else if (rule.until) {
     const ends = untilInstant(rule, timeZone);
     if (ends) forGoogle.until = toUtcRRuleTime(ends);
   }
@@ -856,6 +864,60 @@ function endedByCount(rule: RRule, occurrence: number): boolean {
   return rule.count !== undefined && occurrence > rule.count;
 }
 
+/** Where a series stands at a moment: no repeat, over, or its occurrence after it. */
+export type SeriesOccurrence =
+  | { kind: 'none' }
+  | { kind: 'ended' }
+  | { kind: 'at'; occurrence: number; at: Date };
+
+/**
+ * The first occurrence of a series pinned to `anchorValue` that lands strictly
+ * after `after` — what an event (29-2a) is on next. The same anchored search
+ * a completed task's successor comes from, so a yearly birthday on the 29th
+ * of February and "the last Friday of the month" fall where a task's would.
+ *
+ * Unlike `nextOccurrence` nothing has been completed, so the search starts at
+ * occurrence 1 and the anchor itself counts. A bare-day anchor reads as the
+ * end of that day (`readAnchor`), which is what lets an all-day event stay
+ * current until its day is over.
+ */
+export function seriesOccurrenceAfter(
+  source: RecurrenceSource,
+  anchorValue: string,
+  after: Date,
+  timeZone: string,
+): SeriesOccurrence {
+  const rule = resolveRule(source);
+  if (!rule) return { kind: 'none' };
+  const anchor = readAnchor(anchorValue, timeZone);
+  if (!anchor) return { kind: 'none' };
+
+  const step = firstStepAfter(anchor, rule, 0, after, timeZone);
+  if (step === null || endedByCount(rule, step + 1)) return { kind: 'ended' };
+  const at = occurrenceInstant(anchor, rule, step, timeZone);
+  const endsAt = untilInstant(rule, timeZone);
+  if (endsAt && at.getTime() > endsAt.getTime()) return { kind: 'ended' };
+  return { kind: 'at', occurrence: step + 1, at };
+}
+
+/**
+ * The instant occurrence `occurrence` (1-based) of a series pinned to
+ * `anchorValue` falls on, or `null` when it does not repeat — anchored, as
+ * every occurrence here is. An event's journey (29-2b) starts from the one
+ * before the one it counts to.
+ */
+export function seriesOccurrenceInstant(
+  source: RecurrenceSource,
+  anchorValue: string,
+  occurrence: number,
+  timeZone: string,
+): Date | null {
+  const rule = resolveRule(source);
+  const anchor = readAnchor(anchorValue, timeZone);
+  if (!rule || !anchor || !Number.isInteger(occurrence) || occurrence < 1) return null;
+  return occurrenceInstant(anchor, rule, occurrence - 1, timeZone);
+}
+
 /**
  * A series with nothing to anchor to. There is no schedule to skip forward
  * through, so the successor is simply the next number and the end date is
@@ -940,9 +1002,9 @@ function resetSubtasks(subtasks: Subtask[] | undefined, newId: () => string): Su
  * counter. `seriesId` is used only when the completed task is not already part
  * of a series, i.e. on the first clone.
  *
- * What carries over is everything describing the *work*: title, notes, which
- * list it belongs to, its estimate, its scoring, its prerequisites, its tags
- * and links. What does not carry over is everything describing the *last time
+ * What carries over is everything describing the *work*: title, description,
+ * which list it belongs to, its estimate, its scoring, its prerequisites and
+ * its links. What does not carry over is everything describing the *last time
  * it was done* — how it went (`status`, `completedAt`), how long was set aside
  * for it, the avoided count it earned by being deferred, and its public
  * share link, since a share is a URL somebody already holds and handing the
@@ -985,6 +1047,9 @@ export function buildSuccessorTask(
   successor.shortUrlKeyword = undefined;
   successor.shortUrlDomain = undefined;
   successor.googleEventId = undefined;
+  // 29-2d1: the copy due before an event is the one that was linked. The next
+  // falls a period later, so it cannot be due before the same event.
+  successor.eventId = undefined;
 
   // Present-but-`undefined` is not the same as absent once this reaches
   // Firestore, where an `undefined` in the payload is a write error.

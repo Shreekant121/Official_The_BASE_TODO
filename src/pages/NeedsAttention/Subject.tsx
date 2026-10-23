@@ -148,7 +148,7 @@ export default function Subject({ task, controller, reading, peak, onJump, lockR
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
           {project && (
             <>
-              <Chip icon="folder" dot={project.color || undefined}>{project.name}</Chip>
+              <Chip icon="folder">{project.name}</Chip>
               <span style={{ display: 'flex', color: 'var(--fg-4)' }}>
                 <Icon name="chevron-right" size={14} />
               </span>
@@ -197,7 +197,7 @@ export default function Subject({ task, controller, reading, peak, onJump, lockR
             borderRadius: 'var(--r-control)',
             backgroundImage: titleFocus ? 'var(--glass-well)' : 'none',
             boxShadow: titleFocus
-              ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+              ? 'var(--glass-well-shadow), var(--job-lime-focus)'
               : 'none',
             transition: 'box-shadow var(--dur-base) var(--ease-glass)',
           }}
@@ -250,7 +250,7 @@ export default function Subject({ task, controller, reading, peak, onJump, lockR
                 display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
                 font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
                 textTransform: 'var(--kicker-transform)' as CSSProperties['textTransform'],
-                color: 'var(--accent)', whiteSpace: 'nowrap',
+                color: 'var(--job-lime)', whiteSpace: 'nowrap',
               }}
             >
               <Icon name="check" size={13} />

@@ -51,8 +51,16 @@
  * - **The columns come out uneven**, and more so than before: the score column
  *   holds three controls while timing-and-context holds twelve. The source has
  *   the same shape and does not mind, because its fields are all one-line
- *   troughs; several of ours are whole components. Folding Notes back into
- *   "The work" (which is where the source has it) closed most of the gap.
+ *   troughs; several of ours are whole components. Notes and Tags are gone
+ *   (OPT-3, his call: "description is enough"), and Description is six rows
+ *   tall because it holds what Notes used to.
+ *
+ * **OPT-5 SLIMMED IT (2026-10-06, his call).** The first column lost its
+ * heading, the added total and the factor bar — "What decides the score" is
+ * the Score screen's alone now — and keeps only Importance and Emergency.
+ * Start date, Reminder, Status, Value and Share moved into a closed Optional
+ * section under all three columns (`task-fields/OptionalSection.tsx`, which
+ * the Score screen shares), and the share handlers moved with them, unchanged.
  *
  * WHAT IS UNCHANGED. Everything that writes. `useTaskDraft` still stages every
  * field and nothing reaches the store until `commit()`; `handleSave` still
@@ -61,7 +69,8 @@
  * `useCoverUpload` still picks, compresses and stores a cover the same way; and
  * the five share-related handlers — `handleShare`, `handleShareKeywordChange`,
  * `handleShareSettingsChange`, `handleToggleHidden` and the `ShareModal` they
- * open — are byte-for-byte what they were, including the fact that they write
+ * open, in `OptionalSection.tsx`'s `ShareField` since OPT-5 — are what they
+ * were, including the fact that they write
  * to the store IMMEDIATELY rather than through the draft, so the public page
  * exists the moment you ask for it. `useOverlayDismiss` still owns Escape, the
  * props are the four they were, and all three call sites (Focus Mode, New
@@ -131,55 +140,59 @@
  * still saves; you just cannot type a new one, which was never a thing a task
  * title wanted.
  */
-import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { usePresence } from 'framer-motion';
 import {
-  Button, Chip, Icon, IconButton, Input, Kicker, ProgressRing,
-  ScoreDial, StatusPill, Switch, TaskSheet, Textarea, type IconName, type StatusName,
+  Button, Chip, Icon, IconButton, Input, Kicker,
+  ScoreDial, SoftButton, SoftIconButton, SoftToggle, StatusPill, Switch, TaskSheet, Textarea,
+  WarnLine, WhiteButton, type IconName, type StatusName,
 } from '../ui';
 import {
   useStore, countSubtasksRecursive, emergencyBoostOf,
-  formatINR, formatScore, taskLockReason, type Task, type TaskStatus,
+  formatINR, taskLockReason, type Task, type TaskStatus,
 } from '../store/useStore';
 import { usePriorityScores } from '../store/usePriorityScores';
-import { hasEmergencyLapsed, LINEAR_CEILING } from '../lib/priority';
+import { ignoreSentence, isOwnSwitch } from '../lib/ignoredWork';
+import { IgnoredMark } from './task-fields/TaskMarks';
+import { hasEmergencyLapsed } from '../lib/priority';
 import AssigneeField from './task-fields/AssigneeField';
 import DependencyPicker from './task-fields/DependencyPicker';
 import EstimateField from './task-fields/EstimateField';
-import LinksEditor from './task-fields/LinksEditor';
 import ListLocationPicker from './task-fields/ListLocationPicker';
 import HumanOverridePicker from './task-fields/HumanOverridePicker';
 import EmergencyPicker from './task-fields/EmergencyPicker';
 import { emergencyCrowdNote } from './task-fields/emergencyMenu';
 import RecurrencePicker from './task-fields/RecurrencePicker';
-import ReminderPicker from './task-fields/ReminderPicker';
-import { ScoreFactorBar } from './task-fields/ScoreFactorBar';
 import { Labelled } from './task-fields/Labelled';
-import { deadlineReading, readScore } from './task-fields/scoreReadings';
+import { OptionalSection } from './task-fields/OptionalSection';
+import { StepPercent } from './task-fields/StepPercent';
+import { StorySection } from './task-fields/StorySection';
+import { deadlineReading } from './task-fields/scoreReadings';
 import { useNeedsJump } from './task-fields/useNeedsJump';
-import StatusPills from './task-fields/StatusPills';
 import { STATUS_OPTIONS } from './task-fields/taskStatusOptions';
 import SubtaskTree from './task-fields/SubtaskTree';
-import TagsEditor from './task-fields/TagsEditor';
 import NeedsPills from './task-fields/NeedsPills';
 import { countNeeds } from './task-fields/needs';
-import { HUMAN_OVERRIDE_WORDS, SCORE_TONE_VAR, scoreTone } from './task-fields/scoreDisplay';
+import { HUMAN_OVERRIDE_WORDS } from './task-fields/scoreDisplay';
 import { RedAlertBadge } from './task-fields/RedAlertBadge';
+import { DueDate } from './task-fields/DueDate';
+import { EventLinkField } from './task-fields/EventLinkField';
+import { useEventStore } from '../store/useEventStore';
 import { useCoverUpload } from './task-fields/useCoverUpload';
 import { useTaskDraft } from './task-fields/useTaskDraft';
-import { useAuth } from '../contexts/AuthContext';
 import { describeRecurrenceRule, resolveRule } from '../lib/recurrence';
 import { useOverlayDismiss } from '../lib/useOverlayDismiss';
 import { archiveTask } from '../lib/archive';
 import { Z } from '../lib/zLayers';
-import { makeShareId, shareTask, shareUrl, type ShareSettings } from '../lib/publicShare';
-import ShareModal from './ShareModal';
+import { cue } from '../lib/sound';
+import { dustSelector } from '../lib/dust';
 
 // ── Sheet furniture ────────────────────────────────────────────────────────
 
 interface GroupProps {
-  title: string;
-  icon: IconName;
+  /** Absent, the pane has no heading at all — the sheet's first pane since OPT-5. */
+  title?: string;
+  icon?: IconName;
   /** Right-aligned reading — a score, a ring. Never a control. */
   headerRight?: ReactNode;
   children: ReactNode;
@@ -211,8 +224,8 @@ interface GroupProps {
  * kicker case did not disappear: it moved down a level, to the field labels,
  * where the source also puts it.
  *
- * **The collapse is gone with it.** Only Notes ever used it, and the source
- * files Notes as the last field of "The work" rather than as a pane of its
+ * **The collapse is gone with it.** Only Notes ever used it (Notes itself is
+ * gone since OPT-3), and the source filed Notes as the last field of "The work" rather than as a pane of its
  * own — a collapsing pane is a shape the design system has nowhere else.
  */
 function Group({ title, icon, headerRight, children }: GroupProps) {
@@ -232,21 +245,25 @@ function Group({ title, icon, headerRight, children }: GroupProps) {
         boxShadow: 'var(--glass-rim-1), var(--glass-inner-1)',
       }}
     >
-      <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
-        <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', color: 'var(--fg-3)' }}>
-          <Icon name={icon} size={16} />
-        </span>
-        <h3
-          style={{
-            margin: 0, flex: 1, minWidth: 0,
-            font: 'var(--type-title)', fontSize: 'var(--text-md)',
-            letterSpacing: 'var(--tracking-ui)', color: 'var(--fg-1)',
-          }}
-        >
-          {title}
-        </h3>
-        {headerRight}
-      </header>
+      {title && (
+        <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          {icon && (
+            <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', color: 'var(--fg-3)' }}>
+              <Icon name={icon} size={16} />
+            </span>
+          )}
+          <h3
+            style={{
+              margin: 0, flex: 1, minWidth: 0,
+              font: 'var(--type-title)', fontSize: 'var(--text-md)',
+              letterSpacing: 'var(--tracking-ui)', color: 'var(--fg-1)',
+            }}
+          >
+            {title}
+          </h3>
+          {headerRight}
+        </header>
+      )}
       {children}
     </section>
   );
@@ -276,7 +293,7 @@ function formatMinutes(minutes?: number): string {
 }
 
 /** One measured fact. Mono, because every one of them is a reading. */
-function Fact({ icon, tone, children }: { icon: IconName; tone?: string; children: ReactNode }) {
+function Fact({ icon, tone, iconTone, children }: { icon: IconName; tone?: string; iconTone?: string; children: ReactNode }) {
   return (
     <span
       style={{
@@ -285,7 +302,7 @@ function Fact({ icon, tone, children }: { icon: IconName; tone?: string; childre
         color: tone ?? 'var(--fg-3)', whiteSpace: 'nowrap',
       }}
     >
-      <Icon name={icon} size={14} />
+      <Icon name={icon} size={14} style={iconTone ? { color: iconTone } : undefined} />
       {children}
     </span>
   );
@@ -307,8 +324,6 @@ interface TaskDetailPanelProps {
 }
 
 export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBeforeArchive }: TaskDetailPanelProps) {
-  const { user } = useAuth();
-  const updateBacklogTask = useStore((s) => s.updateBacklogTask);
   const setEmergencyBoost = useStore((s) => s.setEmergencyBoost);
   /* Read live rather than off the `task` prop — three of the four call sites
      hold that prop as a snapshot in local state, and this control writes
@@ -318,6 +333,9 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
   const projects = useStore((s) => s.projects);
   const backlogTasks = useStore((s) => s.backlogTasks);
   const isBacklogTask = backlogTasks.some((t) => t.id === task.id);
+  /* BIG-3. Written at once, like Archive beside it — the switch is not part of
+     the draft, and the save below never writes it back. */
+  const setIgnored = useStore((s) => s.setIgnored);
   const scores = usePriorityScores();
 
   // Every editable field is staged here; the same hook (and therefore the same
@@ -325,6 +343,8 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
   const {
     draft, setField, patch, isDirty, missing, estimatedMinutes, scoreInput, toUpdates, commit,
   } = useTaskDraft(task);
+  /* 29-2d1: due before an event that still exists — the date box gives way to it. */
+  const linkedHere = useEventStore((s) => !!draft.eventId && s.events.some((e) => e.id === draft.eventId));
   const { inputRef: coverInputRef, isUploading, openPicker, handleFileChange } =
     useCoverUpload((url) => setField('imageUrl', url));
 
@@ -339,7 +359,7 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
      deadline copy drifts every day."* */
   const [now] = useState(() => Date.now());
 
-  /* A pressed Needs chip scrolls its field up, rings it amber for a beat and
+  /* A pressed Needs chip scrolls its field up, rings it (grey, 29-1P2c2) for a beat and
      puts the caret in it. All three are `TaskSheet.prompt.md`'s, and the whole
      mechanism moved to `task-fields/useNeedsJump.ts` at UI-30 — the scoring
      screen asks for exactly the same thing. */
@@ -348,71 +368,9 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
   // See "THE PRESENCE BRIDGE" at the top of this file.
   const [isPresent, safeToRemove] = usePresence();
 
-  // Public share / SimpleURL short link. `shareId` is written straight to the
-  // store on first share (not via the staged form), so the public snapshot
-  // exists immediately; the debounced reconcile in firestoreSync keeps it live.
-  const [shareId, setShareId]               = useState(task.shareId);
-  const [shortUrlKeyword, setShortUrlKeyword] = useState(task.shortUrlKeyword);
-  const [shortUrlDomain, setShortUrlDomain] = useState(task.shortUrlDomain);
-  const [shareSettings, setShareSettings] = useState<ShareSettings>({
-    shareAllowContributions: task.shareAllowContributions,
-    shareShowPeople: task.shareShowPeople,
-    shareExpiresOn: task.shareExpiresOn,
-  });
-  const [hiddenFromShare, setHiddenFromShare] = useState(!!task.hiddenFromShare);
-  const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [sharing, setSharing]               = useState(false);
-
-  const handleShare = async () => {
-    if (!user) return;
-    setSharing(true);
-    try {
-      let id = shareId;
-      if (!id) {
-        id = makeShareId();
-        setShareId(id);
-        updateBacklogTask(task.id, { shareId: id });
-      }
-      // Snapshot the stored task merged with the current (possibly unsaved)
-      // edits, so the shared page reflects what's on screen right away.
-      await shareTask(id, user.uid, {
-        ...task,
-        ...toUpdates(),
-        shareId: id,
-        ...shareSettings,
-      });
-      setShareModalOpen(true);
-    } catch (err) {
-      console.error('Failed to share task', err);
-      alert(`Couldn't create the share link. ${err instanceof Error ? err.message : 'Please try again.'}`);
-    } finally {
-      setSharing(false);
-    }
-  };
-
-  const handleShareKeywordChange = (keyword?: string, domain?: string) => {
-    setShortUrlKeyword(keyword);
-    setShortUrlDomain(domain);
-    updateBacklogTask(task.id, { shortUrlKeyword: keyword, shortUrlDomain: domain });
-  };
-
-  const handleShareSettingsChange = async (patch: ShareSettings) => {
-    if (!user || !shareId) return;
-    const next = { ...shareSettings, ...patch };
-    setShareSettings(next);
-    updateBacklogTask(task.id, patch);
-    try {
-      await shareTask(shareId, user.uid, { ...task, shareId, ...next });
-    } catch (err) {
-      console.error('Failed to update share settings', err);
-    }
-  };
-
-  const handleToggleHidden = () => {
-    const next = !hiddenFromShare;
-    setHiddenFromShare(next);
-    updateBacklogTask(task.id, { hiddenFromShare: next });
-  };
+  /* OPT-5 — the Optional section at the foot. Closed every time the sheet
+     opens and remembered nowhere, his call. */
+  const [optionalOpen, setOptionalOpen] = useState(false);
 
   const handleClose = useCallback(() => onClose(), [onClose]);
 
@@ -441,10 +399,7 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
      the sheet was handed is a snapshot. Without this the ring would not move
      when the flag is pressed, which is the one thing item 17 asks it to do. */
   const breakdown = scores.readDraft({ ...scoreInput, emergencyBoost: emergencyLevel });
-  const reading = readScore(breakdown);
   const totalScore = breakdown.score;
-  const tone = scoreTone(totalScore, breakdown.W);
-  const scoreHue = SCORE_TONE_VAR[tone];
   const outstanding = countNeeds(missing);
   /* Measured against the draft's deadline, so moving the date in the field
      above tells you straight away whether the flag comes back to life. */
@@ -452,9 +407,8 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
     emergencyLevel > 0
     && hasEmergencyLapsed({ deadline: draft.deadline || undefined, originalDeadline: task.originalDeadline }, now);
   const emergencyNote = emergencyCrowdNote(scores.emergencyCount, emergencyLapsed);
-  const floorTitle = reading.floor
-    ? backlogTasks.find((t) => t.id === reading.floor!.fromId)?.title
-    : undefined;
+  const ignoreReason = scores.ignored.reasonOf(task);
+  const ignoredHere = ignoreReason !== undefined && isOwnSwitch(ignoreReason, { kind: 'task', id: task.id });
 
   const list = draft.listId ? taskLists.find((l) => l.id === draft.listId) : undefined;
   const project = list?.projectId ? projects.find((p) => p.id === list.projectId) : undefined;
@@ -473,19 +427,9 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
     <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
       {/* Breadcrumb + status + cover controls + close */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-        {/*
-          A neutral `Chip` with the project's colour as a 4px dot. UI-9 built
-          this as a fully tinted pill on the reasoning that a project's hue is
-          the user's data, not a design token — which is true, and is why the
-          dot survives. What changed at UI-30 is the AMOUNT: the source's own
-          breadcrumb is a plain `<Chip icon="folder">` in both files that draw
-          one (`TaskSheet.jsx:657`, `scoring.html:1006`), and UI-29 settled on
-          the board how much of a page a project's colour gets — *"rationed to
-          a 4px dot and a hairline — never a card glow"*. The two screens that
-          show this breadcrumb now draw it the same way.
-        */}
+        {/* A neutral `Chip`; projects carry no colour since OPT-4. */}
         {project && (
-          <Chip icon="folder" dot={project.color || undefined}>{project.name}</Chip>
+          <Chip icon="folder">{project.name}</Chip>
         )}
         {list && (
           <>
@@ -500,7 +444,7 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
 
         {/* The source's header states the status too, and it is the one thing
             in this row that changes while the sheet is open — the pill and the
-            Status control in "The work" are two readings of one draft field,
+            Status control in the Optional section are two readings of one draft field,
             so they cannot disagree. */}
         <StatusPill status={STATUS_PILL[draft.status].status} size="sm">
           {STATUS_PILL[draft.status].label}
@@ -562,7 +506,7 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
             borderRadius: 'var(--r-control)',
             backgroundImage: titleFocus ? 'var(--glass-well)' : 'none',
             boxShadow: titleFocus
-              ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+              ? 'var(--glass-well-shadow), var(--job-lime-focus)'
               : 'none',
             transition: 'box-shadow var(--dur-base) var(--ease-glass)',
           }}
@@ -598,8 +542,16 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
             with the kicker beside it rather than inside it. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flex: '0 0 auto' }}>
           <Kicker>Priority</Kicker>
-          <RedAlertBadge redAlert={breakdown.redAlert} size="md" />
-          <ScoreDial value={totalScore} max={scores.peak} alert={breakdown.redAlert} size="lg" showMax />
+          {/* Ignored work has no score to show (BIG-3): a 0 would read as a
+              verdict on the task, and it is not one. */}
+          {ignoreReason ? (
+            <IgnoredMark title={ignoreSentence(ignoreReason, { kind: 'task', id: task.id })} />
+          ) : (
+            <>
+              <RedAlertBadge redAlert={breakdown.redAlert} size="md" />
+              <ScoreDial value={totalScore} max={scores.peak} alert={breakdown.redAlert} size="lg" showMax />
+            </>
+          )}
         </div>
       </div>
 
@@ -609,9 +561,12 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
         is explicit that nothing derivable ever becomes one.
       */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
-        <Fact icon="calendar-clock" tone={deadline.urgent ? 'var(--hue-amber)' : undefined}>
-          {deadline.phrase}
-        </Fact>
+        {/* 29-1P7a (ideas 165, 66): the date as a tiny calendar page, warming
+            sky to coral as the day nears, flipping as the Deadline field below
+            is changed. With no date, the plain fact says so. */}
+        {draft.deadline
+          ? <DueDate deadline={draft.deadline} size="md" />
+          : <Fact icon="calendar-clock">{deadline.phrase}</Fact>}
         <Fact icon="timer">{formatMinutes(estimatedMinutes)}</Fact>
         {subtaskCounts.total > 0 && (
           <Fact icon="list-checks">{subtaskCounts.done} / {subtaskCounts.total}</Fact>
@@ -636,29 +591,51 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
 
   const footer = (
     <>
-      <IconButton
+      {/* The footer's three icons are round soft buttons since 29-1P2. Delete
+          stays a tap, not a hold: the Trash brings it back for 30 days. */}
+      <SoftIconButton
         label="Delete task"
-        variant="tint"
-        tone="rose"
-        onClick={() => { onDelete(); onClose(); }}
+        onClick={() => { cue('delete'); onDelete(); onClose(); }}
         title="Move this task to the Trash — recoverable for 30 days"
+        style={{ color: 'var(--status-overrun)' }}
       >
         <Icon name="trash-2" size={18} />
-      </IconButton>
+      </SoftIconButton>
 
       {/* BUILD-11 — the row menu's pair, in the footer as `Archive.dc.html`
           asks. One tap, like Delete beside it: nothing is lost, and the
           toast that follows names where it went. Only for a task on the
           board — a subtask archives with its parent. */}
       {isBacklogTask && (
-        <IconButton
+        <SoftIconButton
           label="Archive task"
-          variant="tint"
           onClick={() => { onBeforeArchive?.(); if (archiveTask(task.id)) onClose(); }}
           title="Archive this task — out of every queue and Atlas, kept for good"
         >
           <Icon name="archive" size={18} />
-        </IconButton>
+        </SoftIconButton>
+      )}
+
+      {/* BIG-3 — the row menu's switch, here too. Held by a list or a project
+          above it, it names that one and does nothing: nothing inside ignored
+          work can opt back in (his call). */}
+      {isBacklogTask && (
+        <SoftToggle
+          round
+          aria-label={ignoredHere ? 'Stop ignoring' : ignoreReason ? 'Ignored with its list or project' : 'Ignore score & deadline'}
+          pressed={ignoreReason !== undefined}
+          disabled={ignoreReason !== undefined && !ignoredHere}
+          onClick={() => setIgnored({ kind: 'task', id: task.id }, !ignoredHere)}
+          title={
+            ignoreReason && !ignoredHere
+              ? ignoreSentence(ignoreReason, { kind: 'task', id: task.id })
+              : ignoredHere
+                ? 'Stop ignoring — scored and offered again'
+                : 'Ignore score & deadline — never scored or offered, deadline never pushed, and out of today’s queue'
+          }
+        >
+          <Icon name="moon" size={18} />
+        </SoftToggle>
       )}
 
       <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
@@ -671,19 +648,23 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
           `TaskSheet.prompt.md`'s own words. The chips above are where you act
           on it; this is only the tally. */}
       {outstanding > 0 && (
-        <span style={{ font: 'var(--type-label)', fontSize: 'var(--text-xs)', color: 'var(--status-review)' }}>
+        <WarnLine as="span" style={{ font: 'var(--type-label)', fontSize: 'var(--text-xs)', alignItems: 'center' }}>
           {outstanding === 1 ? '1 field still needed' : `${outstanding} fields still needed`}
-        </span>
+        </WarnLine>
       )}
 
-      <Button
-        variant={isDirty ? 'tint' : 'glass'}
-        tone="accent"
-        onClick={handleSave}
-        iconRight={<Icon name="check" size={16} />}
-      >
-        Save changes
-      </Button>
+      {/* The sheet's confirm (29-1P2): solid white once there is something to
+          save, soft while everything is — the same "lights up when dirty"
+          the tint/glass pair used to say. */}
+      {isDirty ? (
+        <WhiteButton onClick={handleSave} icon={<Icon name="check" size={16} />}>
+          Save changes
+        </WhiteButton>
+      ) : (
+        <SoftButton onClick={handleSave} icon={<Icon name="check" size={16} />}>
+          Save changes
+        </SoftButton>
+      )}
     </>
   );
 
@@ -704,43 +685,20 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
    * evenly — see the container block at the foot of `screens.css`.
    */
 
-  // ── Column 1: what decides the score ────────────────────────────────────
-  const whatDecidesTheScore = (
-    <Group
-      title="What decides the score"
-      icon="target"
-      headerRight={(
-        /*
-         * **This is the ADDED total, not the score**, and the word is what
-         * makes that readable. The dial in the header shows the score against
-         * the highest on screen; this shows the seven variables against the
-         * sum of their caps, because that is what the bar below it draws. Two
-         * different denominators on one screen is exactly the confusion UI-26
-         * was guarding against with "two readings of one number must not
-         * disagree" — the answer is not to hide one but to say which is which.
-         *
-         * Same hue as the dial, from the same table, for the same reason.
-         */
-        <span
-          style={{
-            font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
-            color: totalScore > 0 ? scoreHue : 'var(--fg-4)', fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          <span style={{ color: 'var(--fg-4)', textTransform: 'var(--kicker-transform)' as CSSProperties['textTransform'] }}>added&nbsp;</span>
-          {formatScore(reading.linear)} / {formatScore(LINEAR_CEILING)}
-        </span>
-      )}
-    >
-      {/* Where the number came from. `ScoreDial.prompt.md`: the factor chips
-          "belong beside `size="lg"` on the detail page, where they can be
-          acted on" — which is this column, and the controls under them are
-          the acting. The quasi-need contribution shows up here as a chip and
-          nowhere as an input, because in this app it is not typed: Focus
-          Mode's quasi-need defer accumulates it. Nothing derivable is asked
-          for, and that one is derived from what you did. */}
-      <ScoreFactorBar reading={reading} floorTitle={floorTitle} />
-
+  /*
+   * ── Column 1: the two judgements ────────────────────────────────────────
+   *
+   * This was "What decides the score": a heading, the added total against its
+   * ceiling, the factor bar and three controls. OPT-5 took the pane out — his
+   * words, *"Remove the What decides the score from the task details card
+   * entirely, keep it in the score page"* — and, asked where the controls go
+   * (2026-10-06): *"Hide value too, put importance and emergency on top of
+   * where they are, just remove the what decides the score part."* So the two
+   * judgements stay first, in a pane with no heading, the breakdown lives on
+   * the Score screen alone, and Value is in the Optional section at the foot.
+   */
+  const theTwoJudgements = (
+    <Group>
       {/* One control where there were two. `compact`, because a sheet column
           is 45px per step at five stops and this has ten — the stops keep
           their words in the `aria-label` and in the reading beside the label,
@@ -776,38 +734,23 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
         right={
           emergencyLevel > 0
             ? (
-              <span style={{ color: emergencyLapsed ? 'var(--fg-4)' : 'var(--hue-rose)' }}>
+              <span style={{ color: emergencyLapsed ? 'var(--fg-4)' : 'var(--job-coral-tag-fg)' }}>
                 {emergencyLapsed ? 'lapsed' : 'live'}
               </span>
             )
             : undefined
         }
         hint={(
-          <span style={{ color: emergencyNote.warn ? 'var(--hue-rose)' : undefined }}>
-            {emergencyNote.text}
-          </span>
+          emergencyNote.warn
+            /* Too many flagged: a warning, grey with its icon (29-1P2c2). */
+            ? <WarnLine as="span" style={{ font: 'inherit' }}>{emergencyNote.text}</WarnLine>
+            : <span>{emergencyNote.text}</span>
         )}
       >
         <EmergencyPicker
           value={emergencyLevel}
           onChange={(level) => setEmergencyBoost(task.id, level)}
           compact
-        />
-      </Labelled>
-
-      <Labelled
-        label="Value (₹)"
-        icon="indian-rupee"
-        hint={<>Rolls up into this task&rsquo;s list and project totals.</>}
-      >
-        <Input
-          type="number"
-          inputMode="decimal"
-          value={draft.valueINR}
-          onChange={(e) => setField('valueINR', e.target.value)}
-          placeholder="0"
-          min={0}
-          iconLeft={<span style={{ font: 'var(--type-numeric)' }}>₹</span>}
         />
       </Labelled>
     </Group>
@@ -817,24 +760,6 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
   const theWork = (
     <>
       <Group title="The work" icon="align-left">
-        <Labelled label="Status" icon="circle-dot">
-          {/* Item 19 — "Done" is refused while something this task depends on
-              is unfinished; the other two pills stay live, because a locked
-              task still edits. Read off the `task` prop and not the draft: the
-              lock is a fact about the stored task and its prerequisites, and
-              the sheet's job here is to refuse the write, not to model it.
-
-              The prop is a queue copy on the two call sites that open this
-              from a session, so a task put into today with "Schedule anyway"
-              carries its unlock in and is not refused — `taskLockReason` reads
-              the flag straight off it. */}
-          <StatusPills
-            value={draft.status}
-            onChange={(v) => setField('status', v)}
-            lockedComplete={taskLockReason(backlogTasks, task)}
-          />
-        </Labelled>
-
         <Labelled
           label="Description"
           icon="align-left"
@@ -844,8 +769,8 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
           <Textarea
             value={draft.description}
             onChange={(e) => setField('description', e.target.value)}
-            rows={4}
-            placeholder="Add notes or context…"
+            rows={6}
+            placeholder="What it is, and any context…"
           />
         </Labelled>
 
@@ -853,46 +778,17 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
           label="Subtasks"
           icon="list-checks"
           right={subtaskCounts.total > 0 ? (
-            <ProgressRing
-              value={subtaskCounts.done}
-              max={subtaskCounts.total}
-              size={38}
-              thickness={4}
-              tone="accent"
-              showValue={false}
-            >
-              <span
-                style={{
-                  font: 'var(--type-kicker)', color: 'var(--fg-2)',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {subtaskCounts.done}/{subtaskCounts.total}
-              </span>
-            </ProgressRing>
+            <StepPercent done={subtaskCounts.done} total={subtaskCounts.total} />
           ) : undefined}
         >
           <SubtaskTree value={draft.subtasks} onChange={(v) => setField('subtasks', v)} />
-        </Labelled>
-
-        {/* The source's last field of this pane, not a pane of its own. Ours
-            was a collapsible `Group`, which is a shape the design system has
-            nowhere else — and folding it back in is also what stops the work
-            column running dry two hundred pixels before the timing one. */}
-        <Labelled label="Notes" icon="file-text" hint={<>Long-form. Never shown on the card.</>}>
-          <Textarea
-            value={draft.notes}
-            onChange={(e) => setField('notes', e.target.value)}
-            rows={6}
-            placeholder="Long-form notes, research, context…"
-          />
         </Labelled>
       </Group>
     </>
   );
 
-  // ── Column 3: timing, then context ──────────────────────────────────────
-  const timingAndContext = (
+  // ── Column 3: timing ────────────────────────────────────────────────────
+  const timing = (
     <>
       <Group title="Timing" icon="calendar-clock">
         {/* The switch is INSIDE the deadline field, not a field of its own.
@@ -902,36 +798,36 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
             they care about will ever see it. It reads as a plain sentence
             rather than a label because that is the whole promise being made.
             See `lib/deadlineMath.ts` for what it opts out of. */}
+        {/* 29-2d1: due before an event, the date then the event's — which
+            takes the date box's place, and the Fixed switch's, since a linked
+            date is fixed already (`EventLinkField`). */}
         <Labelled label="Deadline" icon="calendar-clock" {...need('deadline')}>
           <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
-            <Input
-              type="datetime-local"
-              value={draft.deadline}
-              onChange={(e) => setField('deadline', e.target.value)}
+            {!linkedHere && (
+              <Input
+                type="datetime-local"
+                value={draft.deadline}
+                onChange={(e) => setField('deadline', e.target.value)}
+              />
+            )}
+            <EventLinkField
+              eventId={draft.eventId}
+              deadline={draft.deadline}
+              onChange={(link) => patch(link ? { eventId: link.eventId, deadline: link.deadline } : { eventId: '' })}
             />
-            <Switch
-              size="sm"
-              checked={draft.deadlineIsFixed}
-              onChange={(v) => setField('deadlineIsFixed', v)}
-              label={(
-                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
-                  Fixed date (never auto-reschedule)
-                </span>
-              )}
-            />
+            {!linkedHere && (
+              <Switch
+                size="sm"
+                checked={draft.deadlineIsFixed}
+                onChange={(v) => setField('deadlineIsFixed', v)}
+                label={(
+                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                    Fixed date (never auto-reschedule)
+                  </span>
+                )}
+              />
+            )}
           </div>
-        </Labelled>
-
-        <Labelled
-          label="Start date"
-          icon="play"
-          hint={<>Optional. Keeps it out of sessions until then.</>}
-        >
-          <Input
-            type="datetime-local"
-            value={draft.startDate}
-            onChange={(e) => setField('startDate', e.target.value)}
-          />
         </Labelled>
 
         <Labelled label="Est. time" icon="clock" {...need('estimate')}>
@@ -950,18 +846,30 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
             task={task}
           />
         </Labelled>
-
-        <Labelled label="Reminder" icon="bell">
-          <ReminderPicker
-            value={draft.reminderMinutes}
-            customMinutes={draft.customReminderMinutes}
-            onChange={(v) => setField('reminderMinutes', v)}
-            onCustomMinutesChange={(v) => setField('customReminderMinutes', v)}
-          />
-        </Labelled>
       </Group>
 
-      <Group title="Context" icon="share-2">
+    </>
+  );
+
+  /*
+   * ── Context: one wide pane under the columns ──────────────────────────────
+   *
+   * It was the bottom half of column 3, a tall stack of five fields beside two
+   * short columns. His call (2026-10-06): *"make it horizontal as right now
+   * it looks bad so lets use the space fully"* — so it spans the sheet, its
+   * four fields side by side where there is room (List & project and Also
+   * shown in are two cells: `ListLocationPicker`'s root is `display:
+   * contents`), wrapping to two and one as the sheet narrows. Links went to
+   * Optional and the three captions under these fields are gone, his call.
+   */
+  const context = (
+    <Group title="Context" icon="share-2">
+      <div
+        style={{
+          display: 'grid', gap: 'var(--gap-stack) var(--gap-card)', alignItems: 'start',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 230px), 1fr))',
+        }}
+      >
         <ListLocationPicker
           listId={draft.listId}
           sharedListIds={draft.sharedListIds}
@@ -969,10 +877,7 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
           onSharedListIdsChange={(v) => setField('sharedListIds', v)}
         />
 
-        {/* Dependencies (D2) — soft, warning-only prerequisites. The source
-            carries a hint here; ours does not, because `DependencyPicker`
-            already prints the same sentence under its own control and two
-            copies of it stacked is what the reconciliation produced first. */}
+        {/* Dependencies (D2) — soft, warning-only prerequisites. */}
         <Labelled label="Depends on" icon="git-branch">
           <DependencyPicker
             taskId={task.id}
@@ -984,73 +889,72 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
         <Labelled label="Assignee" icon="user-circle">
           <AssigneeField value={draft.assignee} onChange={(v) => setField('assignee', v)} />
         </Labelled>
+      </div>
+    </Group>
+  );
 
-        <Labelled label="Tags" icon="tag">
-          <TagsEditor value={draft.tags} onChange={(v) => setField('tags', v)} />
-        </Labelled>
-
-        <Labelled label="Links" icon="link-2">
-          <LinksEditor value={draft.links} onChange={(v) => setField('links', v)} />
-        </Labelled>
-
-        {/* The source keeps Share as the last field of its Context pane rather
-            than as a pane of its own, and it is right: one button and one
-            switch do not carry a heading. */}
-        <Labelled
-          label="Share"
-          icon="share-2"
-          /* Bare text, NOT a `<Hint>`. `Labelled` puts the hint in one itself,
-             and a `<Hint>` handed to it nested `<p>` inside `<p>` — which the
-             parser is obliged to un-nest, so the sentence escaped the field and
-             React logged an invalid-nesting error every time the sheet opened. */
-          hint={(
-            <>
-              A live, read-only page anyone with the link can watch, plus an optional
-              branded short link + QR.
-            </>
-          )}
-        >
-          <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
-            <Button
-              block
-              onClick={handleShare}
-              disabled={sharing || !user}
-              loading={sharing}
-              iconLeft={<Icon name="share-2" size={16} />}
-              iconRight={shortUrlKeyword ? (
-                <span
-                  style={{
-                    font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
-                    textTransform: 'var(--kicker-transform)' as CSSProperties['textTransform'], color: 'var(--hue-cyan)',
-                  }}
-                >
-                  Linked
+  /* OPT-5 — under Context, closed. Value rides in it on this screen only (his
+     call: "hide value too"); the Score screen keeps Value in its score pane.
+     Links joined it on both screens. See `task-fields/OptionalSection.tsx`. */
+  const optional = (
+    <OptionalSection
+      task={task}
+      controller={{ draft, setField, toUpdates }}
+      /* Read off the `task` prop and not the draft: the lock is a fact about
+         the stored task and its prerequisites. The prop is a queue copy on
+         the two call sites that open this from a session, so a task put into
+         today with "Schedule anyway" carries its unlock in and is not
+         refused — `taskLockReason` reads the flag straight off it. */
+      lockReason={taskLockReason(backlogTasks, task)}
+      open={optionalOpen}
+      onToggle={() => setOptionalOpen((o) => !o)}
+      blur={false}
+      shareHint={(
+        <>
+          A live, read-only page anyone with the link can watch, plus an optional
+          branded short link + QR.
+        </>
+      )}
+      after={(
+        <>
+          {/* 29-1P9b (idea 155): a milestone sits on the project's line, behind
+              its "40% done". What it waits on is its Depends on field. */}
+          <Labelled
+            label="Milestone"
+            icon="flag-triangle-right"
+            hint={<>Shows on the project&rsquo;s milestone line. It waits on what is under Depends on.</>}
+          >
+            <Switch
+              size="sm"
+              checked={draft.milestone}
+              onChange={(v) => setField('milestone', v)}
+              label={(
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                  A big step in this project
                 </span>
-              ) : undefined}
-              style={{ justifyContent: 'flex-start' }}
-            >
-              {shortUrlKeyword ? 'Manage share link' : shareId ? 'Open public link' : 'Create a public link'}
-            </Button>
-
-            {/* Blinding: keep this task out of any shared list/project view. Rose
-                because a task deliberately withheld from a link someone else is
-                reading IS a live condition, which is what this system spends rose
-                on — it is not a warning about something you have yet to do. */}
-            <Button
-              block
-              variant={hiddenFromShare ? 'tint' : 'glass'}
-              tone="rose"
-              onClick={handleToggleHidden}
-              title="Hide this task from any shared/public list or project link"
-              iconLeft={<Icon name={hiddenFromShare ? 'eye-off' : 'eye'} size={16} />}
-              style={{ justifyContent: 'flex-start' }}
-            >
-              {hiddenFromShare ? 'Hidden from shared links' : 'Visible in shared links'}
-            </Button>
-          </div>
-        </Labelled>
-      </Group>
-    </>
+              )}
+            />
+          </Labelled>
+        </>
+      )}
+    >
+      <Labelled
+        label="Value (₹)"
+        icon="indian-rupee"
+        hint={<>Rolls up into this task&rsquo;s list and project totals.</>}
+      >
+        <Input
+          type="number"
+          inputMode="decimal"
+          value={draft.valueINR}
+          onChange={(e) => setField('valueINR', e.target.value)}
+          placeholder="0"
+          min={0}
+          aria-label="Value in rupees"
+          iconLeft={<span style={{ font: 'var(--type-numeric)' }}>₹</span>}
+        />
+      </Labelled>
+    </OptionalSection>
   );
 
   return (
@@ -1062,10 +966,21 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
         onClose={handleClose}
         coverUrl={draft.imageUrl || undefined}
         header={header}
-        columns={[whatDecidesTheScore, theWork, timingAndContext]}
+        columns={[theTwoJudgements, theWork, timing]}
+        after={(
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--gap-card)' }}>
+            {context}
+            {optional}
+            {/* 29-1P9c (idea 166): the task's story, closed under Optional (his pick B). */}
+            <StorySection task={task} blur={false} />
+          </div>
+        )}
         footer={footer}
         label={draft.title || 'Task details'}
         zIndex={Z.modal}
+        /* Idea 54 (29-1P6a): the sheet grows out of the task's row and goes
+           back into it. Every task row already wears this marker for dust. */
+        growFrom={dustSelector('task', task.id)}
         /* The other half of the presence bridge: hold this node in the tree
            until the sheet reports its dissolve has actually finished. This
            used to be a `setTimeout` on a duplicated copy of Dialog's exit
@@ -1075,19 +990,6 @@ export default function TaskDetailPanel({ task, onClose, onSave, onDelete, onBef
            the topmost overlay. See Dialog's port note 2. */
         closeOnEscape={false}
       />
-
-      {shareModalOpen && shareId && (
-        <ShareModal
-          publicUrl={shareUrl(shareId)}
-          entityType="task"
-          currentKeyword={shortUrlKeyword}
-          currentDomain={shortUrlDomain}
-          onKeywordChange={handleShareKeywordChange}
-          settings={shareSettings}
-          onSettingsChange={(patch) => void handleShareSettingsChange(patch)}
-          onClose={() => setShareModalOpen(false)}
-        />
-      )}
     </>
   );
 }

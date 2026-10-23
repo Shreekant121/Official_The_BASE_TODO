@@ -19,7 +19,7 @@
  * light up differently:
  *   - `onChange` is the native React handler (an event), not `Field`'s
  *     `(value) => …`. Every caller in this app is a controlled field.
- *   - `invalid` exists, with `Input`'s rose hairline.
+ *   - `invalid` exists, with `Input`'s coral hairline (rose until 29-1P2c2).
  *
  * A third, added by UI-8: **`ref` reaches the inner `<textarea>`**, not the
  * well that wraps it. The Assistant's composer grows with what is typed, and
@@ -75,9 +75,9 @@ export function Textarea({
   const [focus, setFocus] = useState(false);
 
   const wellShadow = invalid
-    ? 'var(--glass-well-shadow), 0 0 0 1px oklch(0.70 0.15 20 / 0.7)'
+    ? 'var(--glass-well-shadow), 0 0 0 1px var(--job-coral-line)'
     : focus
-      ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+      ? 'var(--glass-well-shadow), var(--job-lime-focus)'
       : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)';
 
   const shell: CSSProperties = {

@@ -32,7 +32,9 @@
  *   change and contradicts its own comment; the key is on the **copy block**
  *   here, so the words condense in and the object stays put.
  *
- *   **Emerald is on the orb while the microphone is open, and nowhere else.**
+ *   **Colour is on the orb while the microphone is open, and nowhere else**
+ *   (Atlas's violet since 29-1P2c3, his call: it was emerald, which means
+ *   running now, and on Atlas's own things Atlas's colour wins).
  *   That is `design-system/readme.md`'s accent ration on the screen most
  *   tempted to light itself up. The old version tinted the disc emerald while
  *   *speaking* as well, which spent the ration on the one state where the
@@ -85,8 +87,8 @@
  * He chose (2026-09-24) to put `Atlas.dc.html`'s WebGL orb here in place of
  * the glass disc, knowing the disc was the thing that turned emerald while
  * the microphone was open. **The green did not go; it moved outward.** The
- * disc's emerald glow now sits behind the orb, and the rings leaving it are
- * still emerald — both only while the microphone is open, slow while it
+ * disc's glow now sits behind the orb, and the rings leaving it carry the
+ * same colour (violet since 29-1P2c3) — both only while the microphone is open, slow while it
  * waits for the word, fast and brighter while it hears him — and the pulsing
  * dot beside the state word is unchanged. The orb itself is blue
  * in every state, and its ripples say the rest: calm while waiting, quick while
@@ -95,12 +97,15 @@
  * this screen are sentence case, as on every other V3 screen.
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { AiPresence, Button, Icon, IconButton, type AiPresenceState } from '../../ui';
+import { AiPresence, Button, EdgeLight, Horizon, Icon, IconButton, SoftButton, WarnLine, WhiteButton, type AiPresenceState } from '../../ui';
 import { Z } from '../../lib/zLayers';
 import { useOverlayDismiss } from '../../lib/useOverlayDismiss';
 import { VoicePicker } from './VoicePicker';
 import { devDockAnswer, devDockHeard, type DockFixture } from '../../lib/devDockFixture';
 import { findWake, startDictation, type DictationError, type DictationSession } from '../../lib/voice/recognition';
+import { MIC_CAP_MS } from '../../lib/voice/useVoice';
+import { MicTimerFace } from './MicTimer';
+import { secondsWords, useSecondsSince } from './micClock';
 import { speak, speakable, stopSpeaking, trimForSpeech, type VoiceChoice } from '../../lib/voice/synthesis';
 
 /** `navigator.wakeLock` is not in every DOM lib this project may build against. */
@@ -191,6 +196,11 @@ export function DockMode({
   );
   const [heard, setHeard] = useState('');
   const [captured, setCaptured] = useState(fixture === 'hearing' ? devDockHeard() : '');
+  /* When it heard "Atlas", for the timer under the orb (29-1P15d, idea 78).
+     The hearing fixture is seven seconds in, so its shot shows a time. */
+  const [hearingSince, setHearingSince] = useState<number | null>(() =>
+    fixture === 'hearing' ? Date.now() - 7_400 : null,
+  );
   const [spoken, setSpoken] = useState(fixture === 'speaking' ? devDockAnswer() : '');
   const [error, setError] = useState<DictationError | null>(
     fixture === 'blocked'
@@ -203,6 +213,8 @@ export function DockMode({
 
   const session = useRef<DictationSession | null>(null);
   const settle = useRef<number | null>(null);
+  /** Two minutes after "Atlas", the sentence ends whether he has or not (`MIC_CAP_MS`). */
+  const cap = useRef<number | null>(null);
   const pending = useRef('');
   const spokenFor = useRef<string | null>(null);
   /* `state` is read inside callbacks that the recogniser owns and that must
@@ -232,11 +244,40 @@ export function DockMode({
     }
   };
 
+  const clearCap = () => {
+    if (cap.current !== null) {
+      window.clearTimeout(cap.current);
+      cap.current = null;
+    }
+  };
+
   const stopListening = useCallback(() => {
     clearSettle();
+    clearCap();
     session.current?.abort();
     session.current = null;
   }, []);
+
+  /* The sentence is over: send what followed "Atlas", or go back to waiting
+     if nothing did. Run by the pause (`SETTLE_MS`) or, after two minutes of
+     talking, by the cap (29-1P15d, his call: the mic stops after 2 minutes). */
+  const finishSentence = useCallback(() => {
+    clearSettle();
+    clearCap();
+    const ask = pending.current.trim();
+    pending.current = '';
+    setCaptured('');
+    setHeard('');
+    if (ask === '') {
+      /* He said "Atlas" and nothing else. Going back to waiting is
+         right; sending an empty turn would be an answer to nothing. */
+      setState('waiting');
+      return;
+    }
+    setState('thinking');
+    stopListening();
+    askRef.current(ask);
+  }, [stopListening]);
 
   /**
    * Start, or restart, the microphone.
@@ -261,6 +302,11 @@ export function DockMode({
           const wake = findWake(text);
           if (wake === null) return;
 
+          if (state_ === 'waiting') {
+            setHearingSince(Date.now());
+            clearCap();
+            cap.current = window.setTimeout(finishSentence, MIC_CAP_MS);
+          }
           setState('hearing');
           pending.current = wake.rest;
           setCaptured(wake.rest);
@@ -268,21 +314,7 @@ export function DockMode({
           /* Every new word pushes the deadline out; the send happens when the
              words stop coming. See `SETTLE_MS`. */
           clearSettle();
-          settle.current = window.setTimeout(() => {
-            const ask = pending.current.trim();
-            pending.current = '';
-            setCaptured('');
-            setHeard('');
-            if (ask === '') {
-              /* He said "Atlas" and nothing else. Going back to waiting is
-                 right; sending an empty turn would be an answer to nothing. */
-              setState('waiting');
-              return;
-            }
-            setState('thinking');
-            stopListening();
-            askRef.current(ask);
-          }, SETTLE_MS);
+          settle.current = window.setTimeout(finishSentence, SETTLE_MS);
         },
         onError: (err) => {
           /* A dead microphone must be visible. Anything else and he is talking
@@ -307,7 +339,7 @@ export function DockMode({
         },
       },
     );
-  }, [stopListening]);
+  }, [stopListening, finishSentence]);
 
   useEffect(() => {
     listenRef.current = listen;
@@ -524,13 +556,19 @@ export function DockMode({
             below, so that the words change and the orb does not. */}
         <Orb state={state} blocked={blocked} />
 
+        {/* 29-1P15d, idea 78: the mic's timer, under the orb while it hears
+            him. The same face as the composer's mic, larger for the room. */}
+        {!blocked && state === 'hearing' && <HearingTimer since={hearingSince} />}
+
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
-          {live && (
+          {/* Not while hearing: the timer's light above says it then, and two
+              pulsing lights for one state is one too many (29-1P15d). */}
+          {live && state !== 'hearing' && (
             <span
               aria-hidden="true"
               style={{
-                width: 9, height: 9, borderRadius: '50%', background: 'var(--accent)',
-                boxShadow: '0 0 10px var(--accent)', animation: 'var(--kf-pulse) 1800ms var(--ease-in-out) infinite',
+                width: 9, height: 9, borderRadius: '50%', background: 'var(--job-violet)',
+                boxShadow: '0 0 10px var(--job-violet)', animation: 'var(--kf-pulse) 1800ms var(--ease-in-out) infinite',
               }}
             />
           )}
@@ -538,7 +576,7 @@ export function DockMode({
             aria-live="polite"
             style={{
               font: KICK, letterSpacing: 'var(--tracking-kicker)', textTransform: KICKER_CASE,
-              color: live ? 'var(--accent)' : blocked ? 'var(--status-review)' : 'var(--fg-3)',
+              color: live ? 'var(--job-violet-tag-fg)' : blocked ? 'var(--status-overrun)' : 'var(--fg-3)',
             }}
           >
             {label}
@@ -568,9 +606,11 @@ export function DockMode({
                     : 'Dock mode cannot hear the wake word until you do.'}
               </p>
               {askable && (
-                <Button variant="frost" size="lg" iconLeft={<Icon name="mic" size={18} />} onClick={allowMic}>
+                /* The screen's one yes: solid white since 29-1P2, as
+                   Notifications' Allow notifications is. */
+                <WhiteButton icon={<Icon name="mic" size={18} />} onClick={allowMic}>
                   Allow the microphone
-                </Button>
+                </WhiteButton>
               )}
             </div>
           ) : state === 'waiting' ? (
@@ -598,7 +638,9 @@ export function DockMode({
             </p>
           ) : state === 'thinking' ? (
             <p style={{ margin: 0, maxWidth: '20ch', font: LEAD, letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)' }}>
-              Thinking<span style={{ color: 'var(--fg-4)' }}>…</span>
+              {/* The thinking shimmer (29-1P15a, idea 47), while it thinks. */}
+              <span className="ag-atlas-shimmer">Thinking</span>
+              <span style={{ color: 'var(--fg-4)' }}>…</span>
             </p>
           ) : (
             <div style={{ display: 'grid', justifyItems: 'center', gap: 'clamp(14px, min(2.4vh, 3vmin), 36px)' }}>
@@ -614,9 +656,10 @@ export function DockMode({
               >
                 {speakable(spoken)}
               </p>
-              <Button variant="frost" size="lg" iconLeft={<Icon name="square" size={18} />} onClick={() => stopSpeaking()}>
+              {/* Soft since 29-1P2: stopping is a second action, not a yes. */}
+              <SoftButton icon={<Icon name="square" size={18} />} onClick={() => stopSpeaking()}>
                 Stop
-              </Button>
+              </SoftButton>
             </div>
           )}
         </div>
@@ -627,13 +670,22 @@ export function DockMode({
           not here; it is the whole screen above. */}
       <footer style={{ display: 'grid', justifyItems: 'center', minHeight: 'var(--sp-6)' }}>
         {error !== null && !blocked && (
-          <p style={{ margin: 0, maxWidth: '46ch', textAlign: 'center', font: SUB, color: 'var(--status-review)' }}>
-            {error.message}
-          </p>
+          <WarnLine style={{ maxWidth: '46ch', font: SUB }}>{error.message}</WarnLine>
         )}
       </footer>
 
       {picker && <VoiceSheet voices={voices} chosen={voiceUri} onChoose={onChooseVoice} onClose={closePicker} />}
+
+      {/* 29-1P15b, idea 83: the stage sits above a horizon of violet light,
+          which brightens while Atlas hears him. Still, so it costs nothing
+          on the charger all night; behind everything on the stage. */}
+      <Horizon top="80%" lit={!blocked && state === 'hearing'} />
+
+      {/* 29-1P15a, idea 67: the screen's edges glow while Atlas hears him
+          and while it thinks, and fade the moment it answers. Not while it
+          waits for its name, which is this screen at rest: that would be a
+          loop running all night on the charger. */}
+      <EdgeLight on={!blocked && (state === 'hearing' || state === 'thinking')} />
     </div>
   );
 }
@@ -721,22 +773,22 @@ function Orb({ state, blocked }: { state: DockState; blocked: boolean }) {
             aria-hidden="true"
             style={{
               position: 'absolute', inset: 0, borderRadius: '50%',
-              border: '1px solid var(--accent-hairline)', boxShadow: 'var(--glow-accent-sm)', opacity: 0,
+              border: '1px solid var(--job-violet-line)', boxShadow: 'var(--job-violet-shine)', opacity: 0,
               animation: `var(--kf-ripple) ${hot ? 2000 : 3600}ms var(--ease-glass) ${i * (hot ? 660 : 1200)}ms infinite`,
             }}
           />
         ))}
 
       {/* The glow the disc used to carry while the microphone was open —
-          `--glow-accent-md` waiting, `-lg` hearing — kept behind the orb,
-          because without it the green shrank to hairline rings and a dot
+          `--job-violet-shine-md` waiting, `-glow` hearing — kept behind the
+          orb, because without it the colour shrank to hairline rings and a dot
           and "it is listening" stopped reading from across the room. */}
       {live && (
         <span
           aria-hidden="true"
           style={{
             position: 'absolute', inset: '4%', borderRadius: '50%',
-            boxShadow: hot ? 'var(--glow-accent-lg)' : 'var(--glow-accent-md)',
+            boxShadow: hot ? 'var(--job-violet-glow)' : 'var(--job-violet-shine-md)',
             transition: 'box-shadow var(--dur-morph) var(--ease-glass)',
           }}
         />
@@ -802,10 +854,21 @@ function VoiceSheet({
         }}
       >
         <VoicePicker all={voices} chosen={chosen} onChoose={onChoose} big />
-        <Button variant="frost" size="lg" block onClick={onClose}>
+        {/* The sheet's yes: solid white since 29-1P2. */}
+        <WhiteButton block onClick={onClose}>
           Done
-        </Button>
+        </WhiteButton>
       </div>
     </>
+  );
+}
+
+/** The mic's timer on the dock: minutes and seconds since it heard "Atlas". */
+function HearingTimer({ since }: { since: number | null }) {
+  const seconds = useSecondsSince(since, true);
+  return (
+    <span role="timer" aria-label={`Hearing you for ${secondsWords(seconds)}`} style={{ display: 'inline-flex' }}>
+      <MicTimerFace face="listening" seconds={seconds} scale={1.6} />
+    </span>
   );
 }

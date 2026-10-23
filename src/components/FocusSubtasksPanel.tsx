@@ -16,7 +16,8 @@
  *   it had nothing to say; the pill is now always present, because "this task
  *   has no steps" is a fact worth being able to check mid-session.
  * - **A closing banner.** Every step ticked puts up *"Every step is closed.
- *   Mark the task done."* on `--glass-tint-accent`, arriving by `ag-condense`.
+ *   Mark the task done."* on `--glass-tint-lime` (done is lime, 29-1P2c1),
+ *   arriving by `ag-condense`.
  *   It is the one place on the screen that tells you what to do next, and it
  *   only appears when there genuinely is nothing else left in the task.
  *
@@ -98,8 +99,8 @@ export function FocusSubtasksBody({ task, onToggle, editable }: FocusSubtasksBod
             <span
               style={{
                 display: 'block', height: '100%', width: `${(done / total) * 100}%`,
-                borderRadius: 'var(--r-pill)', background: 'var(--accent)',
-                boxShadow: '0 0 12px -2px var(--accent)',
+                borderRadius: 'var(--r-pill)', background: 'var(--job-lime)',
+                boxShadow: '0 0 12px -2px var(--job-lime)',
                 transition: 'width var(--dur-slow) var(--ease-spring)',
               }}
             />
@@ -132,12 +133,12 @@ export function FocusSubtasksBody({ task, onToggle, editable }: FocusSubtasksBod
           style={{
             display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
             padding: 'var(--sp-5)', borderRadius: 'var(--r-md)',
-            backgroundImage: 'var(--glass-tint-accent)',
-            boxShadow: 'var(--glass-rim-2), var(--glow-accent-sm)',
+            backgroundImage: 'var(--glass-tint-lime)',
+            boxShadow: 'var(--glass-rim-2), var(--job-lime-shine)',
             animation: 'var(--kf-condense) var(--dur-base) var(--ease-spring) both',
           }}
         >
-          <span style={{ display: 'flex', color: 'var(--accent)', flex: '0 0 auto' }}>
+          <span style={{ display: 'flex', color: 'var(--job-lime)', flex: '0 0 auto' }}>
             <Icon name="check" size={16} />
           </span>
           <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>

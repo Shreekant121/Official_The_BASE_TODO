@@ -29,30 +29,74 @@
  * row onto `tasks` with the first list's id, and every other choice still goes
  * through `addBacklogTask` — which is the difference between a thought that
  * joins today's queue and one that waits in a list.
+ *
+ * A DAY (29-1c3)
+ * --------------
+ * The floating + dropped on a day of the Dashboard's week strip opens this
+ * sheet with `day` set (his pick): the sheet says when, the new task is due
+ * that day at 18:00 — how the app writes a bare date — and "Current Focus
+ * Session" is not offered, since today's queue is not that day. The date goes
+ * on through `updateBacklogTask`, the one path, outside his undo: undoing it
+ * would leave a task he made for Thursday with no Thursday.
+ *
+ * AN EVENT (29-2a)
+ * ----------------
+ * His call: events are made from quick add too. One quiet line under the
+ * field, "Make it an event", hands what he typed — and the day, when the +
+ * was dropped on one — to the event sheet, which has the dates and the rest.
+ * The sheet stays two controls and a button; the line is a way out of it.
  */
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
+import { useEventSheet } from '../store/useEventSheet';
+import { withoutUndo } from '../store/undoGate';
 import { useOverlayDismiss } from '../lib/useOverlayDismiss';
 import { Z } from '../lib/zLayers';
-import { Button, Dialog, FieldLabel, Icon, IconButton, Input } from '../ui';
+import { Dialog, FieldLabel, Icon, IconButton, Input, WhiteButton } from '../ui';
 import CustomDropdown from './CustomDropdown';
 
 interface CaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Something was captured (Focus counts them for "Session done", 29-1P11a). */
+  onCaptured?: () => void;
+  /** A day to make the task due on, `YYYY-MM-DD` (the week strip's, 29-1c3). */
+  day?: string | null;
 }
 
-export default function CaptureModal({ isOpen, onClose }: CaptureModalProps) {
-  const { tasks, setTasks, taskLists, addBacklogTask } = useStore();
+/** "Thursday 23 October". */
+const longDay = (day: string) =>
+  new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' });
+
+export default function CaptureModal({ isOpen, onClose, onCaptured, day = null }: CaptureModalProps) {
+  const { tasks, setTasks, taskLists, addBacklogTask, updateBacklogTask } = useStore();
   const [captureTitle, setCaptureTitle] = useState('');
-  const [captureListId, setCaptureListId] = useState('focus');
+  const [captureListId, setCaptureListId] = useState(day ? 'action' : 'focus');
+  /* A day takes today's queue off the menu, so it starts on Action Steps; the
+     next plain capture starts on today's queue again, as it always has. */
+  const [dayWas, setDayWas] = useState(day);
+  if (dayWas !== day) {
+    setDayWas(day);
+    if (day && captureListId === 'focus') setCaptureListId('action');
+    if (!day && dayWas) setCaptureListId('focus');
+  }
 
   useOverlayDismiss(isOpen, onClose);
+
+  const makeEvent = () => {
+    const title = captureTitle.trim();
+    setCaptureTitle('');
+    onClose();
+    useEventSheet.getState().openEvent(undefined, { ...(title ? { title } : {}), ...(day ? { start: day } : {}) });
+  };
 
   const handleSave = () => {
     if (!captureTitle.trim()) return;
 
-    if (captureListId === 'focus') {
+    if (day) {
+      const id = addBacklogTask(captureTitle, captureListId === 'focus' ? 'action' : captureListId);
+      withoutUndo(() => updateBacklogTask(id, { deadline: `${day}T18:00` }));
+    } else if (captureListId === 'focus') {
       const list = taskLists[0];
       setTasks([
         ...tasks,
@@ -70,6 +114,7 @@ export default function CaptureModal({ isOpen, onClose }: CaptureModalProps) {
     }
 
     setCaptureTitle('');
+    onCaptured?.();
     onClose();
   };
 
@@ -134,6 +179,33 @@ export default function CaptureModal({ isOpen, onClose }: CaptureModalProps) {
         onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
       />
 
+      {day && (
+        <span
+          data-capture-day={day}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', marginTop: 'calc(var(--sp-4) * -1)',
+            font: 'var(--type-label)', color: 'var(--fg-2)',
+          }}
+        >
+          <Icon name="calendar" size={15} style={{ color: 'var(--job-sky)' }} />
+          Due {longDay(day)}
+        </span>
+      )}
+
+      <button
+        type="button"
+        data-capture-event
+        onClick={makeEvent}
+        style={{
+          justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
+          marginTop: 'calc(var(--sp-4) * -1)', padding: 0, border: 0, backgroundColor: 'transparent', cursor: 'pointer',
+          font: 'var(--type-label)', color: 'var(--fg-3)',
+        }}
+      >
+        <Icon name="calendar-plus" size={15} style={{ color: 'var(--job-sky)' }} />
+        Make it an event, to count down to
+      </button>
+
       <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
         <FieldLabel icon={<Icon name="list" size={14} />}>Where it goes</FieldLabel>
         <CustomDropdown
@@ -141,23 +213,21 @@ export default function CaptureModal({ isOpen, onClose }: CaptureModalProps) {
           value={captureListId}
           onChange={setCaptureListId}
           options={[
-            { value: 'focus', label: 'Add to Current Focus Session' },
+            ...(day ? [] : [{ value: 'focus', label: 'Add to Current Focus Session' }]),
             ...taskLists.map((l) => ({ value: l.id, label: l.title })),
           ]}
         />
       </div>
 
-      <Button
+      {/* The sheet's confirm: solid white since 29-1P2. */}
+      <WhiteButton
         block
-        size="lg"
-        variant="solid"
-        tone="accent"
         disabled={!captureTitle.trim()}
         onClick={handleSave}
-        iconLeft={<Icon name="plus" size={18} />}
+        icon={<Icon name="plus" size={18} />}
       >
         Save task
-      </Button>
+      </WhiteButton>
     </Dialog>
   );
 }

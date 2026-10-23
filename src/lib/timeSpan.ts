@@ -29,6 +29,16 @@ export function formatSpan(seconds: number): string {
 }
 
 /**
+ * Seconds → "5 hours" in a sentence (29-1P14c's "You have **5 hours**…"):
+ * whole hours in words, anything else as `formatSpan` says it.
+ */
+export function formatSpanSpoken(seconds: number): string {
+  const minutes = Math.floor(Math.max(0, seconds) / 60);
+  if (minutes > 0 && minutes % 60 === 0) return minutes === 60 ? '1 hour' : `${minutes / 60} hours`;
+  return formatSpanMinutes(minutes);
+}
+
+/**
  * Seconds → "04:00:00" — `hms()` in `design-system/screens/focus.html`, which
  * pads through the hour so a session readout never changes width as it runs
  * down. `Countdown` drops the hour below one and is the right call for the

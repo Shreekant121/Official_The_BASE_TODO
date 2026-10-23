@@ -5,6 +5,7 @@ import {
   type Task,
   type TaskList,
 } from '../store/useStore';
+import { buildProjectTree } from './projectTree';
 
 /**
  * What a public share link contains, and how it is built from the store.
@@ -48,7 +49,6 @@ export interface PublicTask {
   deadline?: string;
   estimatedTime?: number;
   valueINR?: number;
-  tags?: string[];
   subtasks?: PublicSubtask[];
   subtaskDone: number;
   subtaskTotal: number;
@@ -79,12 +79,19 @@ export interface PublicList {
 export interface PublicProject {
   name: string;
   description?: string;
-  color: string;
   icon?: string;
   /** The project's cover. Client view only — it is a whole image in the document. */
   coverUrl?: string;
+  /** The whole tree's value — its own lists and every project inside it. */
   totalValueINR: number;
   lists: PublicList[];
+  /**
+   * The projects inside it, each with its own lists and projects (BIG-2, his
+   * call: a mega project's link shows the whole tree). Absent when there are
+   * none, and on every document written before BIG-2. Read it through
+   * `shareView.ts`'s `projectListsDeep`, never `lists` alone.
+   */
+  children?: PublicProject[];
 }
 
 export type ShareType = 'task' | 'list' | 'project';
@@ -229,7 +236,6 @@ export function snapshotTask(task: Task, people?: PeopleLayer | null): PublicTas
     deadline: task.deadline,
     estimatedTime: task.estimatedTime,
     valueINR: task.valueINR,
-    tags: task.tags && task.tags.length > 0 ? task.tags : undefined,
     subtasks: task.subtasks && task.subtasks.length > 0 ? task.subtasks.map(snapshotSubtask) : undefined,
     subtaskDone: counts.done,
     subtaskTotal: counts.total,
@@ -268,20 +274,29 @@ export function snapshotProject(
   allLists: TaskList[],
   allTasks: Task[],
   people?: PeopleLayer | null,
+  /** Every project, so the ones inside this one can be published with it (BIG-2). */
+  allProjects: Project[] = [project],
 ): PublicProject {
-  const lists = allLists
-    .filter((l) => l.projectId === project.id && !l.hiddenFromShare)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .map((l) => snapshotList(l, allTasks, people));
-  return {
-    name: project.name,
-    description: project.description,
-    color: project.color,
-    icon: project.icon,
-    coverUrl: people ? project.imageUrl : undefined,
-    totalValueINR: lists.reduce((sum, l) => sum + l.valueINR, 0),
-    lists,
+  const tree = buildProjectTree(allProjects);
+  const snap = (p: Project, root: boolean): PublicProject => {
+    const lists = allLists
+      .filter((l) => l.projectId === p.id && !l.hiddenFromShare)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((l) => snapshotList(l, allTasks, people));
+    const children = tree.childrenOf(p.id).map((c) => snap(c, false));
+    return {
+      name: p.name,
+      // The page's hero is the shared project; one inside it is a heading.
+      ...(root ? { description: p.description } : {}),
+      icon: p.icon,
+      coverUrl: root && people ? p.imageUrl : undefined,
+      totalValueINR: lists.reduce((sum, l) => sum + l.valueINR, 0)
+        + children.reduce((sum, c) => sum + c.totalValueINR, 0),
+      lists,
+      ...(children.length > 0 ? { children } : {}),
+    };
   };
+  return snap(project, true);
 }
 
 /**
@@ -316,7 +331,11 @@ function taskIdsOf(doc: Pick<PublicShareDoc, 'task' | 'list' | 'project'>): Set<
   const ids = new Set<string>();
   if (doc.task) ids.add(doc.task.id);
   for (const t of doc.list?.tasks ?? []) ids.add(t.id);
-  for (const l of doc.project?.lists ?? []) for (const t of l.tasks) ids.add(t.id);
+  const walk = (p: PublicProject | undefined) => {
+    for (const l of p?.lists ?? []) for (const t of l.tasks) ids.add(t.id);
+    for (const c of p?.children ?? []) walk(c);
+  };
+  walk(doc.project);
   return ids;
 }
 
@@ -336,7 +355,7 @@ export function buildShareDoc(
   entity:
     | { type: 'task'; task: Task }
     | { type: 'list'; list: TaskList; allTasks: Task[] }
-    | { type: 'project'; project: Project; allLists: TaskList[]; allTasks: Task[] },
+    | { type: 'project'; project: Project; allLists: TaskList[]; allTasks: Task[]; allProjects?: Project[] },
   extras: ShareDocExtras = {},
 ): PublicShareDoc {
   const now = extras.now ?? Date.now();
@@ -388,7 +407,9 @@ export function buildShareDoc(
             type: 'project',
             title: entity.project.name,
             subtitle: entity.project.description,
-            project: snapshotProject(entity.project, entity.allLists, entity.allTasks, people),
+            project: snapshotProject(
+              entity.project, entity.allLists, entity.allTasks, people, entity.allProjects ?? [entity.project],
+            ),
           };
 
   const live = extras.live;

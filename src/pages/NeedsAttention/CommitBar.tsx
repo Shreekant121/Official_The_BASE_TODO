@@ -16,6 +16,10 @@
  * **V3-5 made it `gel`**, V3's one primary, as Home, the board and Focus did
  * with theirs; it draws as `solid` outside a scope. The ration argument above
  * is the old system's — v4 spends its green on exactly this one button.
+ * **29-1P2 made it the design system's plain emerald `GelButton`** — the
+ * session's one verb, as Mark done is Focus's — and Previous and Skip soft.
+ * Not the solid white a sheet's Save is: this is a screen's main action, not
+ * a dialog's yes. 36px tall, as a gel in a bar is on the board.
  *
  * **`Save & next` stays enabled while fields are outstanding, and that is a
  * deliberate divergence.** The source disables it until nothing is missing,
@@ -38,7 +42,7 @@
  * modifier.
  */
 import { useEffect } from 'react';
-import { Button, Icon, ScoreDial } from '../../ui';
+import { GelButton, Icon, RollingNumber, ScoreDial, SoftButton } from '../../ui';
 import { RedAlertBadge } from '../../components/task-fields/RedAlertBadge';
 
 interface CommitBarProps {
@@ -117,42 +121,47 @@ export default function CommitBar({
       <span
         style={{
           font: 'var(--type-label)', minWidth: 0, textWrap: 'pretty',
-          color: outstanding > 0 ? 'oklch(0.95 0.07 82)' : 'var(--fg-2)',
+          /* Fields still needed: a warning, grey with its icon (29-1P2c2). */
+          color: outstanding > 0 ? 'var(--status-warn)' : 'var(--fg-2)',
+          display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
         }}
       >
+        {outstanding > 0 && <Icon name="triangle-alert" size={14} style={{ flex: '0 0 auto' }} />}
         {outstanding > 0
-          ? `${outstanding} field${outstanding === 1 ? '' : 's'} still needed`
+          /* 29-1P4c, idea 49: the count rolls down as he fills them in. One
+             span, so the bar's flex gap does not open between number and words. */
+          ? <span><RollingNumber value={outstanding} />{` field${outstanding === 1 ? '' : 's'} still needed`}</span>
           : 'Scored. ⌘↵ to commit and move on.'}
       </span>
 
       <span style={{ flex: 1 }} />
 
-      <Button
-        variant="glass"
+      <SoftButton
         size="sm"
         disabled={!canGoPrevious}
         onClick={onPrevious}
-        iconLeft={<Icon name="arrow-left" size={16} />}
+        icon={<Icon name="arrow-left" size={16} />}
       >
         Previous
-      </Button>
-      <Button
-        variant="glass"
+      </SoftButton>
+      <SoftButton
         size="sm"
         onClick={onSkip}
         title="Leave this one as it is and move on"
-        iconLeft={<Icon name="skip-forward" size={16} />}
+        icon={<Icon name="skip-forward" size={16} />}
       >
         Skip
-      </Button>
-      <Button
-        variant="gel"
-        size="sm"
+      </SoftButton>
+      <GelButton
+        colour="emerald"
+        tile={false}
+        size="md"
         onClick={onSave}
-        iconRight={<Icon name={isLast ? 'check' : 'arrow-right'} size={16} />}
+        style={{ height: 36, padding: '0 var(--sp-6)' }}
       >
         {isLast ? 'Finish session' : isDirty ? 'Save & next' : 'Next'}
-      </Button>
+        <Icon name={isLast ? 'check' : 'arrow-right'} size={16} />
+      </GelButton>
     </div>
   );
 }

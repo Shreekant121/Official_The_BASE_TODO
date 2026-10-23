@@ -20,8 +20,9 @@
  *   device if anything is: the laptop has room for the list beside the
  *   conversation and the tablet does not, and a preference synced between them
  *   would hide a column on the machine that has space for it.
- * - **The mode and the thinking effort** (item 12, DESIGN.md §3.3). Both are
- *   per-turn fields on the request rather than settings Atlas holds — Atlas
+ * - **The mode** (item 12, DESIGN.md §3.3; the thinking effort beside it went
+ *   with its dial at OPT-8 — every turn is Max). It is a per-turn field on
+ *   the request rather than settings Atlas holds — Atlas
  *   deliberately has no opinion, so that two devices in two rooms cannot change
  *   each other's mode mid-sentence — which leaves the *remembering* here.
  *
@@ -34,7 +35,6 @@ export const CHAT_ID_KEY = 'mutineer_atlas_conversation';
 export const CONTEXT_K_KEY = 'mutineer_atlas_context_k';
 export const LIST_DOCKED_KEY = 'mutineer_atlas_list_docked';
 export const MODE_KEY = 'mutineer_atlas_mode';
-export const EFFORT_KEY = 'mutineer_atlas_effort';
 
 /**
  * **Which voice Atlas speaks in, and whether it speaks at all** (items 24–25).

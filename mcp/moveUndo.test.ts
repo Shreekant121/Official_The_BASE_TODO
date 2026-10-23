@@ -4,10 +4,10 @@ import { useTrashStore } from '../src/store/useTrashStore';
 import { useSnapshotStore } from '../src/store/useSnapshotStore';
 import { liveAgentStore, liveSnapshotCapture } from '../src/lib/agent/liveContext';
 import { moveTask, placeInList } from '../src/lib/agent/tools/moveTools';
-import { DRAWERS, drawerOf, fallbackTools, frontDoorKindOf } from '../src/lib/agent/tools/index';
+import { DRAWERS, drawerOf, frontDoorKindOf } from '../src/lib/agent/tools/index';
 import { describeToolCall } from '../src/lib/agent/toolChip';
 import type { ToolContext } from '../src/lib/agent/types';
-import { applyUndo, beginCapture, endCapture, type UndoPayload } from './undo.ts';
+import { applyUndo, beginCapture, endCapture, type UndoPayload } from '../src/lib/agent/toolServer/undo';
 
 /**
  * BUILD-17 — ATLAS CAN MOVE AND REORDER TASKS.
@@ -22,8 +22,8 @@ import { applyUndo, beginCapture, endCapture, type UndoPayload } from './undo.ts
 const NOW = new Date('2026-09-24T11:00:00+05:30');
 
 const PROJECTS: Project[] = [
-  { id: 'p-home', name: 'Home', color: '#10B981', createdAt: 0, order: 0 },
-  { id: 'p-work', name: 'Work', color: '#8C7BEC', createdAt: 1, order: 1 },
+  { id: 'p-home', name: 'Home', createdAt: 0, order: 0 },
+  { id: 'p-work', name: 'Work', createdAt: 1, order: 1 },
 ];
 
 const LISTS: TaskList[] = [
@@ -232,7 +232,6 @@ describe('where it is registered', () => {
     expect(DRAWERS.tasks.description).toMatch(/moving it to another list or project and reordering it/);
     expect(moveTask.mutates).toBe(true);
     expect(frontDoorKindOf(moveTask)).toBeUndefined();
-    expect(fallbackTools.map((tool) => tool.name)).not.toContain('move_task');
   });
 
   it('draws as a move on the chat and the log, not as its own name', async () => {

@@ -1,12 +1,20 @@
 /**
  * Project board — the subtask tree under a task row (UI-16).
  *
- * A READOUT with exactly one verb: open a branch. It is deliberately NOT
+ * A READOUT with two verbs: open a branch, and — since 29-1P7b (idea 163,
+ * "tick steps from the card") — tick a step. It is still deliberately NOT
  * merged with `task-fields/SubtaskTree.tsx`, which is the editor behind the
  * task sheet — that one carries a draft, five recursive transforms and a
  * details panel per row, and none of it belongs on a board row you are only
  * glancing at. Same call UI-14 made when it left `session/QueueSubtaskTree.tsx`
  * un-merged with the editor for the same reason.
+ *
+ * A tick here is the sheet's tick: the same `TickBox`, `cue` and `popTick` (no
+ * gold +1 — a subtask floats none, his 29-1P4b call), and the write goes
+ * through `updateBacklogTask` with the subtask's id, which finds it at any
+ * depth and mirrors it into today's queue copy. The whole line is the button,
+ * as on the ideas page, so a finger does not have to find a 16px box. Ticking
+ * the last one does nothing to the task itself (his call, 2026-10-13).
  *
  * WHAT CHANGED BEYOND THE PAINT
  *
@@ -20,19 +28,18 @@
  *   rows and `publicShare` together, and `ScoreChip` — which existed for
  *   exactly this job — is deleted with them. The importance dial still writes
  *   `humanOverride` on a subtask; nothing reads it yet.
- * - **A finished subtask reads `--status-done`, not emerald.** `colors.css`
- *   rations emerald to mean LIVE and nothing else, and a subtask that is
- *   finished is the opposite of live. Same reasoning as UI-14's cyan tick on
- *   the queued row.
+ * - **A finished subtask reads `--status-done`, not emerald** — lime since
+ *   29-1P2c1, and drawn by the one done box since 29-1P4b.
  * - **The disclosure control is a real button with `aria-expanded`.** It was a
  *   bare `<button>` holding a rotating chevron and no state for anything but a
  *   sighted user; it is also what stops a press on it starting a drag, since
  *   `SortableList`'s sensors let a `button` own the pointer.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Icon, IconButton } from '../../ui';
-import type { Subtask } from '../../store/useStore';
+import { Icon, IconButton, Strike, TickBox, popTick } from '../../ui';
+import { useStore, type Subtask } from '../../store/useStore';
+import { cue } from '../../lib/sound';
 
 /** One indent step, in px. Matches the 16px the old preview used. */
 const INDENT = 16;
@@ -57,6 +64,14 @@ function PreviewRow({ sub, depth }: { sub: Subtask; depth: number }) {
   const [expanded, setExpanded] = useState(false);
   const children = sub.subtasks ?? [];
   const done = sub.status === 'completed';
+  const updateBacklogTask = useStore((s) => s.updateBacklogTask);
+  const tickBox = useRef<HTMLSpanElement>(null);
+
+  const toggle = () => {
+    cue(done ? 'untick' : 'tick');
+    if (!done) popTick(tickBox.current);
+    updateBacklogTask(sub.id, { status: done ? 'needsAction' : 'completed' });
+  };
 
   return (
     <div>
@@ -91,27 +106,36 @@ function PreviewRow({ sub, depth }: { sub: Subtask; depth: number }) {
           <span aria-hidden="true" style={{ width: 20, flex: '0 0 auto' }} />
         )}
 
-        <Icon
-          name={done ? 'check-circle-2' : 'circle'}
-          size={13}
-          style={{ flex: '0 0 auto', color: done ? 'var(--status-done)' : 'var(--fg-4)' }}
-        />
-
-        <span
-          title={sub.title}
+        <button
+          type="button"
+          aria-pressed={done}
+          aria-label={done ? `Mark ${sub.title} not done` : `Mark ${sub.title} done`}
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
           style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            font: 'var(--type-caption)',
-            color: done ? 'var(--fg-4)' : 'var(--fg-2)',
-            textDecoration: done ? 'line-through' : undefined,
+            flex: 1, minWidth: 0,
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-3)',
+            minHeight: 28, padding: 0, border: 0,
+            background: 'transparent', textAlign: 'left', cursor: 'pointer',
           }}
         >
-          {sub.title}
-        </span>
+          <TickBox ref={tickBox} done={done} size={16} />
+          <span
+            title={sub.title}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              font: 'var(--type-caption)',
+              color: done ? 'var(--fg-4)' : 'var(--fg-2)',
+              transition: 'color var(--dur-base) var(--ease-glass)',
+            }}
+          >
+            {/* The board's slide-through line, not a static line-through. */}
+            <Strike on={done}>{sub.title}</Strike>
+          </span>
+        </button>
 
         {sub.deadline && (
           <span

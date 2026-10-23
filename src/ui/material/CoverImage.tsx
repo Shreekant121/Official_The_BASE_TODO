@@ -1,3 +1,5 @@
+import { useCoverSrc } from '../../lib/covers/coverCache';
+
 /**
  * A cover photograph shown WHOLE inside a fixed box (FIX-9).
  *
@@ -17,6 +19,10 @@
  * see `ProjectCard.tsx`; do not reinstate a dimming filter on the fill either.
  *
  * The parent owns the box (height, radius, `overflow: hidden`); this fills it.
+ *
+ * `src` may be a `cover:` pointer — covers are their own documents now
+ * (`lib/covers/`) — and is resolved here, so every caller passes `imageUrl`
+ * as it is. Until the picture lands the box stays empty rather than broken.
  */
 /**
  * The shape of a project card's cover on Home — 1200×700, Shreekant's number
@@ -42,7 +48,9 @@ export interface CoverImageProps {
   fit?: 'whole' | 'crop';
 }
 
-export function CoverImage({ src, fit = 'whole' }: CoverImageProps) {
+export function CoverImage({ src: imageUrl, fit = 'whole' }: CoverImageProps) {
+  const src = useCoverSrc(imageUrl);
+  if (!src) return null;
   if (fit === 'crop') {
     return (
       <img

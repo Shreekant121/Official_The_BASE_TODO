@@ -11,10 +11,11 @@
  * no Sidebar on purpose: a full sidebar would fight the floating-glass
  * language.
  *
- * `badge` renders a DOT, not a count — any non-null value lights it.
- * `badgeNote` is the app's own addition and adds no pixels: it is the count
- * in words, put in the cell's `title` and accessible name because a dot
- * cannot carry one.
+ * `badge` renders a COUNT when it is a number — a small chip in the corner
+ * of the cell, coral or neutral by `badgeColour` — and a dot for any other
+ * non-null value (29-1P2, his call: "numbers on the nav", over the design
+ * system's dot). `badgeNote` is the count in words, in the cell's `title` and
+ * accessible name, so a screen reader hears what the chip says.
  * The indicator is positioned arithmetically off the item index, so
  * every item must be the same 48px cell; do not pass variable-width
  * items.
@@ -35,7 +36,7 @@
  *     `--dur-morph`, in step with the position transition it rides on.
  *     `--ease-spring` is rationed to "toggles, ticks, handles and
  *     confirmations only" and an indicator is none of those.
- *   - The glow blooms `--glow-accent-sm` -> `--glow-accent-md` and back at
+ *   - The glow blooms `--job-lime-shine` -> `-shine-md` and back at
  *     the midpoint. Glow says *emitting*, and the one moment this object
  *     is genuinely doing something is while it is in flight.
  *
@@ -67,12 +68,29 @@
  * With one, the indicator is positioned inside an inner column rather than
  * off the nav's padding, so the mark cannot throw its arithmetic out; with
  * none, the DOM is exactly what it always was.
+ *
+ * 29-1P5b — `screenLit`, THE APP'S NAV (ideas 71, 23, 80; his calls,
+ * 2026-10-07). Every app nav passes it; `/design`'s specimens may not. With it
+ * there is no plate. Every icon is a layered glass icon (`LayeredIcon`) in the
+ * colour of the screen it opens (his call: "all icons have color"); the lit
+ * one glows the SCREEN's light (not lime) with a key-light under it and a
+ * bright glyph; and the marker is a small dot that, on a move,
+ * stretches like a drop to the new cell and snaps there. The colour is
+ * `tokens/screenLight.css`'s, the same rules that colour the page, so it
+ * fades with the page; the pieces are `navLight.css`.
+ *
+ * 29-1P5c — on the rail, a soft tile glides behind the icon under the mouse
+ * (idea 59, `core/useGlide.ts`). Hover only; nothing is drawn at rest.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { NARROW, useMedia } from '../useMedia';
 import { useMotion } from '../core/motion';
 import { useV3 } from '../core/v3Context';
+import { RollingNumber } from '../data/RollingNumber';
+import { usePopOnLateMount } from '../data/rollCount';
+import { LayeredIcon } from '../core/LayeredIcon';
+import { useGlide } from '../core/useGlide';
 
 export interface MiniNavItem {
   value: string;
@@ -85,18 +103,23 @@ export interface MiniNavItem {
    */
   shortLabel?: string;
   icon: ReactNode;
-  /** Any non-null value renders an alert dot. */
+  /** A number renders a count chip; any other non-null value an alert dot. */
   badge?: unknown;
   /**
-   * What the dot means, in words — e.g. "3 on red alert".
-   *
-   * The dot is deliberately not a number (see the header), which leaves a
-   * count with nowhere to be said. This says it in the cell's `title` and
-   * appends it to the accessible name, so it is reachable by pointer and by
-   * screen reader without adding a second visual treatment the design system
-   * does not have.
+   * The count chip's colour: `coral` for what is urgent (its colour job),
+   * `neutral` for a plain count. The dot is always the alert red.
+   */
+  badgeColour?: 'coral' | 'neutral';
+  /**
+   * What the badge means, in words — e.g. "3 on red alert". Said in the
+   * cell's `title` and appended to the accessible name.
    */
   badgeNote?: string;
+  /**
+   * `screenLit` only: the light of the screen this cell opens (`navCellLight`
+   * in `lib/screenLight.ts`), which colours its icon. Left out: grey.
+   */
+  light?: string;
 }
 
 export interface MiniNavProps extends Omit<HTMLAttributes<HTMLElement>, 'onChange'> {
@@ -108,6 +131,12 @@ export interface MiniNavProps extends Omit<HTMLAttributes<HTMLElement>, 'onChang
   showLabels?: boolean;
   /** Drawn at the head of a vertical rail, above the first cell — the brand mark. */
   lead?: ReactNode;
+  /**
+   * The app's nav (29-1P5b): layered glass icons, the lit one in the screen's
+   * light, and a dot that stretches between cells instead of the plate.
+   * Inside a V3 scope only; outside one it is ignored.
+   */
+  screenLit?: boolean;
 }
 
 const PAD = 6;
@@ -128,31 +157,29 @@ const CELL_ICON = 48;
 const CELL_LABELLED_W = 76;
 const CELL_LABELLED_H = 54;
 
+/** The lit dot's size, and how long its stretch-and-snap takes (idea 23's card). */
+const DOT = 5;
+const DOT_MS = 460;
+
 /**
- * WHERE THE PILL WAS ON THE SCREEN YOU CAME FROM.
+ * WHERE THE DOT WAS ON THE SCREEN YOU CAME FROM (29-1P5b).
  *
- * **This is the whole reason the indicator's slide had never once run.** Both
- * halves of the motion were correctly built — a `top`/`left` transition on
- * `--dur-morph`/`--ease-morph`, and a squash-and-stretch that leans towards
- * where it is going — and both are driven by the index *changing*. It never
- * changes. Every screen renders its own `<MiniNav>`, so tapping a destination
- * unmounts the bar and builds a new one, whose first paint is already at the
- * new cell: `lastIdx` starts equal to `idx`, the effect returns early, and the
- * pill teleports. Shreekant reported exactly that ("the smooth transition on
- * the circle in the nav"), and `IMPROVEMENTS.md` had this listed among the
- * things that *felt right* — it was never checked across a navigation.
+ * Every screen renders its own `<MiniNav>`, so tapping a destination never
+ * changes any one bar's cell: the bar you tapped is hidden and another is
+ * shown (or built), already on its own cell. The old plate's slide never ran
+ * across a navigation for exactly that reason, and the plate's fix — paint one
+ * frame at the old cell, from a `useState` initialiser — stopped working when
+ * the nav screens became kept ones (2026-09-28): a kept screen's bar is shown
+ * again, not built, so no initialiser runs.
  *
- * Module scope is what survives the unmount. The alternative is hoisting one
- * nav above the router so it is never rebuilt, which is the better shape and
- * is seventeen files of restructuring; this is four lines and gets the motion
- * he is asking about.
+ * What does run on a kept screen being shown is its layout effects, so that is
+ * where the dot looks here for where it was, before the first paint, and
+ * stretches from there. Module scope is what survives the screen change.
  *
- * **Keyed by the bar's own items** so two different bars cannot borrow each
- * other's memory — `/settings` renders a tab strip through this component as
- * well as the app nav, and a strip remembering `atlas` would fling its pill at
- * a cell that is not there.
+ * **Keyed by orientation and the bar's own items**, so a rail and a floating
+ * bar never borrow each other's memory, and nor do two different bars.
  */
-const pillWasAt = new Map<string, string>();
+const dotWasAt = new Map<string, string>();
 
 export function MiniNav({
   items = [],
@@ -161,6 +188,7 @@ export function MiniNav({
   orientation = 'horizontal',
   showLabels = false,
   lead,
+  screenLit,
   className = '',
   style,
   ...rest
@@ -171,64 +199,23 @@ export function MiniNav({
   const vertical = orientation === 'vertical';
   const v3 = useV3();
   const motion = useMotion();
+  const popIn = usePopOnLateMount<HTMLSpanElement>();
   /* Resting and in-flight glow for the pill. The keyframes below read these
      so a V3 pill does not flash back to the old emerald glass mid-travel. */
   const pillRim = v3 ? 'var(--glass-rim-2)' : 'var(--glass-rim-3)';
 
-  /*
-   * The cell this bar paints its pill on for one frame before moving it —
-   * see `pillWasAt`. `null` on the first bar of a session and whenever the
-   * destination has not changed, which is what keeps a plain page *reload*
-   * still (and is why the screenshot harness, which loads every route fresh,
-   * cannot see any of this).
-   */
-  const barKey = items.map((i) => i.value).join('|');
-  const [entering, setEntering] = useState<number | null>(() => {
-    const previous = pillWasAt.get(barKey);
-    if (previous === undefined || previous === current) return null;
-    const at = items.findIndex((i) => i.value === previous);
-    return at === -1 ? null : at;
-  });
-
-  /* Where it is drawn *now*, which is the old cell for exactly one frame. */
-  const shownIdx = entering ?? idx;
-
-  useEffect(() => {
-    pillWasAt.set(barKey, current);
-  }, [barKey, current]);
-
-  /*
-   * Let the first paint land at the old cell, then move. A frame is the whole
-   * mechanism: a transition needs a painted "from" to come out of, and setting
-   * both positions inside one render gives it none.
-   *
-   * **The timer is not belt-and-braces, it is the correctness half.** A
-   * background or unpainted tab throttles `requestAnimationFrame` to nothing,
-   * and a frame that never arrives leaves the pill parked on the cell you came
-   * *from* — so a screen opened in a background tab would sit there lighting
-   * the wrong destination until it was looked at. Whichever of the two fires
-   * first wins; the other is cancelled.
-   */
-  useEffect(() => {
-    if (entering === null) return;
-    const done = () => setEntering(null);
-    const frame = requestAnimationFrame(done);
-    const fallback = setTimeout(done, 64);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(fallback);
-    };
-  }, [entering]);
+  /* The app's nav draws the lit dot instead of the plate (29-1P5b). */
+  const lit = !!screenLit && v3;
 
   const indicatorRef = useRef<HTMLSpanElement>(null);
   /* Where the pill was last time, so a first paint does not animate. */
-  const lastIdx = useRef(shownIdx);
+  const lastIdx = useRef(idx);
 
   useEffect(() => {
     const from = lastIdx.current;
-    lastIdx.current = shownIdx;
+    lastIdx.current = idx;
     const el = indicatorRef.current;
-    if (!el || from === shownIdx) return;
+    if (!el || from === idx) return;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     if (typeof el.animate !== 'function') return;
 
@@ -237,13 +224,13 @@ export function MiniNav({
      * stretch than a step to the neighbour, capped so a six-item rail does
      * not turn into a rubber band.
      */
-    const reach = Math.min(1, Math.abs(shownIdx - from) / 3);
+    const reach = Math.min(1, Math.abs(idx - from) / 3);
     const along = 1 + 0.10 + 0.10 * reach;
     const across = 1 - 0.05 - 0.04 * reach;
 
     /* The origin is the trailing edge, so the pill stretches TOWARDS where it
        is going rather than growing symmetrically out of itself. */
-    const forward = shownIdx > from;
+    const forward = idx > from;
     el.style.transformOrigin = vertical
       ? `50% ${forward ? '0%' : '100%'}`
       : `${forward ? '0%' : '100%'} 50%`;
@@ -254,14 +241,14 @@ export function MiniNav({
        Outside a scope that is 560ms on (0.32, 0.72, 0, 1), as it always was. */
     const anim = el.animate(
       [
-        { transform: 'scale(1, 1)', boxShadow: `${pillRim}, var(--glow-accent-sm)` },
-        { transform: squash, boxShadow: `${pillRim}, var(--glow-accent-md)`, offset: 0.42 },
-        { transform: 'scale(1, 1)', boxShadow: `${pillRim}, var(--glow-accent-sm)` },
+        { transform: 'scale(1, 1)', boxShadow: `${pillRim}, var(--job-lime-shine)` },
+        { transform: squash, boxShadow: `${pillRim}, var(--job-lime-shine-md)`, offset: 0.42 },
+        { transform: 'scale(1, 1)', boxShadow: `${pillRim}, var(--job-lime-shine)` },
       ],
       { duration: Math.round(motion.dur.morph * 1000), easing: `cubic-bezier(${motion.ease.morph.join(', ')})` },
     );
     return () => anim.cancel();
-  }, [shownIdx, vertical, pillRim, motion]);
+  }, [idx, vertical, pillRim, motion]);
 
   const pick = (v: string) => {
     if (value === undefined) setInternal(v);
@@ -326,13 +313,79 @@ export function MiniNav({
   const inner = vertical && lead != null;
   const inset = inner ? 0 : PAD;
   const step = vertical ? cellH : cellW;
-  const offset = inset + shownIdx * (step + 2);
+  const offset = inset + idx * (step + 2);
   const indicator: CSSProperties = vertical
     ? { left: inset, right: inset, top: offset, height: cellH }
     : { top: PAD, bottom: PAD, left: offset, width: cellW };
 
+  /*
+   * The lit dot (29-1P5b). On a bar it sits under the icon, at the cell's
+   * foot; on the rail it sits on the rail's outer edge, beside the cell, where
+   * a dock keeps its dot. `dotAt` is its leading edge along the bar's axis.
+   */
+  const dotAt = (i: number) => inset + i * (step + 2) + (step - DOT) / 2;
+  /* On a screen that is none of the cells (`/design`, a placeholder), nothing
+     is lit, so there is no dot either: `idx` falls back to the first cell. */
+  const dot: CSSProperties = {
+    ...(vertical
+      ? { left: (inner ? -PAD : 0) + 1, top: dotAt(idx), width: DOT, height: DOT }
+      : { top: PAD + cellH - DOT, left: dotAt(idx), width: DOT, height: DOT }),
+    ...(items.some((i) => i.value === current) ? {} : { display: 'none' }),
+  };
+
+  const dotRef = useRef<HTMLSpanElement>(null);
+  const dotKey = `${orientation}:${items.map((i) => i.value).join('|')}`;
+
+  /*
+   * IDEA 23 — THE DOT STRETCHES TO THE NEW CELL, THEN SNAPS THERE. Its front
+   * edge runs ahead to the new cell while its back edge holds, then the back
+   * catches up, like a drop of liquid: two halves of one Web Animation on
+   * `left`/`width` (`top`/`height` on the rail), so the rounded ends stay
+   * round, which a `scale` would squash. Nothing is left behind at rest.
+   *
+   * A layout effect, so a kept screen being shown starts its dot at the old
+   * cell before its first paint (see `dotWasAt`). Never cancelled in a
+   * cleanup: StrictMode's second run would cancel the only run that had a
+   * "from", and a dot left playing on a hidden bar costs nothing.
+   */
+  useLayoutEffect(() => {
+    if (!lit) return;
+    const previous = dotWasAt.get(dotKey);
+    dotWasAt.set(dotKey, current);
+    const el = dotRef.current;
+    if (!el || previous === undefined || previous === current) return;
+    const from = items.findIndex((i) => i.value === previous);
+    if (from === -1 || from === idx) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    if (typeof el.animate !== 'function') return;
+
+    const along = vertical ? 'top' : 'left';
+    const length = vertical ? 'height' : 'width';
+    const at = (start: number, size: number) => ({ [along]: `${start}px`, [length]: `${size}px` });
+    const a = inset + from * (step + 2) + (step - DOT) / 2;
+    const b = inset + idx * (step + 2) + (step - DOT) / 2;
+    const glide = `cubic-bezier(${motion.ease.glide.join(', ')})`;
+    el.animate(
+      [
+        { ...at(a, DOT), easing: glide },
+        { ...at(Math.min(a, b), Math.abs(b - a) + DOT), offset: 0.45, easing: 'cubic-bezier(0.55, 0, 0.25, 1)' },
+        at(b, DOT),
+      ],
+      { duration: DOT_MS },
+    );
+  }, [lit, dotKey, current, items, idx, vertical, inset, step, motion]);
+
+  /* Idea 59 (29-1P5c): on the rail, one soft tile glides behind whichever
+     icon the mouse is over. The rail only — the laptop's nav. */
+  const { pad: glidePad, hostProps: glideHost } = useGlide();
+  const railGlide = lit && vertical;
+
   const cellsAndPill = (
     <>
+      {railGlide && <span ref={glidePad} className="ag-glide ag-glide--rail" aria-hidden="true" />}
+      {lit ? (
+        <span ref={dotRef} aria-hidden="true" className="ag-nav-dot" style={dot} />
+      ) : (
       <span
         ref={indicatorRef}
         aria-hidden="true"
@@ -341,14 +394,15 @@ export function MiniNav({
           ...indicator,
           borderRadius: 'var(--r-pill)',
           /* V3: the design's plate — white glass at 0.14 with V3's rim, and
-             the emerald glow its blurred disc throws. */
+             a lime glow (29-1P2c1: the current page is lime's). */
           backgroundImage: v3
             ? 'linear-gradient(oklch(1 0 0 / 0.14), oklch(1 0 0 / 0.14))'
-            : 'var(--glass-tint-accent)',
-          boxShadow: `${pillRim}, var(--glow-accent-sm)`,
+            : 'var(--glass-tint-lime)',
+          boxShadow: `${pillRim}, var(--job-lime-shine)`,
           transition: `${vertical ? 'top' : 'left'} var(--dur-morph) var(--ease-morph)`,
         }}
       />
+      )}
       {items.map((it) => {
         const on = it.value === current;
         return (
@@ -358,6 +412,9 @@ export function MiniNav({
             aria-label={it.badgeNote ? `${it.label}, ${it.badgeNote}` : it.label}
             title={it.badgeNote}
             aria-current={on ? 'page' : undefined}
+            className={lit ? 'ag-nav-cell ag-licon-host' : undefined}
+            data-light={lit ? it.light : undefined}
+            data-glide={railGlide ? '' : undefined}
             onClick={() => pick(it.value)}
             style={{
               position: 'relative',
@@ -392,7 +449,17 @@ export function MiniNav({
             onPointerCancel={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
             onBlur={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
           >
-            {v3 ? (
+            {lit ? (
+              /* 29-1P5b: a layered glass icon in its screen's colour; the lit
+                 one glows, with the key-light under it (`navLight.css`). On a bar the
+                 icon rises a little to make room for the dot beneath it. */
+              <>
+                <span className="ag-nav-key" aria-hidden="true" />
+                <span style={{ display: 'grid', transform: vertical ? undefined : 'translateY(-3px)' }}>
+                  <LayeredIcon icon={it.icon} />
+                </span>
+              </>
+            ) : v3 ? (
               /* V3 dims the glyph rather than greying it: white at 55%, with
                  a shadow so it holds over a bright patch of backdrop. On the
                  glyph, not the cell, so the alert dot stays at full red. */
@@ -423,8 +490,35 @@ export function MiniNav({
                 {it.shortLabel ?? it.label}
               </span>
             )}
-            {it.badge != null && (
+            {/* 29-1P4c, idea 49: the count rolls to its new number and the chip
+                bounces when it grows; a chip or dot that appears pops in. */}
+            {typeof it.badge === 'number' ? (
               <span
+                ref={popIn}
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: 3,
+                  right: 3,
+                  display: 'grid',
+                  placeItems: 'center',
+                  minWidth: 17,
+                  height: 17,
+                  padding: '0 4px',
+                  boxSizing: 'border-box',
+                  borderRadius: 'var(--r-2xs)',
+                  font: 'var(--weight-semi) 0.625rem / 1 var(--font-numeric)',
+                  fontVariantNumeric: 'tabular-nums',
+                  ...(it.badgeColour === 'coral'
+                    ? { color: 'var(--job-coral-deep)', backgroundColor: 'var(--job-coral)' }
+                    : { color: 'var(--fg-1)', backgroundColor: 'oklch(0.36 0.005 260)' }),
+                }}
+              >
+                <RollingNumber value={it.badge} text={it.badge > 99 ? '99+' : undefined} bump />
+              </span>
+            ) : it.badge != null && (
+              <span
+                ref={popIn}
                 style={{
                   position: 'absolute',
                   top: 6,
@@ -448,10 +542,16 @@ export function MiniNav({
        app does — `screens.css` calls a browser scrollbar in a pane of glass
        "a browser part, not a surface". It is inert when nothing overflows, so
        it is applied unconditionally rather than switched with `scrolls`. */
-    <nav className={`ag-scroll ${className}`.trim()} style={shell} {...rest}>
+    <nav
+      className={`ag-scroll ${lit ? 'ag-nav-lit ' : ''}${className}`.trim()}
+      style={shell}
+      {...rest}
+      {...(railGlide && !inner ? glideHost : {})}
+    >
       {lead}
       {inner ? (
         <div
+          {...(railGlide ? glideHost : {})}
           style={{
             position: 'relative', display: 'flex', flexDirection: 'column',
             alignItems: 'center', gap: 2,

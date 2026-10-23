@@ -8,7 +8,8 @@
  * `trimTrash` holds it under that (see `lib/trashModel.ts`).
  *
  * Reconciliation is cloud-wins on first read, then local writes push — the
- * same rule every slice of the main document follows. Entries are whole and
+ * same rule every slice of the main document follows — except for entries this
+ * device changed and the cloud never confirmed (FIX-15, `lib/unsentEdits.ts`). Entries are whole and
  * immutable, so there is nothing to merge field by field; the only operations
  * are add, restore and empty.
  *
@@ -22,6 +23,8 @@ import { db } from './firebase';
 import { useTrashStore } from '../store/useTrashStore';
 import { purgeExpiredTrash } from './trash';
 import type { TrashEntry } from './trashModel';
+import { markCloudLoaded } from './covers/useCoverSync';
+import { trashUnsent } from './unsentEdits';
 
 interface TrashDoc {
   entries: TrashEntry[];
@@ -29,6 +32,15 @@ interface TrashDoc {
 
 function isValidTrashDoc(data: unknown): data is TrashDoc {
   return !!data && typeof data === 'object' && Array.isArray((data as TrashDoc).entries);
+}
+
+/** FIX-15: a save the cloud confirms clears the Trash's list of unsent changes. */
+function saveTrash(uid: string, entries: TrashEntry[]) {
+  const seq = trashUnsent.seq(uid);
+  void setDoc(doc(db, 'users', uid, 'data', 'trash'), { entries }).then(
+    () => trashUnsent.confirmed(uid, seq),
+    () => {},
+  );
 }
 
 export function useTrashSync(uid: string | null): void {
@@ -55,12 +67,22 @@ export function useTrashSync(uid: string | null): void {
       ref,
       (snap) => {
         const data = snap.data();
+        // FIX-15: what was deleted here and never reached the cloud (offline,
+        // then the tab died) is laid over the cloud's copy, not lost to it.
+        const unsent = hasLoadedOnceRef.current ? null : trashUnsent.read(uid);
         if (snap.exists() && isValidTrashDoc(data)) {
           isAdoptingRef.current = true;
-          useTrashStore.getState().setEntries(data.entries);
+          const entries = unsent
+            ? trashUnsent.merge({ entries: data.entries }, useTrashStore.getState(), unsent).entries
+            : data.entries;
+          useTrashStore.getState().setEntries(entries);
           setTimeout(() => { isAdoptingRef.current = false; }, 100);
+          if (unsent) saveTrash(uid, useTrashStore.getState().entries);
+        } else if (!snap.exists() && unsent) {
+          saveTrash(uid, useTrashStore.getState().entries);
         }
         hasLoadedOnceRef.current = true;
+        markCloudLoaded(uid, 'trash');
         purgeExpiredTrash();
       },
       // Non-fatal by design: the Trash is a convenience, and `SyncStatusBanner`
@@ -86,12 +108,13 @@ export function useTrashSync(uid: string | null): void {
       const entries = pending;
       pending = null;
       if (timer) { clearTimeout(timer); timer = null; }
-      void setDoc(doc(db, 'users', uid, 'data', 'trash'), { entries }).catch(() => {});
+      saveTrash(uid, entries);
     };
 
-    const unsub = useTrashStore.subscribe((state) => {
+    const unsub = useTrashStore.subscribe((state, prev) => {
       if (isAdoptingRef.current) return;
       if (!hasLoadedOnceRef.current) return;
+      trashUnsent.track(uid, prev, state);
       pending = state.entries;
       if (timer) clearTimeout(timer);
       timer = setTimeout(flush, 1500);

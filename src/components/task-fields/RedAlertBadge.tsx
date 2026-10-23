@@ -8,7 +8,7 @@
  * rather than only where you happened to look.
  *
  * **It is `StatusPill status="overrun"` and nothing custom.** That state is
- * rose plus a rippling dot, and `StatusPill.prompt.md`'s rule is that the
+ * coral (since 29-1P2c2) plus a haloed dot, and `StatusPill.prompt.md`'s rule is that the
  * seven states are semantic: *"Do not reach for a hue because it looks good
  * next to something; reach for the state."* A task that cannot be started in
  * time and is compounding is the same kind of fact as a timer past its
@@ -18,8 +18,8 @@
  *
  * **Why it does not simply recolour the score chip.** `ScoreDial.prompt.md`
  * gives that component two states and one hue — *"Two states, no score-band
- * rainbow"* — and the chip's alert state is amber, so the chip warms and this
- * names what warmed it. A number going from grey to amber says *something*
+ * rainbow"* — and the chip's alert state is coral, so the chip warms and this
+ * names what warmed it. A number going from grey to coral says *something*
  * changed; only a word says which thing.
  *
  * The `title` is the sentence rather than the number: `W` is meaningless to

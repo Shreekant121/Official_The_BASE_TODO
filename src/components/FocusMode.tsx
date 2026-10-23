@@ -49,7 +49,7 @@
  * **THE CLOCK IS WHITE.** It was emerald while running. `Countdown`'s real
  * file emits `--text-glow-white` on a `--fg-1` numeral — the glow is the
  * numeral's own colour — and this screen carries "live" in three other places
- * already: the status pill, the stage's `--glow-accent-sm`, and the strip's
+ * already: the status pill, the stage's glow (Focus's teal since 29-1P2c3), and the strip's
  * running segment. A fourth would be the accent ceasing to mean anything.
  * An overrun still forces rose, and the pill now says **Overrunning** rather
  * than continuing to say "Running", which is the state `StatusPill` has a
@@ -101,11 +101,10 @@
  *   `Toast.prompt.md`: *"it disappears, so it can only ever confirm"*, and
  *   confirming a thing that visibly just happened is noise.
  *
- * ON THE 88px TIMER. `--type-timer` is 88px at **weight 300** and the light
- * weight is the point — a bold countdown reads as a threat, and this is a
- * focus tool. It steps down to `--text-5xl` (64px, same weight) below the
- * 960px breakpoint, because a seven-character clock at 88px is ~370px wide and
- * would not fit on a tablet.
+ * ON THE TIMER. It was `--type-timer`, 88px at weight 300, on the argument
+ * that a bold countdown reads as a threat. **Shreekant overruled it on
+ * 2026-09-30**: the clock is bold now and as big as the card allows — see
+ * `clockSize` below, which replaced the fixed 36 / 64 / 88 steps.
  *
  * V3 (V3-4, step 8) — FOCUS IS ON V3. Design: `design-system/Focus.dc.html`.
  * The whole screen sits in one `<V3Scope>` (`FocusMode`, the default export,
@@ -116,7 +115,8 @@
  * **His two calls, 2026-09-24, both for keeping what is here:**
  *   - **No ring.** The design wraps the clock in a 360px ring around a round
  *     glass face. The numerals and `Countdown`'s thin rail stay, exactly as
- *     UI-32 left them ("THE RING IS GONE", above).
+ *     UI-32 left them ("THE RING IS GONE", above). (The rail went too in
+ *     29-1P11c, his "just the numbers".)
  *   - **Today's buttons, in today's places.** The design's row is Defer ·
  *     round Play/Pause · Mark done, with no Skip and no +5m / +15m. The four
  *     controls stay where they are and only change material: Mark done is gel
@@ -133,8 +133,47 @@
  * bar (the + still opens Capture), its Subtasks / Details / Queue tabs (the
  * landscape column keeps both panes open, his FIX-10 call), the Space / D /
  * → shortcuts line, and a toast for Done.
+ *
+ * OPT-7 (2026-10-06) — FOCUS, CLEAN. His words: *"remove the status that
+ * comes on top of the clock the Paused and running and stuff… also remove the
+ * priority score and the text beside it that says To Read… also on the bottom
+ * remove the Next: task"*. So the run-state pill (Running / Paused /
+ * Overrunning), the `ScoreDial`, the list name and the "Next:" line are gone.
+ * Nothing else stopped saying them: the stage still glows while running
+ * (teal, Focus's colour, since 29-1P2c3) and coral past the allocation, the clock still turns rose with its
+ * own "over the time you gave this task", the button still reads Pause or
+ * Resume, and the run itself is `useFocusRun`'s, which the mini timer and the
+ * Dashboard read elsewhere. The marks that ask something of him (red alert,
+ * avoided, emergency, needs time, blocked) stay. The corner toggles went into
+ * a drawer and gained a fifth, the header — see `ViewToggle`.
+ *
+ * 29-1P10b (2026-10-15) — WHILE YOU WORK. **Past zero is "in flow", not
+ * "over" (idea 102)**: the clock, the stage's light, the session bar and the
+ * pill turn gold and count up, and Wrap up beside the clock opens Mark done
+ * — on both clocks, his call; the session's end rings once, softly
+ * (`FocusRunHost`). **Halfway through a task of 20 minutes or more (idea
+ * 103)** a note asks "Still on it?" for ten seconds, silently; Switch pauses
+ * the clock and opens today's queue. The away card (idea 101) is on every
+ * screen, so it is `FocusAwayHost`'s, not this file's. All three are in
+ * `FocusMoments.tsx`, their rules in `lib/focusMoments.ts`.
+ *
+ * 29-1P10c (2026-10-15) — STANDBY (idea 100). On the tablet held sideways
+ * with the clock running, a minute after his last touch, a black layer with
+ * the task's clock and name covers this screen; dim red at night. A tap puts
+ * this screen back. It is a layer, so the run, the noise and the wake lock
+ * under it are untouched — see `FocusStandBy.tsx`, rules in `lib/standBy.ts`.
+ *
+ * 29-1P11c (2026-10-15) — THE COVER'S COLOURS (ideas 46 and 68). **Focus
+ * takes the project's own cover colours** (his call): its photo's, or its made
+ * cover's two inks (`useProjectLight`). The page's one pool is the main colour
+ * (`data-cover-light`, `screenLight.css`), so it fades in from the last screen
+ * and from task to task; while the clock runs, the stage casts both colours
+ * onto the page round it (`castLight`) in place of the teal. A task in no
+ * project keeps the teal. Gold flow stays gold: that is a state, not a picture.
+ * **And the clock's line went** — his "just the numbers": `Countdown` is given
+ * no `total` here, so it draws no rail.
  */
-import { useState, useLayoutEffect, useMemo } from 'react';
+import { useState, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useStore, countSubtasksRecursive, AVOIDED_MAX,
@@ -142,7 +181,7 @@ import {
   type Subtask,
 } from '../store/useStore';
 import {
-  useFocusRun, subjectOf, taskSecondsLeft, sessionSecondsLeft,
+  useFocusRun, subjectOf, taskSecondsLeft, sessionSecondsLeft, finishHead,
 } from '../store/useFocusRun';
 import { useNow } from '../lib/useNow';
 import { usePriorityScores } from '../store/usePriorityScores';
@@ -159,12 +198,27 @@ import { formatHms, formatSpan } from '../lib/timeSpan';
 import { Z } from '../lib/zLayers';
 import TaskDetailPanel from './TaskDetailPanel';
 import { useWakeLock } from '../lib/useWakeLock';
+import { useProjectLight } from '../lib/projectIcons/useProjectGlow';
+import { castLight } from '../lib/projectCover';
+import { useRememberedState } from '../lib/useRememberedState';
+import { cue } from '../lib/sound';
+import { getNoisePrefs, setNoisePrefs, subscribeNoisePrefs } from '../lib/brownNoise';
 import {
-  Button, Countdown, Icon, IconButton, MetaKicker, MiniNav, ScoreDial, StatusPill, Stepper,
-  Toast, useMedia, useMotion, V3Scope, WIDE,
+  Countdown, FloatingAddButton, GelButton, Icon, Knob, MetaKicker, MiniNav, MorphIcon,
+  SoftButton, SoftIconButton, SoftToggle, StatusPill, Stepper, Toast, useMedia, useMotion, V3Scope, WIDE,
 } from '../ui';
 import { useNavModel } from './navModel';
 import { RailMark } from './BrandMark';
+import { AddTime, DoneQuestion, FocusBreath, FocusIntent } from './FocusStart';
+import { cleanIntent, type FocusOutcome } from '../lib/focusIntent';
+import { HalfwayNote, MomentLane, SwitchPicker, WrapUp } from './FocusMoments';
+import { ANOTHER_SECONDS, LiveSessionDone } from './FocusSessionDone';
+import { takeBreak } from '../store/useFocusBreak';
+import { breakMinutes } from '../lib/breaks';
+import { buildSmartQueue } from '../lib/smartStart';
+import { halfwayLeft } from '../lib/focusMoments';
+import { StandByLayer } from './FocusStandBy';
+import { useStandBy } from './useStandBy';
 
 /**
  * Where the panels stop docking and start stacking. `focus.html` switches on
@@ -206,16 +260,6 @@ const SPLIT = '(min-width: 960px) and (orientation: landscape)';
 const ROOMY = '(min-height: 860px)';
 const SHORT = '(max-height: 680px)';
 
-/** One closed task, for the strip's done segments and the end pane's list. */
-interface SessionLogEntry {
-  id: string;
-  title: string;
-  /** What it was given. Sizes its segment in the strip. */
-  allocated: number;
-  /** What it actually took. */
-  used: number;
-}
-
 /**
  * The pill that opens a docked panel. It is the panel's origin, so it stays
  * lit while the panel is open — `readme.md`'s motion law is that everything
@@ -232,25 +276,16 @@ function DockPill({
   onClick: () => void;
   title: string;
 }) {
-  const [hover, setHover] = useState(false);
+  /* The design system's soft material since 29-1P2, pressed in while its
+     panel is open (`aria-expanded`, which `buttons.css` reads as pressed). */
   return (
     <button
       type="button"
       onClick={onClick}
       aria-expanded={open}
       title={title}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)',
-        height: 44, padding: '0 var(--sp-6)', border: 0, cursor: 'pointer',
-        borderRadius: 'var(--r-pill)',
-        backgroundImage: open ? 'var(--glass-fill-3)' : hover ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
-        boxShadow: open ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)',
-        color: open ? 'var(--fg-1)' : 'var(--fg-2)',
-        font: 'var(--type-label)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap',
-        transition: 'var(--t-hover)',
-      }}
+      className="ds-soft"
+      style={{ fontSize: 'var(--text-sm)' }}
     >
       <Icon name={icon} size={17} />
       {label}
@@ -266,6 +301,90 @@ function DockPill({
       )}
     </button>
   );
+}
+
+/**
+ * PURE FOCUS (2026-09-30, his ask): four toggles in the stage's top-left
+ * corner that hide the subtasks, the task details, the session bar and the
+ * nav, "so I can hide it and just do pure focus". Each is remembered on this
+ * device only (`useRememberedState`, FIX-1's rule) — the laptop and the tablet
+ * want different amounts of screen. Hiding never ends anything: the session
+ * still counts, and Back in the header still leaves.
+ *
+ * The design system's soft toggle since 29-1P2 (the queue's "soft toggle for
+ * Focus's pure-focus toggles"): pressed in while the thing is showing, raised
+ * while it is hidden. Never emerald: four lit rings on the stage would spend
+ * the colour this screen keeps for "live" (see THE CLOCK IS WHITE above).
+ *
+ * OPT-7, his ask: a fifth hides the header ("the top focus session banner…
+ * that way just the clock is seen"), and all five live in a drawer behind one
+ * button, "so there is much more clean look" — his pick over a single switch
+ * that hid everything at once. The drawer only shows or hides the switches;
+ * what they hid stays hidden. Whether it is open is remembered too, and it
+ * starts closed.
+ */
+function ViewToggle({
+  icon, what, shown, onToggle,
+}: {
+  icon: 'list-tree' | 'file-text' | 'hourglass' | 'panel-left' | 'panel-top' | 'volume-2';
+  what: string;
+  shown: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <SoftToggle
+      round
+      size="sm"
+      pressed={shown}
+      aria-label={`Show ${what}`}
+      title={`${shown ? 'Hide' : 'Show'} ${what}`}
+      onClick={onToggle}
+    >
+      <Icon name={icon} size={16} />
+    </SoftToggle>
+  );
+}
+
+/** Is every step in this tree done, counting `closing` as done? (29-1P3's chord.) */
+function everyStepClosed(steps: Subtask[] | undefined, closing: string): boolean {
+  return (steps ?? []).every((s) => (s.id === closing || s.status === 'completed') && everyStepClosed(s.subtasks, closing));
+}
+
+/** Where the toggles sit, and the room the stage keeps clear above its content for them. */
+const TOGGLE_INSET = 'var(--sp-4)';
+const TOGGLE_RESERVE = 'calc(34px + 2 * var(--sp-4))';
+
+/*
+ * THE CLOCK FILLS THE CARD (2026-09-30, his ask: "as big of a space it can
+ * cover", and bold). It is sized off its own box — a CSS size container — so
+ * pure focus's extra room goes straight into the numerals.
+ *
+ * `CLOCK_EM` is the widest reading it is sized for, in ems, measured in the
+ * V3 face at weight 700: `+1:30:00` (an overrun past an hour) is 4.38em. A
+ * plain `1:30:00` is 3.62em and so fills ~83% of the width. Sizing to the
+ * text actually showing would fill 100%, and jump 30% bigger the second the
+ * clock passes 59:59. `CLOCK_LINE` is `--leading-tight`.
+ *
+ * In landscape the height is the limit too: the clock's box is the row left
+ * over after the badges, title and buttons, and `CLOCK_BELOW` is what else
+ * sits in that box — the elapsed line and its gap (the rail and its gap went
+ * in 29-1P11c) — plus the overrun note when it shows. In portrait the card grows to fit, so
+ * only the width limits it, under a cap so it cannot push the page into a
+ * scroll; with a panel stacked under it (`condensed`) the cap is the old
+ * 64px, because FIX-2's fold budget is what that rung is for.
+ */
+const CLOCK_EM = 4.4;
+const CLOCK_LINE = 1.03;
+const CLOCK_BELOW = 60;
+const CLOCK_NOTE = 30;
+
+function clockSize(split: boolean, condensed: boolean, note: boolean): string {
+  const byWidth = `calc(100cqi / ${CLOCK_EM})`;
+  if (split) {
+    const byHeight = `calc((100cqb - ${CLOCK_BELOW + (note ? CLOCK_NOTE : 0)}px) / ${CLOCK_LINE})`;
+    return `max(var(--text-3xl), min(${byWidth}, ${byHeight}))`;
+  }
+  return `min(${byWidth}, ${condensed ? 'var(--text-5xl)' : '20vh'})`;
 }
 
 /**
@@ -334,12 +453,28 @@ function FocusScreen() {
    * header for what a throttled interval did to a locked tablet.
    */
   const run = useFocusRun();
+  /* What this session has closed, in order: the run's since FIX-14, so a task
+     closed from the pill, or while he was on another screen, is on it too. */
+  const log = run.closed;
   const isRunning = run.running;
   const now = useNow(isRunning);
   const timeLeft = taskSecondsLeft(run, now);
   const sessionTimeLeft = sessionSecondsLeft(run, now);
   /** Which panel is docked out, if any. One at a time, as in the mockup. */
   const [dock, setDock] = useState<'details' | 'subs' | null>(null);
+  /* Pure focus — what the corner toggles have hidden (see `ViewToggle`). */
+  const [showSubs, setShowSubs] = useRememberedState('base.focus.show.subtasks', true);
+  const [showDetails, setShowDetails] = useRememberedState('base.focus.show.details', true);
+  const [showSession, setShowSession] = useRememberedState('base.focus.show.session', true);
+  const [showNav, setShowNav] = useRememberedState('base.focus.show.nav', true);
+  const [showHeader, setShowHeader] = useRememberedState('base.focus.show.header', true);
+  /* 29-1P3, idea 132: brown noise's level as a knob on the stage, with a sixth
+     switch to hide it (his call, 2026-10-07). Both only while the noise is on
+     in Settings — a knob, or a switch for one, over no sound is a control over
+     nothing, the mute button's rule. */
+  const [showKnob, setShowKnob] = useRememberedState('base.focus.show.knob', true);
+  const noise = useSyncExternalStore(subscribeNoisePrefs, getNoisePrefs);
+  const [switchesOpen, setSwitchesOpen] = useRememberedState('base.focus.switches.open', false);
   const [isEditing, setIsEditing] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   /**
@@ -354,8 +489,13 @@ function FocusScreen() {
   const [quasiNeedToast, setQuasiNeedToast] = useState<number | null>(null);
   /** Smart Sort has run on this queue — the strip's button holds its tint. */
   const [sorted, setSorted] = useState(false);
-  /** What this session has closed, in the order it closed it. */
-  const [log, setLog] = useState<SessionLogEntry[]>([]);
+  /* 29-1P10a, idea 96. The line is being changed (the box stays while it has
+     the caret, even once the clock starts), and the task Mark done is asking
+     about — an id, so a queue that moves under the question drops it. */
+  const [intentEditing, setIntentEditing] = useState(false);
+  const [askingFor, setAskingFor] = useState<string | null>(null);
+  /* 29-1P10b, idea 103: Switch's queue is open (the clock is paused under it). */
+  const [switching, setSwitching] = useState(false);
 
   // The focus queue holds *snapshots* taken when tasks were selected for today,
   // so their description / notes / links can already be stale (and a subtask
@@ -386,6 +526,15 @@ function FocusScreen() {
    */
   const liveTask = details?.task ?? activeTask;
 
+  /* 29-1P11c: the project whose cover lights this screen. The task's home list
+     names it; a subtask proxy's is its root task's. */
+  const homeListId = (details?.parent ?? liveTask)?.listId;
+  const project = useStore((s) => {
+    const projectId = s.taskLists.find((l) => l.id === homeListId)?.projectId;
+    return projectId ? s.projects.find((p) => p.id === projectId) : undefined;
+  });
+  const light = useProjectLight(project);
+
   /**
    * Ticking a step writes through to the real subtask wherever it lives.
    * `SUBTASK_PROXY_FIELDS` already carries `status`, so `updateBacklogTask`
@@ -393,7 +542,12 @@ function FocusScreen() {
    * This used to be a local `string[]` that was never persisted anywhere.
    */
   const toggleSubtask = (sub: Subtask, done: boolean) => {
+    /* 29-1P3, 118: the tick that closes the last open step lands on a chord.
+       The tick itself sounded in `Checkbox`. */
+    if (done && liveTask && everyStepClosed(liveTask.subtasks, sub.id)) cue('cleared');
     updateBacklogTask(sub.id, { status: done ? 'completed' : 'needsAction' });
+    /* An untick takes its tick back off the count. */
+    run.tickStep(done);
   };
 
   // Seed the run from the queue, and re-seed it whenever the active task
@@ -432,6 +586,14 @@ function FocusScreen() {
   // leaving focus mode (unmount).
   useWakeLock(isRunning);
 
+  /* 29-1P10c, idea 100: the tablet held sideways becomes a StandBy clock a
+     minute after the last touch, never over something he opened. */
+  const standBy = useStandBy({
+    running: isRunning,
+    busy: askingFor !== null || switching || isEditing || isCapturing,
+    now,
+  });
+
   // ─── Focus time-log ───────────────────────────────────────────────────────
   // The stretch of work being timed used to be a ref in this component, banked
   // on unmount. BUILD-1 moved it into `useFocusRun` beside the clock, because
@@ -445,8 +607,15 @@ function FocusScreen() {
   // last-chance banking on `visibilitychange`/`pagehide` moved with it, to
   // `FocusRunHost`, which is mounted whether or not this screen is.
 
+  /* `start`, not `resume`: the session's first press breathes first (29-1P10a,
+     idea 95), and a press during the breath skips it. */
   const handleToggleRunning = () => {
-    run.toggle();
+    if (run.running) {
+      run.pause(true);
+      return;
+    }
+    cue('start');
+    run.start();
   };
 
   /*
@@ -465,32 +634,36 @@ function FocusScreen() {
   const liveHead = () => useStore.getState().tasks;
 
   const handleDone = () => {
-    const queue = liveHead();
-    const current = queue[0];
+    const current = liveHead()[0];
     if (!current) return;
-    /* The button is disabled, so this can only be reached by a keyboard
-       shortcut or a stale closure — but "Mark done" is the one control on this
-       screen that writes a completion, and it reads the LIVE head rather than
-       the render's, so it has to re-check against the live head too. Same
-       reading as the button's: backlog for the blockers, the queue copy for
-       the override. */
     if (taskLockReason(useStore.getState().backlogTasks, current)) return;
-    const allocated = taskFocusSeconds(current);
-    /* Stopping the run banks the stretch AND freezes the clock, so the figure
-       read out of the store on the next line is this task's own final one —
-       which is what `timeLeftRef` used to be for: `AnimatePresence` keeps the
-       outgoing card's handlers alive through the dissolve, and a closure over
-       a render's `timeLeft` would report the minutes of the task after it. */
-    run.pause();
-    updateBacklogTask(current.id, { status: 'completed' });
-    // The strip's done segment and the end pane's line for this task.
-    const left = useFocusRun.getState().taskLeft;
-    setLog((prev) => [
-      ...prev,
-      { id: current.id, title: current.title, allocated, used: Math.max(0, allocated - left) },
-    ]);
+    /* 29-1P10a, idea 96: he said what done would look like, so Mark done asks
+       whether he did it before it finishes anything. */
+    if (cleanIntent(useFocusRun.getState().intent)) {
+      setAskingFor(current.id);
+      return;
+    }
+    finishTask();
+  };
+
+  /** Mark done's answer. His call: Not yet keeps the task open, clock and all. */
+  const answerDone = (answer: FocusOutcome | 'notYet') => {
+    setAskingFor(null);
+    if (answer !== 'notYet') finishTask(answer);
+  };
+
+  const finishTask = (outcome?: FocusOutcome) => {
+    /* `finishHead` is the whole of Mark done since 29-1P11b, because the pill's
+       panel presses it too. It reads the LIVE head and re-checks the lock, and
+       reads the task's final minutes off the stopped run rather than this
+       render's `timeLeft` — `AnimatePresence` keeps the outgoing card's
+       handlers alive through the dissolve, and a closure over a render's clock
+       would report the minutes of the task after it. */
+    const closed = finishHead(outcome);
+    if (!closed) return;
+    /* 29-1P3: done, or the chord when it was the session's last task. */
+    cue(closed.last ? 'cleared' : 'done');
     setDock(null);
-    setTasks(queue.slice(1));
   };
 
   const handleSkip = () => {
@@ -521,6 +694,27 @@ function FocusScreen() {
     setTimeout(() => setQuasiNeedToast(null), 2500);
   };
 
+  /** Halfway's Switch: the clock stops while he picks (his call). */
+  const openSwitch = () => {
+    const current = liveHead()[0];
+    if (!current) return;
+    run.seeHalfway(current.id);
+    run.pause();
+    setSwitching(true);
+  };
+
+  /** The picked task goes on the clock; the one he was on is next in line. */
+  const switchTo = (id: string) => {
+    const [current, ...rest] = liveHead();
+    const picked = rest.find((t) => t.id === id);
+    setSwitching(false);
+    if (current && picked) {
+      setDock(null);
+      setTasks([picked, current, ...rest.filter((t) => t.id !== id)]);
+    }
+    run.resume();
+  };
+
   const handleSmartSort = () => {
     const sorted_ = [...tasks].sort((a, b) => scores.scoreOf(b) - scores.scoreOf(a));
     setTasks(sorted_);
@@ -540,12 +734,34 @@ function FocusScreen() {
       }}
     >
       <span style={{ pointerEvents: 'auto' }}>
-        <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+        <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
       </span>
     </div>
   );
 
-  const totalUsed = log.reduce((n, entry) => n + entry.used, 0);
+  /*
+   * 29-1P11a, idea 105: Another 25 starts the next best task (his call) — the
+   * head of a 25-minute Smart Start, so a blocked task brings what it waits on
+   * first, and ignored work never comes up. Worked out only on the end pane.
+   */
+  const nextBest = useMemo(
+    () => (activeTask ? null : buildSmartQueue(ANOTHER_SECONDS / 3600, backlogTasks, {
+      scores, ignored: scores.ignored.ids,
+    }).queue[0] ?? null),
+    [activeTask, backlogTasks, scores],
+  );
+  const startAnother = () => {
+    if (!nextBest) return;
+    const head = { ...nextBest, allocatedTime: ANOTHER_SECONDS };
+    setSorted(false);
+    /* A new session: `attach` on an empty run zeroes the card's tally. */
+    run.clear();
+    setTasks([head]);
+    run.attach(subjectOf(head), ANOTHER_SECONDS, sessionDuration);
+    /* `resume`, not `start`: the session's one breath was at its start. */
+    cue('start');
+    run.resume();
+  };
   /** Everything this session committed to, closed and outstanding alike. */
   const plannedSeconds =
     log.reduce((n, entry) => n + entry.allocated, 0)
@@ -567,11 +783,15 @@ function FocusScreen() {
        * report's furniture: no glowing zero, and no emission at all, because
        * `elevation.css` gives glow to what is live or finished and this is
        * neither.
+       *
+       * Since 29-1P11a it is "Session done" (idea 105, `FocusSessionDone.tsx`):
+       * the same report plus subtasks ticked, ideas captured and pauses, and
+       * Another 25 · Break · Done in place of Home and New session.
        */
       <div className="ag-page ag-page--focal" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
         {wide && (
           <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -582,101 +802,15 @@ function FocusScreen() {
             padding: wide ? 'var(--sp-9) var(--gutter-page)' : 'var(--sp-8) var(--gutter-page-sm) 128px',
           }}
         >
-          <div
-            style={{
-              width: '100%', maxWidth: 640,
-              display: 'grid', gap: 'var(--sp-7)', justifyItems: 'center',
-              padding: 'var(--sp-10) var(--pad-card-lg)',
-              borderRadius: 'var(--r-card-lg)',
-              backgroundImage: 'var(--glass-fill-2)',
-              backdropFilter: 'var(--glass-bd-lg)',
-              WebkitBackdropFilter: 'var(--glass-bd-lg)',
-              boxShadow: log.length > 0
-                ? 'var(--glass-shadow-pane), var(--glow-accent-sm)'
-                : 'var(--glass-shadow-pane)',
-              animation: 'var(--kf-condense) var(--dur-slow) var(--ease-glass) both',
-            }}
-          >
-            <MetaKicker
-              icon="flag-triangle-right"
-              tone={log.length > 0 ? 'var(--accent)' : 'var(--fg-3)'}
-            >
-              {log.length > 0 ? 'Session complete' : 'Session ended'}
-            </MetaKicker>
-
-            {log.length > 0 ? (
-              <h1
-                style={{
-                  font: 'var(--type-numeric)', fontSize: 'var(--text-5xl)', color: 'var(--fg-1)',
-                  fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-                  textShadow: '0 0 34px oklch(0.70 0.15 162 / 0.45)',
-                }}
-              >
-                {formatSpan(totalUsed)}
-              </h1>
-            ) : (
-              <h1
-                style={{
-                  font: 'var(--type-display)', fontSize: 'var(--text-3xl)',
-                  letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)',
-                }}
-              >
-                Queue cleared
-              </h1>
-            )}
-
-            <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-              {log.length > 0
-                ? `${log.length} ${log.length === 1 ? 'task' : 'tasks'} closed. Time spent on each, below.`
-                : 'Nothing was closed. Every task left this session unfinished.'}
-            </p>
-
-            {log.length > 0 && (
-              <div style={{ display: 'grid', gap: 'var(--sp-2)', width: '100%' }}>
-                {log.map((entry) => (
-                  <div
-                    key={entry.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 44,
-                      padding: '0 var(--sp-5)', borderRadius: 'var(--r-sm)',
-                      backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)',
-                    }}
-                  >
-                    <span style={{ display: 'flex', color: 'var(--accent)', flex: '0 0 auto' }}>
-                      <Icon name="check" size={15} />
-                    </span>
-                    <span
-                      className="flex-1 min-w-0 truncate"
-                      style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)' }}
-                    >
-                      {entry.title}
-                    </span>
-                    <span
-                      style={{
-                        font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)',
-                        fontVariantNumeric: 'tabular-nums', flex: '0 0 auto',
-                      }}
-                    >
-                      {formatSpan(entry.used)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--sp-4)' }}>
-              <Button variant="ghost" onClick={() => navigate('/')} iconLeft={<Icon name="house" size={16} />}>
-                Home
-              </Button>
-              <Button
-                variant="gel"
-                onClick={() => navigate('/select')}
-                iconRight={<Icon name="arrow-right" size={16} />}
-              >
-                New session
-              </Button>
-            </div>
-          </div>
+          <LiveSessionDone
+            log={log}
+            stats={{ subtasks: run.stepsTicked, ideas: run.ideasCaptured, pauses: run.pauses }}
+            canAnother={nextBest !== null}
+            breakMinutes={noise.mode === 'pomodoro' ? breakMinutes(noise, false) : null}
+            onAnother={startAnother}
+            onBreak={takeBreak}
+            onDone={() => navigate('/dashboard')}
+          />
         </div>
 
         {floatingBar}
@@ -685,12 +819,19 @@ function FocusScreen() {
   }
 
   const reading = scores.read(activeTask);
-  const score = reading.score;
   const subCounts = liveTask.subtasks && liveTask.subtasks.length > 0
     ? countSubtasksRecursive(liveTask.subtasks)
     : null;
   const overrun = timeLeft < 0;
+  /* Idea 102: either clock past zero is flow, and Wrap up shows beside the clock. */
+  const inFlow = (overrun && activeDuration > 0) || sessionTimeLeft < 0;
   const spent = Math.max(0, activeDuration - timeLeft);
+  /* Idea 103: the halfway note's ten seconds, read off the clock; never over
+     another question, or once he has answered it for this task. */
+  const halfway = isRunning && !switching && run.away === null && askingFor === null
+    && run.halfwaySeenFor !== activeTask.id
+    ? halfwayLeft(activeDuration, timeLeft)
+    : null;
   const quasiNeeded = (activeTask.avoidedCount ?? 0) > 0;
   /* The counter saturates (item 17), so the Defer button stops promising a
      point it can no longer add. The press still does the useful half — the
@@ -728,6 +869,17 @@ function FocusScreen() {
   const condensed = !split && !canDock && dockOpen;
   /** Any reason the stage is a rung down: a stacked panel, or a landscape window under `ROOMY`. */
   const small = condensed || tight;
+  /** Above the header, or above whatever comes first when the header is hidden. */
+  const topGap = small ? 'var(--sp-5)' : wide ? 'var(--sp-7)' : 'var(--sp-8)';
+  /** The stage's insets for each rung: top, sides, bottom. */
+  const stagePad: [string, string, string] = condensed
+    ? ['var(--sp-5)', 'var(--sp-5)', 'var(--sp-5)']
+    : split
+      ? short ? ['var(--sp-5)', 'var(--sp-6)', 'var(--sp-5)']
+        : tight ? ['var(--sp-6)', 'var(--pad-card)', 'var(--sp-6)']
+          : ['var(--sp-9)', 'var(--pad-card-lg)', 'var(--sp-9)']
+      : wide ? ['var(--sp-10)', 'var(--pad-card-lg)', 'var(--sp-9)']
+        : ['var(--pad-card)', 'var(--pad-card)', 'var(--pad-card)'];
 
   /*
    * The strip's segments: what has closed, then what is left, the head of the
@@ -776,11 +928,25 @@ function FocusScreen() {
     />
   );
 
+  /** Hiding one closes its panel too, or the dock would hold a pane with no pill left to close it. */
+  const toggleSubs = () => {
+    if (showSubs && dock === 'subs') setDock(null);
+    setShowSubs(!showSubs);
+  };
+  const toggleDetails = () => {
+    if (showDetails && dock === 'details') setDock(null);
+    setShowDetails(!showDetails);
+  };
+
   return (
-    <div className="ag-page ag-page--focal" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
-      {wide && (
+    <div
+      className="ag-page ag-page--focal"
+      data-cover-light={light ? '' : undefined}
+      style={{ height: '100dvh', display: 'flex', overflow: 'hidden', ...(light ? { ['--cover-light' as string]: light[0] } : {}) }}
+    >
+      {wide && showNav && (
         <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
-          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
         </div>
       )}
 
@@ -803,11 +969,15 @@ function FocusScreen() {
                      The floor is where a window has become too short to share
                      at all: past it the page scrolls again rather than crushing
                      the clock. Nothing he owns is that short. */
-                  display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)',
+                  display: 'grid',
+                  gridTemplateRows: [showHeader && 'auto', showSession && 'auto', 'minmax(0, 1fr)'].filter(Boolean).join(' '),
                   gap: tight ? 'var(--sp-5)' : 'var(--sp-7)', justifyItems: 'center',
-                  flex: 1, minHeight: 460,
+                  flex: 1, minHeight: 460, paddingTop: showHeader ? 0 : topGap,
                 }
-              : { display: 'grid', gap: condensed ? 'var(--sp-5)' : 'var(--sp-8)', justifyItems: 'center' }
+              : {
+                  display: 'grid', gap: condensed ? 'var(--sp-5)' : 'var(--sp-8)', justifyItems: 'center',
+                  paddingTop: showHeader ? 0 : topGap,
+                }
           }
         >
           {/*
@@ -818,96 +988,102 @@ function FocusScreen() {
             contexts without a z-index paint in DOM order — so this header,
             being the first child, would be painted over by the card that
             scrolls up to meet it.
+            OPT-7's fifth switch can hide it, and then the first thing on the
+            page takes its top margin instead (`topGap`).
           */}
-          <header
-            style={{
-              width: '100%',
-              position: 'sticky',
-              top: 'var(--sp-5)',
-              zIndex: 2,
-              marginTop: condensed || tight ? 'var(--sp-5)' : wide ? 'var(--sp-7)' : 'var(--sp-8)',
-              /* FIX-10: a rounded rectangle, not a pill — his "more of a
-                 rectangle with curved edges". The strip under it matches. */
-              borderRadius: 'var(--r-md)',
-              padding: 'var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--sp-6)',
-              flexWrap: 'wrap',
-              backgroundImage: 'var(--glass-fill-2)',
-              backdropFilter: 'var(--glass-bd-lg)',
-              WebkitBackdropFilter: 'var(--glass-bd-lg)',
-              boxShadow: 'var(--glass-shadow-pane)',
-              animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
-            }}
-          >
-            {/* Round glass since V3-4, as the board's Back (V3-3). */}
-            <IconButton label="Back to set deadlines" onClick={() => navigate('/deadlines')}>
-              <Icon name="arrow-left" size={18} />
-            </IconButton>
+          {showHeader && (
+            <header
+              style={{
+                width: '100%',
+                position: 'sticky',
+                top: 'var(--sp-5)',
+                zIndex: 2,
+                marginTop: topGap,
+                /* FIX-10: a rounded rectangle, not a pill — his "more of a
+                   rectangle with curved edges". The strip under it matches. */
+                borderRadius: 'var(--r-md)',
+                padding: 'var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--sp-6)',
+                flexWrap: 'wrap',
+                backgroundImage: 'var(--glass-fill-2)',
+                backdropFilter: 'var(--glass-bd-lg)',
+                WebkitBackdropFilter: 'var(--glass-bd-lg)',
+                boxShadow: 'var(--glass-shadow-pane)',
+                animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
+              }}
+            >
+              {/* Round glass since V3-4, as the board's Back (V3-3). */}
+              <SoftIconButton label="Back to set deadlines" onClick={() => navigate('/deadlines')}>
+                <Icon name="arrow-left" size={18} />
+              </SoftIconButton>
 
-            {/* The system voice, as on the two steps before this one — and
-                the explanatory line under it is `readme.md`'s own example of
-                that register, quoted there as "the best line in the product". */}
-            <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
-              <h1
-                style={{
-                  /* Uppercase in V3 too: this is the system voice, not a
-                     kicker, and v4's readme keeps that voice in capitals — its
-                     0.30em tracking only reads as a word in them. */
-                  font: 'var(--type-system)', textTransform: 'uppercase',
-                  letterSpacing: 'var(--tracking-system)', color: 'var(--fg-1)', whiteSpace: 'nowrap',
-                }}
-              >
-                Focus
-              </h1>
-              <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
-                Strict focus. One task at a time.
-              </p>
-            </div>
+              {/* The system voice, as on the two steps before this one — and
+                  the explanatory line under it is `readme.md`'s own example of
+                  that register, quoted there as "the best line in the product". */}
+              <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+                <h1
+                  style={{
+                    /* Uppercase in V3 too: this is the system voice, not a
+                       kicker, and v4's readme keeps that voice in capitals — its
+                       0.30em tracking only reads as a word in them. */
+                    font: 'var(--type-system)', textTransform: 'uppercase',
+                    letterSpacing: 'var(--tracking-system)', color: 'var(--fg-1)', whiteSpace: 'nowrap',
+                  }}
+                >
+                  Focus
+                </h1>
+                <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
+                  Strict focus. One task at a time.
+                </p>
+              </div>
 
-            <span style={{ flex: 1, minWidth: 'var(--sp-8)' }} />
+              <span style={{ flex: 1, minWidth: 'var(--sp-8)' }} />
 
-            {wide && !tight && (
-              /* Step three of New Session, which the other two already draw.
-                 `hint` is where the real value lives — a stepper with only
-                 labels is decoration, and `Stepper.prompt.md` says so. */
-              <Stepper
-                current={2}
-                steps={[
-                  { label: 'Select', hint: `${log.length + tasks.length} chosen` },
-                  { label: 'Deadlines', hint: formatSpan(plannedSeconds) },
-                  { label: 'Focus', hint: `${log.length} done` },
-                ]}
-                style={{ margin: 0 }}
+              {wide && !tight && (
+                /* Step three of New Session, which the other two already draw.
+                   `hint` is where the real value lives — a stepper with only
+                   labels is decoration, and `Stepper.prompt.md` says so. */
+                <Stepper
+                  current={2}
+                  steps={[
+                    { label: 'Select', hint: `${log.length + tasks.length} chosen` },
+                    { label: 'Deadlines', hint: formatSpan(plannedSeconds) },
+                    { label: 'Focus', hint: `${log.length} done` },
+                  ]}
+                  style={{ margin: 0 }}
+                />
+              )}
+
+              {/* In landscape the corner button would sit on the side column's
+                  foot, so it moves up here, where the stepper leaves room. */}
+              {split && (
+                <SoftIconButton label="Capture an idea or task" onClick={() => setIsCapturing(true)}>
+                  <Icon name="plus" size={20} />
+                </SoftIconButton>
+              )}
+            </header>
+          )}
+
+          {showSession && (
+            <div
+              style={{
+                width: '100%',
+                maxWidth: split ? 'none' : dockOpen && canDock ? 1200 : 860,
+                transition: 'max-width var(--dur-morph) var(--ease-morph)',
+              }}
+            >
+              <FocusSessionStrip
+                segments={segments}
+                secondsLeft={sessionTimeLeft}
+                doneCount={log.length}
+                total={log.length + tasks.length}
+                sorted={sorted}
+                onSort={tasks.length > 1 ? handleSmartSort : undefined}
               />
-            )}
-
-            {/* In landscape the corner button would sit on the side column's
-                foot, so it moves up here, where the stepper leaves room. */}
-            {split && (
-              <IconButton label="Capture an idea or task" title="Capture an idea or task" onClick={() => setIsCapturing(true)}>
-                <Icon name="plus" size={20} />
-              </IconButton>
-            )}
-          </header>
-
-          <div
-            style={{
-              width: '100%',
-              maxWidth: split ? 'none' : dockOpen && canDock ? 1200 : 860,
-              transition: 'max-width var(--dur-morph) var(--ease-morph)',
-            }}
-          >
-            <FocusSessionStrip
-              segments={segments}
-              secondsLeft={sessionTimeLeft}
-              doneCount={log.length}
-              total={log.length + tasks.length}
-              sorted={sorted}
-              onSort={tasks.length > 1 ? handleSmartSort : undefined}
-            />
-          </div>
+            </div>
+          )}
 
           {/* ══════════════ THE STAGE, and what docks beside it ══════════════ */}
           <div
@@ -933,13 +1109,18 @@ function FocusScreen() {
                   /* In landscape the stage fills its half of the row and
                      centres what it holds; the scroll is a last resort for a
                      window under the floor above, never the normal case. */
-                  ...(split ? { flex: 1, alignContent: 'center', overflowY: 'auto' } : {}),
-                  borderRadius: 'var(--r-card-lg)',
-                  padding: condensed
-                    ? 'var(--sp-5)'
-                    : split
-                      ? short ? 'var(--sp-5) var(--sp-6)' : tight ? 'var(--sp-6) var(--pad-card)' : 'var(--sp-9) var(--pad-card-lg)'
-                      : wide ? 'var(--sp-10) var(--pad-card-lg) var(--sp-9)' : 'var(--pad-card)',
+                  /* The clock's row takes whatever height is left, so the
+                     clock can grow into it (see CLOCK_EM). */
+                  ...(split ? { flex: 1, gridTemplateRows: 'auto minmax(0, 1fr) auto auto', overflowY: 'auto' } : {}),
+                  /* A rounded rectangle like the bars above it — his call,
+                     2026-09-30 — not --r-card-lg's big curve. */
+                  borderRadius: 'var(--r-md)',
+                  /* One shorthand, never `padding` plus `paddingTop`: React
+                     clears a longhand when the shorthand beside it changes. The
+                     top is at least the toggles' corner, so they stay clear of
+                     the badges under them however many badges a task has. */
+                  padding: `max(${TOGGLE_RESERVE}, ${stagePad[0]}) ${stagePad[1]} ${stagePad[2]}`,
+                  position: 'relative',
                   display: 'grid',
                   justifyItems: 'center',
                   gap: small ? 'var(--sp-5)' : 'var(--sp-7)',
@@ -948,32 +1129,70 @@ function FocusScreen() {
                   backdropFilter: 'var(--glass-bd-lg)',
                   WebkitBackdropFilter: 'var(--glass-bd-lg)',
                   /* Emission says what the stage IS: overrunning, live, or
-                     resting. `elevation.css` — a resting surface never glows. */
+                     resting. `elevation.css` — a resting surface never glows.
+                     Live is Focus's teal since 29-1P2c3 (it was emerald):
+                     this is Focus's own stage, so its colour wins, as
+                     Atlas's violet does on Atlas's things. The strip's live
+                     segment and the run pill keep emerald, running now.
+                     Since 29-1P11c a task in a project casts its cover's
+                     colours instead (`castLight`); flow stays gold. */
                   boxShadow: overrun
-                    ? 'var(--glass-shadow-pane), var(--glow-rose-md)'
+                    ? 'var(--glass-shadow-pane), var(--job-gold-shine-md)'
                     : isRunning
-                      ? 'var(--glass-shadow-pane), var(--glow-accent-sm)'
+                      ? `var(--glass-shadow-pane), ${light ? castLight(light) : 'var(--job-teal-shine-md)'}`
                       : 'var(--glass-shadow-pane)',
                 }}
               >
+                <div
+                  role="group"
+                  aria-label="Show or hide parts of this screen"
+                  style={{ position: 'absolute', top: TOGGLE_INSET, left: TOGGLE_INSET, display: 'flex', gap: 'var(--sp-2)' }}
+                >
+                  <SoftIconButton
+                    size="sm"
+                    label={switchesOpen ? 'Hide the screen switches' : 'Show the screen switches'}
+                    aria-expanded={switchesOpen}
+                    onClick={() => setSwitchesOpen(!switchesOpen)}
+                  >
+                    <Icon name="sliders-horizontal" size={16} />
+                  </SoftIconButton>
+                  {switchesOpen && (
+                    <>
+                      <ViewToggle icon="panel-top" what="the top banner" shown={showHeader} onToggle={() => setShowHeader(!showHeader)} />
+                      <ViewToggle icon="list-tree" what="subtasks" shown={showSubs} onToggle={toggleSubs} />
+                      <ViewToggle icon="file-text" what="task details" shown={showDetails} onToggle={toggleDetails} />
+                      <ViewToggle icon="hourglass" what="the session bar" shown={showSession} onToggle={() => setShowSession(!showSession)} />
+                      <ViewToggle icon="panel-left" what="the nav bar" shown={showNav} onToggle={() => setShowNav(!showNav)} />
+                      {noise.enabled && (
+                        <ViewToggle icon="volume-2" what="the brown noise knob" shown={showKnob} onToggle={() => setShowKnob(!showKnob)} />
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* The brown noise knob, in the corner the switches leave free. Sized
+                    to sit inside the room the stage keeps clear for them. */}
+                {noise.enabled && showKnob && (
+                  <div title="Brown noise level" style={{ position: 'absolute', top: TOGGLE_INSET, right: TOGGLE_INSET }}>
+                    <Knob
+                      label="Brown noise level"
+                      value={Math.round(noise.level * 100)}
+                      min={0}
+                      max={100}
+                      step={5}
+                      size={52}
+                      dots={8}
+                      valueText={`${Math.round(noise.level * 100)} percent`}
+                      onValueChange={(v) => setNoisePrefs({ level: v / 100 })}
+                    />
+                  </div>
+                )}
+
                 <div style={{ display: 'grid', justifyItems: 'center', gap: small ? 'var(--sp-4)' : 'var(--sp-5)', width: '100%' }}>
                   <div className="flex flex-wrap items-center justify-center" style={{ gap: small ? 'var(--sp-3)' : 'var(--sp-4)' }}>
-                    {/* Three states, not two. `StatusPill.prompt.md` ships
-                        `overrun` for exactly this and the screen never used
-                        it, so a task ten minutes past its allocation went on
-                        calling itself "Running". */}
-                    <StatusPill status={overrun ? 'overrun' : isRunning ? 'running' : 'queued'}>
-                      {overrun ? 'Overrunning' : isRunning ? 'Running' : 'Paused'}
-                    </StatusPill>
-
+                    {/* No run-state pill, score or list name since OPT-7 (see
+                        the header). What is left here asks something of him. */}
                     <RedAlertBadge redAlert={reading.redAlert} />
-                    {score > 0 && (
-                      <ScoreDial value={score} max={scores.peak} alert={reading.redAlert} size="sm" label="Priority" />
-                    )}
-
-                    {activeTask.listName && (
-                      <MetaKicker tone="var(--fg-4)">{activeTask.listName}</MetaKicker>
-                    )}
 
                     {/* The bonus is real and stored; nothing ever showed it.
                         **Item 17 gave it the count and one name.** It used to
@@ -997,9 +1216,9 @@ function FocusScreen() {
                       lapsed={(activeTask.emergencyBoost ?? 0) > 0 && reading.variables.emergency === 0}
                     />
 
-                    {/* Amber, not rose: a field you never filled in needs a
-                        decision, it is not a live problem. Same call UI-9 and
-                        UI-10 made for their "Needs …" chips. */}
+                    {/* Grey with its triangle, not coral: a field you never
+                        filled in needs a look, it is not a live problem
+                        (29-1P2c2: warnings quiet; it was amber, gold's hue). */}
                     {activeDuration === 0 && (
                       <StatusPill status="review" size="sm" dot={false}>Needs time</StatusPill>
                     )}
@@ -1035,110 +1254,133 @@ function FocusScreen() {
                   >
                     {activeTask.title}
                   </h2>
+
+                  <FocusIntent
+                    intent={run.intent}
+                    asking={(!run.taskBegun && !isRunning) || intentEditing}
+                    onChange={run.setIntent}
+                    onEditing={setIntentEditing}
+                    onEnter={() => { if (!run.taskBegun && !isRunning && run.settleUntil === null) handleToggleRunning(); }}
+                  />
                 </div>
 
                 {/* What you can OPEN about this task, next to its name. Both
                     pills are always here — "this one has no steps" is a fact
                     worth being able to check without leaving the screen. */}
-                {!split && (
+                {!split && (showDetails || showSubs) && (
                 <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--sp-4)' }}>
-                  <DockPill
-                    icon="file-text"
-                    label="Details"
-                    open={dock === 'details'}
-                    title="Description, notes and reference links"
-                    onClick={() => setDock(dock === 'details' ? null : 'details')}
-                  />
-                  <DockPill
-                    icon="list-tree"
-                    label="Subtasks"
-                    count={subCounts ? `${subCounts.done} / ${subCounts.total}` : undefined}
-                    open={dock === 'subs'}
-                    title={subCounts ? `${subCounts.total} subtasks` : 'No breakdown on this task'}
-                    onClick={() => setDock(dock === 'subs' ? null : 'subs')}
-                  />
+                  {showDetails && (
+                    <DockPill
+                      icon="file-text"
+                      label="Details"
+                      open={dock === 'details'}
+                      title="Description, notes and reference links"
+                      onClick={() => setDock(dock === 'details' ? null : 'details')}
+                    />
+                  )}
+                  {showSubs && (
+                    <DockPill
+                      icon="list-tree"
+                      label="Subtasks"
+                      count={subCounts ? `${subCounts.done} / ${subCounts.total}` : undefined}
+                      open={dock === 'subs'}
+                      title={subCounts ? `${subCounts.total} subtasks` : 'No breakdown on this task'}
+                      onClick={() => setDock(dock === 'subs' ? null : 'subs')}
+                    />
+                  )}
                 </div>
                 )}
 
-                {/* The two numerals this screen exists for. */}
-                <div style={{ display: 'grid', justifyItems: 'center', gap: small ? 'var(--sp-4)' : 'var(--sp-5)', width: '100%', paddingTop: small ? 0 : 'var(--sp-3)' }}>
+                {/* 29-1P10a, idea 95: while the session settles in, the screen
+                    goes quiet — the breath stands where the clock and its
+                    buttons were, and the title and the line stay. */}
+                {run.settleUntil !== null ? (
+                  <div style={{ display: 'grid', placeItems: 'center', minHeight: 0 }}>
+                    <FocusBreath until={run.settleUntil} onSkip={() => run.resume()} />
+                  </div>
+                ) : (
+                <>
+                {/* The two numerals this screen exists for. A size container,
+                    so the clock can be sized off the room it actually has. */}
+                <div
+                  style={{
+                    display: 'grid', justifyItems: 'center', alignContent: 'center',
+                    gap: small ? 'var(--sp-4)' : 'var(--sp-5)', width: '100%', minHeight: 0,
+                    paddingTop: small ? 0 : 'var(--sp-3)',
+                    containerType: split ? 'size' : 'inline-size',
+                  }}
+                >
+                  {/* Just the numbers (29-1P11c, his call): no `total`, so no rail. */}
                   <Countdown
                     seconds={timeLeft}
-                    total={activeDuration || undefined}
                     format="clock"
-                    /* One rung down while a panel is open, like everything
-                       else on the card — `lg` is 64px of numeral and `md` is
-                       36. It goes straight back up when the panel closes. */
-                    size={condensed || (split && short) ? 'md' : wide && !tight ? 'timer' : 'lg'}
+                    size="timer"
+                    numeralSize={clockSize(split, condensed, inFlow)}
+                    numeralWeight="var(--weight-bold)"
                     running={isRunning}
-                    note={
-                      activeDuration > 0 && overrun
-                        ? 'over the time you gave this task'
-                        : undefined
-                    }
+                    over="flow"
+                    note={inFlow ? <WrapUp onClick={handleDone} /> : undefined}
                   />
 
                   <span className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--sp-5)' }}>
                     <MetaKicker tone="var(--fg-4)">
-                      {overrun ? `Over by ${formatHms(-timeLeft)}` : `${formatHms(spent)} elapsed`}
+                      {overrun ? `${formatHms(-timeLeft)} in flow` : `${formatHms(spent)} elapsed`}
                     </MetaKicker>
                     <span aria-hidden="true" style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--fg-4)' }} />
                     <MetaKicker tone="var(--fg-4)">{formatSpan(activeDuration)} allocated</MetaKicker>
-                    {/* On the clock's own line, because they move the clock. */}
-                    <span className="flex items-center" style={{ gap: 'var(--sp-3)' }}>
-                      <Button size="sm" variant="ghost" onClick={() => run.addTaskSeconds(300)} title="Add five minutes">
-                        +5m
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => run.addTaskSeconds(900)} title="Add fifteen minutes">
-                        +15m
-                      </Button>
-                    </span>
+                    {/* On the clock's own line, because it moves the clock. Was
+                        +5m / +15m; the ruler since 29-1P10a (idea 97). */}
+                    <AddTime timeLeft={timeLeft} running={isRunning} now={now} onAdd={run.addTaskSeconds} />
                   </span>
                 </div>
 
+                {/* Mark done's question takes the controls' place until he
+                    answers it (29-1P10a, idea 96). */}
+                {askingFor === activeTask.id && cleanIntent(run.intent) ? (
+                  <DoneQuestion intent={run.intent} onAnswer={answerDone} />
+                ) : (
+                <>
                 {/* Controls. One ghost escape, one glass verb, one frost verb —
                     and no `solid`: the mockup gives this row three weights and
                     a fourth would leave none of them meaning anything. */}
                 <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--sp-5)' }}>
-                  <IconButton label="Skip this task" title="Skip this task" size="lg" variant="ghost" onClick={handleSkip}>
+                  <SoftIconButton label="Skip this task" onClick={handleSkip}>
                     <Icon name="x" size={20} />
-                  </IconButton>
+                  </SoftIconButton>
 
-                  <Button
-                    variant="glass"
-                    size="lg"
+                  {/* Soft raised, the second action (29-1P2), as tall as Mark done. */}
+                  <SoftButton
                     onClick={handleToggleRunning}
-                    iconLeft={<Icon name={isRunning ? 'pause' : 'play'} size={18} />}
+                    icon={<MorphIcon kind="play-pause" on={isRunning} size={18} />}
+                    style={{ height: 56, padding: '0 var(--sp-8)', fontSize: 'var(--text-md)' }}
                   >
-                    {isRunning ? 'Pause' : 'Resume'}
-                  </Button>
+                    {isRunning ? 'Pause' : run.begun ? 'Resume' : 'Start'}
+                  </SoftButton>
 
                   {/* Item 19. Skip and Defer are deliberately left alone: a
                       task you cannot finish is exactly the one you want to move
                       past, and taking away every verb on the screen would leave
                       a locked task able to stop the whole session. */}
-                  {/* Gel since V3-4 — V3's one primary, and finishing the task
-                      is this screen's. It draws as `solid` outside a scope. */}
-                  <Button
-                    variant="gel"
-                    size="lg"
+                  {/* The screen's one lit button: finishing the task. A plain gel
+                      since 29-1P2, lime — done is lime's job. */}
+                  <GelButton
+                    colour="lime"
+                    tile={false}
                     onClick={handleDone}
                     disabled={lockReason !== undefined}
                     title={lockReason}
-                    iconLeft={<Icon name={lockReason ? 'lock' : 'check'} size={18} />}
+                    icon={<Icon name={lockReason ? 'lock' : 'check'} size={18} />}
                   >
                     Mark done
-                  </Button>
+                  </GelButton>
                 </div>
 
                 {/* Defer is a decision, not a control, so it sits a step below
-                    them — and names what runs next, since that is the thing
-                    the press actually changes. */}
-                <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-3)' }}>
-                  <Button
+                    them. It named what runs next until OPT-7 took the "Next:"
+                    line off, his ask; the strip's run order still says it. */}
+                <div style={{ display: 'grid', justifyItems: 'center' }}>
+                  <SoftButton
                     size="sm"
-                    variant="tint"
-                    tone="amber"
                     onClick={handleQuasiNeed}
                     title={
                       avoidedAtCap
@@ -1149,27 +1391,26 @@ function FocusScreen() {
                        the Emergency flag, and a defer is the opposite gesture.
                        The words are the counter's own name for the same reason
                        every other surface's are: one field, one vocabulary. */
-                    iconLeft={<Icon name="skip-forward" size={15} />}
+                    icon={<Icon name="skip-forward" size={15} />}
                   >
                     {avoidedAtCap ? `Defer — already avoided ×${AVOIDED_MAX}` : 'Defer — +1 avoided'}
-                  </Button>
-                  {/* The last thing the ladder takes off: on a window under
-                      `SHORT` the strip's run order already says what is next. */}
-                  {tasks.length > 1 && !(split && short) && (
-                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
-                      Next: {tasks[1].title} · {formatSpan(taskFocusSeconds(tasks[1]))}
-                    </span>
-                  )}
+                  </SoftButton>
                 </div>
+                </>
+                )}
+                </>
+                )}
               </motion.div>
             </AnimatePresence>
 
             {!split && canDock && detailsPanel}
             {!split && canDock && subtasksPanel}
 
-            {split && (
+            {split && (showSubs || showDetails) && (
               <FocusSideColumn
                 key={activeTask.id}
+                showSubtasks={showSubs}
+                showDetails={showDetails}
                 task={liveTask}
                 detailsTask={details?.task ?? activeTask}
                 parentTask={details?.parent}
@@ -1191,18 +1432,17 @@ function FocusScreen() {
         </div>
       </div>
 
-      {floatingBar}
+      {showNav && floatingBar}
 
       {!split && (
         <div style={{ position: 'fixed', right: 'calc(var(--sp-9) + var(--safe-r))', bottom: 'calc(var(--sp-9) + var(--safe-b))', zIndex: Z.chrome }}>
-          <IconButton
-            label="Capture an idea or task"
-            title="Capture an idea or task"
-            size="lg"
-            onClick={() => setIsCapturing(true)}
-          >
-            <Icon name="plus" size={22} />
-          </IconButton>
+          {/* The floating + (29-1P2), where the capture button always was. While
+              Capture is open it is an ✕, and closes it (29-1P5c). */}
+          <FloatingAddButton
+            open={isCapturing}
+            label={isCapturing ? 'Close capture' : 'Capture an idea or task'}
+            onClick={() => setIsCapturing(!isCapturing)}
+          />
         </div>
       )}
 
@@ -1268,7 +1508,53 @@ function FocusScreen() {
         </AnimatePresence>
       </div>
 
-      <CaptureModal isOpen={isCapturing} onClose={() => setIsCapturing(false)} />
+      {/* Idea 100: StandBy, over everything on Focus but the two notes that
+          ask him something (halfway, below; the away card, App's). */}
+      {standBy.shown && (
+        <StandByLayer
+          seconds={timeLeft}
+          title={activeTask.title}
+          running={isRunning}
+          night={standBy.night}
+          onWake={standBy.wake}
+        />
+      )}
+
+      {/* Idea 103: halfway, at the top, where the away card would be. */}
+      <MomentLane top>
+        <AnimatePresence>
+          {halfway !== null && (
+            <motion.div
+              key={activeTask.id}
+              initial={{ opacity: 0, y: -14, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -14, scale: 0.97 }}
+              style={{ pointerEvents: 'auto' }}
+            >
+              <HalfwayNote
+                title={activeTask.title}
+                drain={halfway}
+                onYes={() => run.seeHalfway(activeTask.id)}
+                onSwitch={tasks.length > 1 ? openSwitch : undefined}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </MomentLane>
+
+      {switching && (
+        <SwitchPicker
+          tasks={tasks.slice(1).map((t) => ({ id: t.id, title: t.title, seconds: taskFocusSeconds(t) }))}
+          onPick={switchTo}
+          onClose={() => { setSwitching(false); run.resume(); }}
+        />
+      )}
+
+      <CaptureModal
+        isOpen={isCapturing}
+        onClose={() => setIsCapturing(false)}
+        onCaptured={run.captureIdea}
+      />
     </div>
   );
 }

@@ -31,7 +31,7 @@
  * says what the browser has already decided.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Icon, Kicker, Well, type IconName } from '../ui';
+import { Card, Icon, Kicker, SoftButton, Well, type IconName } from '../ui';
 import { useAuth } from '../contexts/AuthContext';
 import {
   checkForUpdateNow,
@@ -280,38 +280,35 @@ export default function AppInfoSection({ onToast }: { onToast: (t: ToastPayload)
         </Well>
 
         <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-          <Button
+          <SoftButton
             size="sm"
-            variant="glass"
             onClick={handleCheck}
             disabled={checking || !running}
-            iconLeft={<Icon name="refresh-cw" size={14} />}
+            icon={<Icon name="refresh-cw" size={14} />}
           >
             {checking ? 'Checking…' : 'Check for updates'}
-          </Button>
+          </SoftButton>
 
           {notifyState === 'off' && pushConfigured() && (
-            <Button
+            <SoftButton
               size="sm"
-              variant="tint"
               onClick={handleEnable}
               disabled={working}
-              iconLeft={<Icon name="bell" size={14} />}
+              icon={<Icon name="bell" size={14} />}
             >
               Turn on notifications
-            </Button>
+            </SoftButton>
           )}
 
           {notifyState === 'on' && (
-            <Button
+            <SoftButton
               size="sm"
-              variant="tint"
               onClick={handleTest}
               disabled={working}
-              iconLeft={<Icon name="send" size={14} />}
+              icon={<Icon name="send" size={14} />}
             >
               {working ? 'Sending…' : 'Send a test notification'}
-            </Button>
+            </SoftButton>
           )}
         </div>
 

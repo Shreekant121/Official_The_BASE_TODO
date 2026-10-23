@@ -12,11 +12,13 @@
  * **The trough is `PersonalScorePicker`'s, and its argument carries over
  * whole.** From UI-30, quoting the design system's own note: *"Personal
  * importance is one hue heating up, not five hues: the trough reads as a dial,
- * and the ramp says 'more of the same thing'."* Amber is the hue this system
- * spends on a judgement someone has to make, which is exactly what this input
- * is, and emerald stays out because it only ever means live. Ten stops make
- * the trough read *more* like a dial than five did, not less — the ramp has
- * twice the room to warm across.
+ * and the ramp says 'more of the same thing'."* **The hue is white since
+ * 29-1P2c3, his call (2026-10-07): "plain white glow".** It was amber, and
+ * amber is gold's hue, which is rewards; this is his own judgement, not a
+ * warning, an error, a date or anything Atlas did, so no job colour fits and
+ * the ramp is light alone — like the subtask priority ladder's (29-1P2c2).
+ * Ten stops make the trough read *more* like a dial than five did, not
+ * less — the ramp has twice the room to brighten across.
  *
  * **What did not come across is the 2×2's four hues.** `EisenhowerPicker`
  * earned them by a real argument — each quadrant's hue was the `--status-*`
@@ -46,17 +48,17 @@ import { HUMAN_OVERRIDE_MAX } from '../../store/useStore';
 const STEPS = Array.from({ length: HUMAN_OVERRIDE_MAX + 1 }, (_, n) => n);
 
 /**
- * The source's ramp: one hue, more of it each step. `PersonalScorePicker` ran
- * `0.05 + n × 0.035` over five stops; this spans the identical alpha range
- * (0.05 → 0.225) over ten, so the trough warms by the same total amount and
- * simply has finer rungs to do it in.
+ * The source's ramp: one colour, more of it each step. `PersonalScorePicker`
+ * ran `0.05 + n × 0.035` of amber over five stops; white reads stronger than
+ * amber at the same alpha on this dark glass, so the white ramp spans a
+ * little less (0.04 → 0.18) over ten stops.
  */
-const HEAT = (n: number) => `oklch(0.75 0.15 82 / ${0.05 + (n / HUMAN_OVERRIDE_MAX) * 0.175})`;
+const HEAT = (n: number) => `oklch(1 0 0 / ${0.04 + (n / HUMAN_OVERRIDE_MAX) * 0.14})`;
 
-/** The selected stop's three-stop amber tint, and the ink that reads on it. */
+/** The selected stop's three-stop white tint, and the ink that reads on it. */
 const ON_TINT =
-  'linear-gradient(155deg, oklch(0.75 0.15 82 / 0.34) 0%, oklch(0.75 0.15 82 / 0.12) 55%, oklch(0.75 0.15 82 / 0.22) 100%)';
-const ON_INK = 'oklch(0.96 0.07 82)';
+  'linear-gradient(155deg, oklch(1 0 0 / 0.26) 0%, oklch(1 0 0 / 0.09) 55%, oklch(1 0 0 / 0.17) 100%)';
+const ON_INK = 'var(--fg-1)';
 
 interface HumanOverridePickerProps {
   value: number | undefined;
@@ -90,7 +92,7 @@ export default function HumanOverridePicker({ value, onChange, compact = false }
                 padding: 0, borderRadius: 'var(--r-pill)',
                 backgroundImage: on ? ON_TINT : `linear-gradient(155deg, ${HEAT(n)}, ${HEAT(n)})`,
                 boxShadow: on
-                  ? 'var(--glass-rim-2), 0 0 0 1px oklch(0.75 0.15 82 / 0.45), 0 0 24px -6px oklch(0.75 0.15 82 / 0.6)'
+                  ? 'var(--glass-rim-2), 0 0 0 1px oklch(1 0 0 / 0.4), 0 0 24px -6px oklch(1 0 0 / 0.4)'
                   : 'none',
                 color: on ? ON_INK : 'var(--fg-1)',
                 font: 'var(--type-numeric)',

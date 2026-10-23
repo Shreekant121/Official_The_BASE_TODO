@@ -61,6 +61,18 @@
  *    is no longer a DOM descendant of the wrapper), and a `fixed` surface
  *    needs a rung, which arrives as the `zIndex` prop for the same reason
  *    `Dialog` takes one — see its port note 3.
+ * 5. ADDED (OPT-10): the panel no longer scrolls itself. A tall menu on a
+ *    short screen scrolls an inner box, which draws no scrollbar and fades
+ *    the end with rows past it (`.ag-scroll .ag-fade`) — his BASE list,
+ *    *"remove the scroll sidebar from all the dropdowns"* and *"no abrupt
+ *    cut"*. The fade cannot sit on the panel: a mask on the glass would
+ *    fade the panel's own edges away with its rows. And `beside` puts two
+ *    short items in one row as a pair of boxes (Share | Hide on a list).
+ * 6. ADDED (29-1P5c, idea 59): a row no longer lights up on its own under
+ *    the mouse. One pad glides from row to row (`core/useGlide.ts`), coral
+ *    under a delete; the row keeps its brighter text and lime icon.
+ * 7. ADDED (29-1P6a, idea 75): hold the trigger, slide to a row, let go —
+ *    `core/useHoldSlide.ts`, on every menu. A plain tap is unchanged.
  */
 import {
   cloneElement, isValidElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
@@ -68,16 +80,25 @@ import {
 import { createPortal } from 'react-dom';
 import type { CSSProperties, HTMLAttributes, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { useV3, v3Attr } from '../core/v3Context';
+import { HoldToConfirm } from '../actions/HoldToConfirm';
+import { cue } from '../../lib/sound';
+import { useGlide } from '../core/useGlide';
+import { useHoldSlide } from '../core/useHoldSlide';
+import { KeyCaps } from '../core/KeyCaps';
 
 export interface MorphMenuItem {
   value?: string;
   label?: ReactNode;
   icon?: ReactNode;
-  /** Right-aligned mono hint, e.g. `⌘K`. */
-  shortcut?: ReactNode;
+  /**
+   * The row's key, drawn as little raised keys on the laptop (idea 18,
+   * 29-1P6a): `'n'`, or `['g', 'h']` for a sequence. Take it from
+   * `lib/shortcutBindings.ts`, never a literal, so a moved key shows moved.
+   */
+  shortcut?: string | string[];
   /** Right-aligned mono value — a current setting. Never both this and `shortcut`. */
   meta?: ReactNode;
-  /** `danger` renders the item in rose. */
+  /** `danger` renders the item in coral (29-1P2c2: delete is coral's job). */
   tone?: 'default' | 'danger';
   onSelect?: () => void;
   /**
@@ -86,7 +107,7 @@ export interface MorphMenuItem {
    * closes the menu.
    */
   /**
-   * A `danger` item's strip is rose with a rose button and "Keep"; any other
+   * A `danger` item's strip is coral with a coral button and "Keep"; any other
    * item's is a neutral well with a solid glass button and "Cancel" — BUILD-11's
    * Archive, which sits above Delete and is never red (`Archive.dc.html`).
    */
@@ -98,10 +119,22 @@ export interface MorphMenuItem {
     /** Confirm button copy. Defaults to `Delete`. */
     action?: string;
     onConfirm?: () => void;
+    /**
+     * The confirm is a `HoldToConfirm`: pressed and held until its fill runs
+     * across, never a tap (29-1P2). For what costs most to undo — deleting a
+     * project and its whole tree, his call — not for every delete.
+     */
+    hold?: boolean;
   };
   /** Label swapped in for 1.4s on select; the menu stays open. */
   flash?: ReactNode;
   flashIcon?: ReactNode;
+  /**
+   * Draws this item and the NEXT one side by side, as two boxes in one row
+   * (OPT-10, his ask: Share and Hide). For two short labels with no
+   * `confirm` — a confirm strip has no room to grow under half a row.
+   */
+  beside?: boolean;
   /** Renders a separator instead of an item. */
   divider?: boolean;
   /** Renders an uppercase mono group label instead of an item. */
@@ -165,6 +198,8 @@ export function MorphMenu({
   const isOpen = open !== undefined ? open : internal;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  /* The panel's inner box — what actually scrolls (port note 5). */
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLSpanElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [armed, setArmed] = useState<number | null>(null);
@@ -172,8 +207,42 @@ export function MorphMenu({
   /* Flip up when there is no room below — the panel grows again when a
      confirm arms, so this is re-measured on that too. */
   const [flip, setFlip] = useState(false);
+  /* The panel's height cap when it fits neither below nor above the trigger —
+     see effect 1. `null` whenever it fits one way or the other. */
+  const [cap, setCap] = useState<number | null>(null);
   /* Where the trigger is, in viewport coordinates. Only read when `portal`. */
   const [anchor, setAnchor] = useState({ top: 0, bottom: 0, left: 0, right: 0, viewportW: 0, viewportH: 0 });
+
+  /*
+   * THE PANEL IS BUILT ON FIRST OPEN, NOT BEFORE (2026-09-28). It used to be
+   * mounted closed for every menu on the page, and a row menu is one per row:
+   * New Session with 161 tasks carried 161 hidden menus, 10,844 elements —
+   * 70% of the page — which is most of why it took 7.6s to open on a
+   * phone-speed CPU. Now a menu that was never opened costs its trigger only.
+   *
+   * The morph still plays on that first open: the panel mounts in its closed
+   * pose, and `primed` flips it open two frames later, once the browser has
+   * computed that closed style (one frame is not enough — the flip can land
+   * before the first style pass, and a transition needs a "from"). Once
+   * primed it stays mounted, so closing and every later open animate exactly
+   * as they always did. `shown` is what the panel draws; `isOpen` stays the
+   * truth for the trigger, focus and the outside-click listener.
+   */
+  const [primed, setPrimed] = useState(false);
+  useEffect(() => {
+    if (!isOpen || primed) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setPrimed(true));
+    });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [isOpen, primed]);
+  const shown = isOpen && primed;
+
+  /* Idea 59: the one pad that glides under the mouse. Gone with the panel,
+     and while a confirm is armed (its row has folded away). */
+  const { pad: glidePad, moveTo: glideTo, hostProps: glideHost } = useGlide();
+  useEffect(() => { if (!shown || armed !== null) glideTo(null); }, [shown, armed, glideTo]);
 
   const setOpen = useCallback(
     (v: boolean) => {
@@ -183,6 +252,14 @@ export function MorphMenu({
     },
     [open, onOpenChange],
   );
+
+  /* Idea 75: press and hold the trigger, slide onto a row, let go. */
+  useHoldSlide(triggerRef, {
+    isOpen,
+    open: () => setOpen(true),
+    close: () => setOpen(false),
+    panel: () => panelRef.current,
+  });
 
   /* Indices of real rows, in DOM order — what the arrow keys walk. */
   const rowIndices = useMemo(
@@ -222,12 +299,20 @@ export function MorphMenu({
   useEffect(() => {
     if (!isOpen) return;
     const raf = requestAnimationFrame(() => {
-      const panel = panelRef.current;
+      const inner = scrollRef.current;
       const wrap = wrapRef.current;
-      if (!panel || !wrap) return;
+      if (!inner || !wrap) return;
       const box = wrap.getBoundingClientRect();
-      const h = panel.scrollHeight;
-      setFlip(window.innerHeight - box.bottom - 16 < h && box.top - 16 > h);
+      /* The inner box's whole content, plus the panel's 1px rim each side. */
+      const h = inner.scrollHeight + 2;
+      const below = window.innerHeight - box.bottom - 16;
+      const above = box.top - 16;
+      /* Fits neither way (a tall row menu on a short screen, BIG-3): open
+         towards the roomier side and scroll inside, rather than run off the
+         bottom where the last rows — Delete among them — cannot be reached. */
+      const fits = below >= h || above > h;
+      setFlip(fits ? below < h : above > below);
+      setCap(fits ? null : Math.max(above, below) - 8 - 2);
     });
     return () => cancelAnimationFrame(raf);
   }, [isOpen, armed]);
@@ -241,13 +326,13 @@ export function MorphMenu({
         NOT re-run on `armed`: arming collapses the rows to
         tabIndex={-1}, and focus belongs on the confirm strip. */
   useEffect(() => {
-    if (!isOpen) return;
+    if (!shown) return;
     const t = setTimeout(() => {
       const first = itemRefs.current.find((el): el is HTMLButtonElement => el != null);
       first?.focus({ preventScroll: true });
     }, 90);
     return () => clearTimeout(t);
-  }, [isOpen]);
+  }, [shown]);
 
   /* 3. Close on a pointer landing outside the wrapper. A portalled panel is
         not inside that wrapper in the DOM, so it has to be spared by name —
@@ -361,13 +446,11 @@ export function MorphMenu({
   const panel: CSSProperties = {
     ...placement,
     width,
-    padding: 'var(--sp-3)',
     display: 'grid',
-    gap: 2,
     /* V3 drops the morph (v4 `MorphMenu.jsx`): no pill-to-card radius, no
        scale, no blur — the panel fades in and drops 4px from the trigger's
        side, and its rows arrive together rather than in a stagger. */
-    borderRadius: isOpen || v3 ? 'var(--r-lg)' : 'var(--r-pill)',
+    borderRadius: shown || v3 ? 'var(--r-lg)' : 'var(--r-pill)',
     /* Near-opaque on purpose. A menu sits ON TOP of the content it acts
        on — at card translucency the two texts overlap and neither is
        readable. The gradient and rim keep it glass; the base coat makes
@@ -379,20 +462,20 @@ export function MorphMenu({
     WebkitBackdropFilter: 'var(--glass-bd-lg)',
     boxShadow: 'var(--glass-cast-3), var(--glass-inner-1)',
     transformOrigin: `${flip ? 'bottom ' : 'top '}${align === 'end' ? 'right' : 'left'}`,
-    transform: isOpen
+    transform: shown
       ? 'scale(1) translateY(0)'
       : v3 ? `translateY(${flip ? '4px' : '-4px'})` : `scale(0.86) translateY(${flip ? '10px' : '-10px'})`,
-    opacity: isOpen ? 1 : 0,
+    opacity: shown ? 1 : 0,
     /* Closed panels must leave the a11y tree, not just go transparent: a
        transparent-but-focusable menu puts dead tab stops in the page.
        visibility does that, and its items are also removed from the tab
        order below. */
-    visibility: isOpen ? 'visible' : 'hidden',
-    filter: isOpen || v3 ? 'blur(0)' : 'blur(6px)',
-    pointerEvents: isOpen ? 'auto' : 'none',
+    visibility: shown ? 'visible' : 'hidden',
+    filter: shown || v3 ? 'blur(0)' : 'blur(6px)',
+    pointerEvents: shown ? 'auto' : 'none',
     transition: v3
-      ? `transform var(--dur-base) var(--ease-glass), opacity var(--dur-base) var(--ease-glass), visibility 0s linear ${isOpen ? '0s' : 'var(--dur-base)'}`
-      : `transform var(--dur-morph) var(--ease-morph), opacity var(--dur-base) var(--ease-glass), filter var(--dur-base) var(--ease-glass), border-radius var(--dur-morph) var(--ease-morph), visibility 0s linear ${isOpen ? '0s' : 'var(--dur-base)'}`,
+      ? `transform var(--dur-base) var(--ease-glass), opacity var(--dur-base) var(--ease-glass), visibility 0s linear ${shown ? '0s' : 'var(--dur-base)'}`
+      : `transform var(--dur-morph) var(--ease-morph), opacity var(--dur-base) var(--ease-glass), filter var(--dur-base) var(--ease-glass), border-radius var(--dur-morph) var(--ease-morph), visibility 0s linear ${shown ? '0s' : 'var(--dur-base)'}`,
   };
 
   /*
@@ -404,11 +487,27 @@ export function MorphMenu({
    */
   const panelNode = (
     /* Portalled, the panel leaves the scope's DOM subtree; `v3Attr` carries it. */
-    <div ref={panelRef} role="menu" aria-hidden={!isOpen} style={panel} {...(portal ? v3Attr(v3) : {})}>
-      {header != null && header !== false && <MenuHeader header={header} open={isOpen} />}
+    <div ref={panelRef} role="menu" aria-hidden={!shown} style={panel} {...(portal ? v3Attr(v3) : {})}>
+      <div
+        ref={scrollRef}
+        className="ag-scroll ag-fade"
+        {...glideHost}
+        style={{
+          position: 'relative',
+          display: 'grid',
+          gap: 2,
+          padding: 'var(--sp-3)',
+          ...(cap !== null ? { maxHeight: cap, overflowY: 'auto' as const, overscrollBehavior: 'contain' as const } : {}),
+        }}
+      >
+      <span ref={glidePad} className="ag-glide" aria-hidden="true" />
+      {header != null && header !== false && <MenuHeader header={header} open={shown} />}
 
       {items.map((it, i) => {
         if (it.divider) {
+          /* A rule only ever separates two things: none at either end, none
+             doubled — callers spread groups that may come back empty. */
+          if (i === 0 || i === items.length - 1 || items[i - 1].divider) return null;
           return (
             <span
               key={`d${i}`}
@@ -428,8 +527,8 @@ export function MorphMenu({
                 font: 'var(--type-kicker)',
                 letterSpacing: 'var(--tracking-kicker)',
                 textTransform: 'var(--kicker-transform)' as CSSProperties['textTransform'],
-                color: it.tone === 'danger' ? 'oklch(0.70 0.15 20 / 0.78)' : 'var(--fg-3)',
-                opacity: isOpen ? 1 : 0,
+                color: it.tone === 'danger' ? 'var(--job-coral-line)' : 'var(--fg-3)',
+                opacity: shown ? 1 : 0,
                 transition: `opacity var(--dur-base) var(--ease-glass) ${v3 ? 0 : i * 18}ms`,
               }}
             >
@@ -437,22 +536,45 @@ export function MorphMenu({
             </span>
           );
         }
-        return (
-          <MenuRow
-            key={it.value || i}
-            item={it}
-            index={i}
-            open={isOpen}
-            armed={armed === i}
-            flashing={flashed === i}
-            dimmed={armed !== null && armed !== i}
-            innerRef={(el) => { itemRefs.current[i] = el; }}
-            onPick={() => pick(it, i)}
-            onCancel={() => setArmed(null)}
-            onConfirm={() => { setArmed(null); setOpen(false); it.confirm?.onConfirm?.(); }}
-          />
-        );
+        const row = (n: number, half = false) => {
+          const one = items[n];
+          return (
+            <MenuRow
+              key={one.value || n}
+              item={one}
+              index={n}
+              half={half}
+              open={shown}
+              armed={armed === n}
+              flashing={flashed === n}
+              dimmed={armed !== null && armed !== n}
+              innerRef={(el) => { itemRefs.current[n] = el; }}
+              onPick={() => pick(one, n)}
+              onCancel={() => setArmed(null)}
+              onConfirm={() => {
+                setArmed(null);
+                setOpen(false);
+                /* 29-1P3: a tapped coral confirm is a delete (a held one sounds in `HoldToConfirm`). */
+                if (one.tone === 'danger' && !one.confirm?.hold) cue('delete');
+                one.confirm?.onConfirm?.();
+              }}
+            />
+          );
+        };
+        /* The second of a pair was drawn by the first. */
+        if (items[i - 1]?.beside && isPairable(items[i - 1]) && isPairable(it)) return null;
+        const next = items[i + 1];
+        if (it.beside && next && isPairable(it) && isPairable(next)) {
+          return (
+            <div key={`p${i}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--sp-2)' }}>
+              {row(i, true)}
+              {row(i + 1, true)}
+            </div>
+          );
+        }
+        return row(i);
       })}
+      </div>
     </div>
   );
 
@@ -481,9 +603,14 @@ export function MorphMenu({
         {triggerNode}
       </span>
 
-      {portal ? createPortal(panelNode, document.body) : panelNode}
+      {(isOpen || primed) && (portal ? createPortal(panelNode, document.body) : panelNode)}
     </div>
   );
+}
+
+/** An item that can sit in half a row: a plain row with no confirm strip. */
+function isPairable(it: MorphMenuItem): boolean {
+  return !it.divider && !it.section && !it.confirm;
 }
 
 function isHeaderObject(h: MorphMenuHeaderObject | ReactNode): h is MorphMenuHeaderObject {
@@ -543,6 +670,8 @@ function MenuHeader({ header, open }: { header: MorphMenuHeaderObject | ReactNod
 interface MenuRowProps {
   item: MorphMenuItem;
   index: number;
+  /** One of a `beside` pair: a box, centred, with a resting fill. */
+  half?: boolean;
   open: boolean;
   armed: boolean;
   flashing: boolean;
@@ -553,7 +682,7 @@ interface MenuRowProps {
   onConfirm: () => void;
 }
 
-function MenuRow({ item, index, open, armed, flashing, dimmed, innerRef, onPick, onCancel, onConfirm }: MenuRowProps) {
+function MenuRow({ item, index, half = false, open, armed, flashing, dimmed, innerRef, onPick, onCancel, onConfirm }: MenuRowProps) {
   const v3 = useV3();
   const [hover, setHover] = useState(false);
   const danger = item.tone === 'danger';
@@ -575,21 +704,26 @@ function MenuRow({ item, index, open, armed, flashing, dimmed, innerRef, onPick,
             ref={innerRef}
             type="button"
             role="menuitem"
+            data-glide={danger ? 'danger' : ''}
             tabIndex={open && !armed ? 0 : -1}
             onClick={onPick}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
             style={{
+              position: 'relative',
+              zIndex: 1,
               display: 'flex',
               alignItems: 'center',
-              gap: 'var(--sp-5)',
+              justifyContent: half ? 'center' : undefined,
+              gap: half ? 'var(--sp-3)' : 'var(--sp-5)',
               width: '100%',
               minHeight: 48,
-              padding: '0 var(--sp-4)',
+              padding: half ? '0 var(--sp-3)' : '0 var(--sp-4)',
               border: 0,
               textAlign: 'left',
               borderRadius: 'var(--r-sm)',
-              background: hover ? (danger ? 'var(--glass-tint-rose)' : 'oklch(1 0 0 / 0.10)') : 'transparent',
+              /* The hover is the gliding pad's (idea 59); a half keeps its resting fill. */
+              background: half ? 'oklch(1 0 0 / 0.04)' : 'transparent',
               color: danger ? 'var(--status-overrun)' : hover || flashing ? 'var(--fg-1)' : 'var(--fg-2)',
               font: 'var(--type-body)',
               cursor: 'pointer',
@@ -605,14 +739,14 @@ function MenuRow({ item, index, open, armed, flashing, dimmed, innerRef, onPick,
                 style={{
                   display: 'flex',
                   flex: '0 0 auto',
-                  color: danger ? 'inherit' : flashing ? 'var(--accent)' : hover ? 'var(--accent)' : 'var(--fg-3)',
+                  color: danger ? 'inherit' : flashing || hover ? 'var(--job-lime)' : 'var(--fg-3)',
                   transition: 'color var(--dur-fast) var(--ease-glass)',
                 }}
               >
                 {flashing && item.flashIcon ? item.flashIcon : item.icon}
               </span>
             )}
-            <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ flex: half ? '0 1 auto' : 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {label}
             </span>
             {item.meta && !flashing && (
@@ -629,9 +763,7 @@ function MenuRow({ item, index, open, armed, flashing, dimmed, innerRef, onPick,
               </span>
             )}
             {item.shortcut && !flashing && (
-              <span style={{ font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)' }}>
-                {item.shortcut}
-              </span>
+              <KeyCaps keys={(Array.isArray(item.shortcut) ? item.shortcut : [item.shortcut]).map((k) => k.toUpperCase())} />
             )}
           </button>
         </div>
@@ -652,7 +784,7 @@ function MenuRow({ item, index, open, armed, flashing, dimmed, innerRef, onPick,
                 gap: 'var(--sp-4)',
                 padding: 'var(--sp-4)',
                 borderRadius: 'var(--r-sm)',
-                backgroundImage: danger ? 'var(--glass-tint-rose)' : 'var(--glass-well)',
+                backgroundImage: danger ? 'var(--glass-tint-coral)' : 'var(--glass-well)',
                 boxShadow: danger ? 'var(--glass-rim-1)' : 'var(--glass-well-shadow)',
                 opacity: armed ? 1 : 0,
                 transition: 'opacity var(--dur-fast) var(--ease-glass)',
@@ -681,7 +813,17 @@ function MenuRow({ item, index, open, armed, flashing, dimmed, innerRef, onPick,
                 >
                   {danger ? 'Keep' : 'Cancel'}
                 </button>
-                <button
+                {item.confirm.hold ? (
+                  <HoldToConfirm
+                    tabIndex={armed ? 0 : -1}
+                    tone={danger ? 'danger' : 'neutral'}
+                    onConfirm={onConfirm}
+                    doneLabel={item.confirm.action || 'Delete'}
+                    style={{ flex: 1, height: 'auto', minHeight: 38, padding: '0 var(--sp-3)', borderRadius: 'var(--r-pill)' }}
+                  >
+                    Hold to {(item.confirm.action || 'Delete').toLowerCase()}
+                  </HoldToConfirm>
+                ) : <button
                   type="button"
                   tabIndex={armed ? 0 : -1}
                   onClick={onConfirm}
@@ -702,7 +844,7 @@ function MenuRow({ item, index, open, armed, flashing, dimmed, innerRef, onPick,
                   }}
                 >
                   {item.confirm.action || 'Delete'}
-                </button>
+                </button>}
               </div>
             </div>
           </div>

@@ -45,17 +45,19 @@
  * one, on the screen whose whole promise is that it says what happened. A
  * closed lid is an empty state naming which of the three things is wrong.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Button, Icon, Input, MiniNav, SegmentedControl, StatusPill, Toast, useMedia, WIDE, type IconName,
+  BlurAcross, Bone, Button, CountChip, Icon, Input, LitLine, litSafe, MiniNav, SegmentedControl, SkeletonRows, SoftButton, StatusPill,
+  Toast, useArrival, useMedia, WIDE, type IconName,
 } from '../ui';
 import { RailMark } from '../components/BrandMark';
 import { useNavModel } from '../components/navModel';
 import { useAtlasStore } from '../lib/atlas/atlasStore';
+import { loadLog, useMemorySource } from '../lib/atlas/memorySource';
+import { tabletAtlas } from '../lib/atlas/engine/tabletAtlas';
 import {
   AtlasMemoryUnavailable,
-  fetchLog,
   revertLogTurn,
   type AtlasLogEntry,
   type AtlasLogIndex,
@@ -138,11 +140,6 @@ function dayHeading(day: string, today: string): { title: string; date: string }
   return { title: date, date: '' };
 }
 
-/** Rupees, or an em dash for a turn whose cost nobody measured. */
-function rupees(value: number | null): string {
-  return value === null ? '—' : `₹${value.toFixed(2)}`;
-}
-
 interface ToastPayload {
   icon: IconName;
   title: string;
@@ -156,11 +153,18 @@ export default function LogPage() {
   const status = useAtlasStore((s) => s.status);
   const baseUrl = useAtlasStore((s) => s.baseUrl);
   const probe = useAtlasStore((s) => s.probe);
+  /* BIG-4: the laptop when it is awake, the cloud copy when it is asleep.
+     BIG-12: with the lid shut a turn Atlas ran on this tablet is reverted
+     here, by Atlas in this page; a laptop turn still needs the laptop. */
+  const source = useMemorySource();
 
   const fixture = useMemo(() => devLogFixture(), []);
 
   const [scope, setScope] = useState<AtlasLogScope>('today');
   const [index, setIndex] = useState<AtlasLogIndex | null>(null);
+  /* The range whose days are on screen — `scope` runs ahead of it while a
+     switch is loading. What the blur across keys on (29-1P5c). */
+  const [landed, setLanded] = useState<AtlasLogScope>('today');
   const [loading, setLoading] = useState(true);
   const [problem, setProblem] = useState<{ message: string; tooOld: boolean } | null>(null);
   const [query, setQuery] = useState('');
@@ -178,10 +182,11 @@ export default function LogPage() {
     async (signal?: AbortSignal) => {
       if (fixture !== null) {
         setIndex(fixture);
+        setLanded(scope);
         setLoading(false);
         return;
       }
-      if (baseUrl === null || status !== 'awake') {
+      if (source === null) {
         setLoading(false);
         return;
       }
@@ -189,8 +194,9 @@ export default function LogPage() {
       setLoading(true);
       setProblem(null);
       try {
-        const next = await fetchLog(baseUrl, scope, signal);
+        const next = await loadLog(source, scope, signal);
         setIndex(next);
+        setLanded(scope);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setProblem(
@@ -203,7 +209,7 @@ export default function LogPage() {
         setLoading(false);
       }
     },
-    [baseUrl, fixture, scope, status],
+    [source, fixture, scope],
   );
 
   /*
@@ -246,6 +252,13 @@ export default function LogPage() {
     return counts;
   }, [index]);
 
+  /* OPT-2: only the drawers that still have a chip. A drawer picked under
+     All and absent from Today used to keep filtering with its chip gone, so
+     Today read "Nothing in the log matches that" and nothing on screen was
+     pressed to undo it. Kept in `drawers`, so going back to All finds the
+     chip still pressed. */
+  const activeDrawers = useMemo(() => drawers.filter((key) => drawerCounts.has(key)), [drawers, drawerCounts]);
+
   const visibleDays = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return (index?.days ?? [])
@@ -256,26 +269,33 @@ export default function LogPage() {
             ...turn,
             entries: turn.entries.filter((entry) => {
               const key = entry.drawer ?? 'system';
-              if (drawers.length > 0 && !drawers.includes(key)) return false;
+              if (activeDrawers.length > 0 && !activeDrawers.includes(key)) return false;
               if (needle === '') return true;
-              const haystack = `${entry.tool} ${entry.summary} ${turn.ask ?? ''}`.toLowerCase();
+              /* The arguments too (OPT-2): a row's line is drawn from them,
+                 so a task named on the row but missing from Atlas's summary
+                 was on screen and not findable. */
+              const haystack = `${entry.tool} ${entry.summary} ${turn.ask ?? ''} ${JSON.stringify(entry.args ?? {})}`.toLowerCase();
               return haystack.includes(needle);
             }),
           }))
           .filter((turn) => turn.entries.length > 0),
       }))
       .filter((day) => day.turns.length > 0);
-  }, [drawers, index, query]);
+  }, [activeDrawers, index, query]);
 
   const toggleDrawer = (key: string) => {
     setDrawers((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   };
 
-  const onRevert = async (turn: AtlasLogTurn) => {
-    if (baseUrl === null || fixture !== null) return;
+  const onRevert = async (turn: AtlasLogTurn, day: string) => {
+    if (fixture !== null || source === null) return;
+    if (source.kind === 'laptop' ? baseUrl === null : turn.revertibleHere !== true) return;
     setReverting(turn.id);
     try {
-      const result = await revertLogTurn(baseUrl, turn.id);
+      const result =
+        source.kind === 'cloud'
+          ? await (await tabletAtlas(source.uid)).revert(turn.id, day)
+          : await revertLogTurn(source.baseUrl, turn.id);
       /*
        * The whole index is refetched rather than the returned turn spliced in.
        * A revert writes to Firestore through the laptop, and the entries it
@@ -292,7 +312,7 @@ export default function LogPage() {
     } catch (err) {
       setToast({
         icon: 'circle-alert',
-        title: 'Could not reach the laptop',
+        title: source.kind === 'laptop' ? 'Could not reach the laptop' : 'Could not put it back',
         detail: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -300,7 +320,19 @@ export default function LogPage() {
     }
   };
 
-  const unavailable = fixture === null && (status !== 'awake' || problem !== null || index === null);
+  /* The laptop's awake-ness only matters when the laptop is what is being
+     read. BIG-4 left `status !== 'awake'` standing for the cloud copy too, so
+     with the lid shut a log that had loaded stayed on "Reading the cloud
+     copy…" for ever (found at BIG-12). */
+  const unavailable =
+    fixture === null && ((source?.kind !== 'cloud' && status !== 'awake') || problem !== null || index === null);
+  /* 29-1P14d2, idea 116: `/catalog`'s waiting — a day of placeholder turns
+     while the probe or the read is on its way, the days fading in over it. */
+  const waiting =
+    unavailable && index === null && problem === null && status !== 'unconfigured' &&
+    (status === 'unknown' || (source !== null && loading));
+  const arrived = useRef<HTMLDivElement>(null);
+  useArrival(arrived, !unavailable);
 
   return (
     /* `ag-page ag-page--calm`, which this screen was built without (item 20).
@@ -312,180 +344,220 @@ export default function LogPage() {
 
        Nothing but the pool changes. The wrapper repaints `--surface-page` and
        the same 88px grid over the body's, so the two are indistinguishable
-       everywhere except low on the page, which is where the pool sat. */
-    <div
-      className="ag-page ag-page--calm"
-      style={{ display: 'flex', minHeight: '100dvh', alignItems: 'stretch' }}
-    >
-      {wide && (
+       everywhere except low on the page, which is where the pool sat.
+
+       OPT-2: `h-screen overflow-y-auto`, the scroller every other screen is.
+       This was `min-height: 100dvh` and relied on the window to scroll, but
+       `<body>` is `overflow: hidden` (index.css), so a long log was cut off
+       at the bottom of the screen with no way down. And the backdrop's two
+       teal masses are sized to `.ag-page`'s own box: on a box as tall as the
+       content they stretched and slid every time Today / 7 days / All
+       changed how much there was — "the green light on the side changes".
+       One viewport tall, they stay put. */
+    <div className="ag-page ag-page--calm h-screen overflow-y-auto">
+      <div style={{ display: 'flex', minHeight: '100%', alignItems: 'stretch' }}>
+        {wide && (
+          <div
+            style={{
+              position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto',
+              padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
+            }}
+          >
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
+          </div>
+        )}
+
         <div
           style={{
-            position: 'sticky', top: 0, alignSelf: 'flex-start', flex: '0 0 auto',
-            padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
+            flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
+            padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-8)' : 'var(--sp-8) var(--gutter-page-sm) 116px',
           }}
         >
-          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
-        </div>
-      )}
-
-      <div
-        style={{
-          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
-          padding: wide ? 'var(--sp-9) var(--gutter-page) var(--sp-8)' : 'var(--sp-8) var(--gutter-page-sm) 116px',
-        }}
-      >
-        <div style={{ width: '100%', maxWidth: COLUMN_PX, margin: '0 auto', display: 'grid', gap: 'var(--sp-7)' }}>
-          <header style={{ display: 'grid', gap: 'var(--sp-7)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
-              <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 220 }}>
-                <span className="ag-kicker" style={{ color: 'var(--fg-3)' }}>
-                  Everything Atlas has done
-                </span>
-                <h1
-                  style={{
-                    font: 'var(--type-display)', fontSize: 'var(--text-2xl)',
-                    letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0,
-                  }}
-                >
-                  Action log
-                </h1>
-              </div>
-              <SegmentedControl
-                size="sm"
-                options={SCOPES}
-                value={scope}
-                onChange={(next) => setScope(next as AtlasLogScope)}
-              />
-              <Button
-                size="sm"
-                variant="glass"
-                iconLeft={<Icon name="sparkles" size={15} />}
-                onClick={() => nav.go('atlas')}
-              >
-                Back to Atlas
-              </Button>
-            </div>
-
-            {index !== null && (
-              <>
-                <div
-                  style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: 'var(--sp-4)',
-                  }}
-                >
-                  <Metric value={String(index.counts.entries)} label="entries today" />
-                  <Metric
-                    value={String(index.counts.undoable)}
-                    label={index.counts.undoable === 1 ? 'change you can put back' : 'changes you can put back'}
-                    tone="var(--accent)"
-                  />
-                  <Metric value={`₹${index.counts.spent.toFixed(2)}`} label="spent today" />
-                  {/* The reading that matters, and the mockup says so: acts that
-                      cannot be taken back. It is the only tinted-amber number on
-                      the screen. */}
-                  <Metric
-                    value={String(index.counts.frontDoor)}
-                    label="through the front door"
-                    tone="var(--status-review)"
-                  />
+          <div style={{ width: '100%', maxWidth: COLUMN_PX, margin: '0 auto', display: 'grid', gap: 'var(--sp-7)' }}>
+            <header style={{ display: 'grid', gap: 'var(--sp-7)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'grid', gap: 'var(--sp-2)', flex: 1, minWidth: 220 }}>
+                  <span className="ag-kicker" style={{ color: 'var(--fg-3)' }}>
+                    Everything Atlas has done
+                  </span>
+                  <h1
+                    /* 29-1P5c, idea 57: shrinks and fades as the page scrolls. */
+                    className="ag-tuck-title"
+                    style={{
+                      font: 'var(--type-display)', fontSize: 'var(--text-2xl)',
+                      letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0,
+                    }}
+                  >
+                    Action log
+                  </h1>
                 </div>
+                {/* The soft pressed-in switch and a soft way back, since 29-1P2. */}
+                <SegmentedControl
+                  size="sm"
+                  look="soft"
+                  options={SCOPES}
+                  value={scope}
+                  onChange={(next) => setScope(next as AtlasLogScope)}
+                />
+                <SoftButton
+                  size="sm"
+                  icon={<Icon name="sparkles" size={15} />}
+                  onClick={() => nav.go('atlas')}
+                >
+                  Back to Atlas
+                </SoftButton>
+              </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-                  <div style={{ flex: '1 1 240px', minWidth: 200, maxWidth: 340 }}>
-                    <Input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search the log"
-                      aria-label="Search the log"
-                      iconLeft={<Icon name="search" size={16} />}
+              {index !== null && (
+                <>
+                  <div
+                    style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: 'var(--sp-4)',
+                    }}
+                  >
+                    {/* Each label names its own span (OPT-2). These three do not
+                        follow the switch — two are today's and the front door
+                        is every act ever, from Atlas — and an unlabelled count
+                        that stood still while 7 days and All filled the list
+                        read as a page that had not updated. */}
+                    <Metric value={String(index.counts.entries)} label="entries today" />
+                    <Metric
+                      value={String(index.counts.undoable)}
+                      label={index.counts.undoable === 1 ? 'change to put back today' : 'changes to put back today'}
+                    />
+                    {/* The reading that matters, and the mockup says so: acts that
+                        cannot be taken back. It is the only tinted number on the
+                        screen: violet, Atlas's, since 29-1P2c3 (it was amber). */}
+                    <Metric
+                      value={String(index.counts.frontDoor)}
+                      label="through the front door, ever"
+                      tone="var(--job-violet-tag-fg)"
                     />
                   </div>
-                  {[...drawerCounts.entries()].map(([key, count]) => (
-                    <FilterChip
-                      key={key}
-                      label={drawerLabel(key)}
-                      icon={DRAWER_ICONS[key] ?? 'folder'}
-                      count={count}
-                      on={drawers.includes(key)}
-                      onClick={() => toggleDrawer(key)}
-                    />
-                  ))}
-                  {(drawers.length > 0 || query.trim() !== '') && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      iconLeft={<Icon name="x" size={14} />}
-                      onClick={() => {
-                        setDrawers([]);
-                        setQuery('');
-                      }}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </>
-            )}
-          </header>
 
-          {unavailable ? (
-            <Unavailable loading={loading} status={status} problem={problem} onRetry={() => void load()} />
-          ) : visibleDays.length === 0 ? (
-            <Nothing filtered={query.trim() !== '' || drawers.length > 0} scope={scope} />
-          ) : (
-            <div style={{ display: 'grid', gap: 'var(--sp-11)', paddingBottom: 'var(--sp-11)' }}>
-              {visibleDays.map((day) => {
-                const heading = dayHeading(day.day, index?.today ?? day.day);
-                const entries = day.turns.reduce((total, turn) => total + turn.entries.length, 0);
-                return (
-                  <section key={day.day} style={{ display: 'grid', gap: 'var(--sp-6)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
-                      <h2
-                        style={{
-                          font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)',
-                          color: 'var(--fg-1)', margin: 0, flex: '0 0 auto',
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 240px', minWidth: 200, maxWidth: 340 }}>
+                      <Input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Search the log"
+                        aria-label="Search the log"
+                        iconLeft={<Icon name="search" size={16} />}
+                      />
+                    </div>
+                    {[...drawerCounts.entries()].map(([key, count]) => (
+                      <FilterChip
+                        key={key}
+                        label={drawerLabel(key)}
+                        icon={DRAWER_ICONS[key] ?? 'folder'}
+                        count={count}
+                        on={drawers.includes(key)}
+                        onClick={() => toggleDrawer(key)}
+                      />
+                    ))}
+                    {(activeDrawers.length > 0 || query.trim() !== '') && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        iconLeft={<Icon name="x" size={14} />}
+                        onClick={() => {
+                          setDrawers([]);
+                          setQuery('');
                         }}
                       >
-                        {heading.title}
-                      </h2>
-                      {heading.date !== '' && (
-                        <span className="ag-kicker" style={{ flex: '0 0 auto', color: 'var(--fg-4)' }}>
-                          {heading.date}
-                        </span>
-                      )}
-                      <span style={{ flex: 1, height: 1, background: 'var(--line-faint)' }} />
-                      <span className="ag-kicker" style={{ flex: '0 0 auto', color: 'var(--fg-4)' }}>
-                        {entries} {entries === 1 ? 'entry' : 'entries'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
-                      {day.turns.map((turn) => (
-                        <TurnCard
-                          key={turn.id}
-                          turn={turn}
-                          timezone={timezone}
-                          busy={reverting === turn.id}
-                          canRevert={fixture === null}
-                          onRevert={() => void onRevert(turn)}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </header>
 
-              <p
+            {/* 29-1P5c, idea 60: a new range blurs across once its days have landed —
+                not on the press, while the last range's stay up dimmed. */}
+            <BlurAcross value={landed} index={SCOPES.findIndex((one) => one.value === landed)}>
+            {waiting ? (
+              <LogWaiting />
+            ) : unavailable ? (
+              <Unavailable
+                loading={loading}
+                status={status}
+                fromCloud={source?.kind === 'cloud'}
+                problem={problem}
+                onRetry={() => void load()}
+              />
+            ) : visibleDays.length === 0 ? (
+              <Nothing filtered={query.trim() !== '' || activeDrawers.length > 0} typed={query.trim()} scope={scope} />
+            ) : (
+              /* Dimmed while another scope is on its way (OPT-2): the last
+                 scope's days stay up until the new ones land, and at full
+                 strength they read as the answer to the switch just pressed. */
+              <div
+                ref={arrived}
+                aria-busy={loading}
                 style={{
-                  font: 'var(--type-caption)', color: 'var(--fg-4)', textAlign: 'center',
-                  maxWidth: '58ch', margin: '0 auto', textWrap: 'pretty',
+                  display: 'grid', gap: 'var(--sp-11)', paddingBottom: 'var(--sp-11)',
+                  opacity: loading ? 0.5 : 1, transition: 'opacity var(--dur-base) var(--ease-glass)',
                 }}
               >
-                The log keeps everything. Reads are recorded and cannot be undone because nothing changed; published
-                links are recorded and cannot be undone because they left. Atlas keeps what it needs to put a change
-                back for {index?.undoRetentionDays ?? 30} days, the same as the Trash.
-              </p>
-            </div>
-          )}
+                {visibleDays.map((day) => {
+                  const heading = dayHeading(day.day, index?.today ?? day.day);
+                  const entries = day.turns.reduce((total, turn) => total + turn.entries.length, 0);
+                  return (
+                    <section key={day.day} style={{ display: 'grid', gap: 'var(--sp-6)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
+                        <h2
+                          style={{
+                            font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)',
+                            color: 'var(--fg-1)', margin: 0, flex: '0 0 auto',
+                          }}
+                        >
+                          {heading.title}
+                        </h2>
+                        {heading.date !== '' && (
+                          <span className="ag-kicker" style={{ flex: '0 0 auto', color: 'var(--fg-4)' }}>
+                            {heading.date}
+                          </span>
+                        )}
+                        <span style={{ flex: 1, height: 1, background: 'var(--line-faint)' }} />
+                        <span className="ag-kicker" style={{ flex: '0 0 auto', color: 'var(--fg-4)' }}>
+                          {entries} {entries === 1 ? 'entry' : 'entries'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+                        {day.turns.map((turn) => (
+                          <TurnCard
+                            key={turn.id}
+                            turn={turn}
+                            timezone={timezone}
+                            busy={reverting === turn.id}
+                            canRevert={
+                              fixture === null &&
+                              (source?.kind === 'laptop' || (source?.kind === 'cloud' && turn.revertibleHere === true))
+                            }
+                            lidShut={source?.kind === 'cloud' && turn.revertibleHere !== true}
+                            onRevert={() => void onRevert(turn, day.day)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+
+                <p
+                  style={{
+                    font: 'var(--type-caption)', color: 'var(--fg-4)', textAlign: 'center',
+                    maxWidth: '58ch', margin: '0 auto', textWrap: 'pretty',
+                  }}
+                >
+                  The log keeps everything. Reads are recorded and cannot be undone because nothing changed; published
+                  links are recorded and cannot be undone because they left. Atlas keeps what it needs to put a change
+                  back for {index?.undoRetentionDays ?? 30} days, the same as the Trash.
+                </p>
+              </div>
+            )}
+            </BlurAcross>
+          </div>
         </div>
       </div>
 
@@ -500,7 +572,7 @@ export default function LogPage() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}
@@ -572,31 +644,15 @@ function FilterChip({
   on: boolean;
   onClick: () => void;
 }) {
+  /* A chip with a count since 29-1P2, pressed in while its drawer is
+     filtered on — the Trash's kind filters, the same piece. */
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 38, flex: '0 0 auto',
-        padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
-        backgroundImage: on ? 'var(--glass-fill-solid)' : 'var(--glass-fill-1)',
-        boxShadow: on ? 'var(--glass-rim-3), var(--glass-cast-1)' : 'var(--glass-rim-1)',
-        color: on ? 'var(--fg-on-light)' : 'var(--fg-2)', font: 'var(--type-label)',
-        transition: 'var(--t-hover)',
-      }}
-    >
-      <span style={{ display: 'flex', opacity: on ? 0.7 : 1, color: on ? 'inherit' : 'var(--fg-3)' }}>
+    <CountChip count={count} pressed={on} onClick={onClick} className="ds-soft--sm" style={{ flex: '0 0 auto' }}>
+      <span style={{ display: 'flex', color: on ? 'inherit' : 'var(--fg-3)' }}>
         <Icon name={icon} size={15} />
       </span>
       {label}
-      <span
-        className="ag-kicker"
-        style={{ color: on ? 'var(--fg-on-light)' : 'var(--fg-4)', opacity: on ? 0.6 : 1, fontVariantNumeric: 'tabular-nums' }}
-      >
-        {count}
-      </span>
-    </button>
+    </CountChip>
   );
 }
 
@@ -612,12 +668,15 @@ function TurnCard({
   timezone,
   busy,
   canRevert,
+  lidShut = false,
   onRevert,
 }: {
   turn: AtlasLogTurn;
   timezone: string;
   busy: boolean;
   canRevert: boolean;
+  /** A laptop turn read from the cloud copy (BIG-4): the button says why it cannot be pressed. */
+  lidShut?: boolean;
   onRevert: () => void;
 }) {
   const undoable = turn.entries.filter((entry) => entry.undoable).length;
@@ -648,9 +707,9 @@ function TurnCard({
           style={{
             display: 'grid', placeItems: 'center', width: 30, height: 30, marginTop: 1, flex: '0 0 auto',
             borderRadius: '50%',
-            backgroundImage: byYou ? 'var(--glass-fill-2)' : 'var(--glass-tint-accent)',
+            backgroundImage: byYou ? 'var(--glass-fill-2)' : 'var(--glass-tint-violet)',
             boxShadow: 'var(--glass-rim-2)',
-            color: byYou ? 'var(--fg-3)' : 'oklch(0.93 0.07 162)',
+            color: byYou ? 'var(--fg-3)' : 'var(--job-violet-text)',
           }}
         >
           <Icon name={byYou ? 'user' : 'sparkles'} size={15} />
@@ -675,9 +734,6 @@ function TurnCard({
                 {turn.model}
               </span>
             )}
-            <span className="ag-kicker" style={{ color: 'var(--fg-4)' }}>
-              {rupees(turn.costRupees)}
-            </span>
             {turn.conversationTitle !== null && (
               <span className="ag-kicker" style={{ color: 'var(--fg-3)' }}>
                 {turn.conversationTitle}
@@ -703,7 +759,7 @@ function TurnCard({
               iconLeft={<Icon name="undo-2" size={14} />}
               onClick={onRevert}
             >
-              {busy ? 'Putting it back…' : 'Revert this turn'}
+              {busy ? 'Putting it back…' : lidShut ? 'Revert needs the laptop' : 'Revert this turn'}
             </Button>
           ))}
       </header>
@@ -721,7 +777,7 @@ function TurnCard({
             padding: 'var(--sp-4) var(--sp-6)', borderTop: '1px solid var(--line-faint)',
           }}
         >
-          <span style={{ display: 'flex', color: 'var(--status-review)', flex: '0 0 auto' }}>
+          <span style={{ display: 'flex', color: 'var(--job-violet)', flex: '0 0 auto' }}>
             <Icon name="lock" size={14} />
           </span>
           <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
@@ -772,11 +828,11 @@ function Row({ entry, timezone, first }: { entry: AtlasLogEntry; timezone: strin
 
   const undone = entry.undoneAt !== null;
   const tone = entry.frontDoor
-    ? 'var(--status-review)'
+    ? 'var(--job-violet)'
     : !entry.ok
       ? 'var(--fg-3)'
       : entry.wrote
-        ? 'var(--accent)'
+        ? 'var(--job-violet)'
         : 'var(--fg-3)';
 
   return (
@@ -835,14 +891,18 @@ function Row({ entry, timezone, first }: { entry: AtlasLogEntry; timezone: strin
         {/* Three states, three treatments, and the difference between them is
             the safety rule: something that left the house, something that
             changed data here, and something that only looked. */}
+        {/* "No undo" is coral since 29-1P2c2: it cannot be taken back, the
+            same family as delete, and it must stay louder than a warning
+            (which went grey). The rest of the front door's marks, and "wrote",
+            are Atlas's: violet since 29-1P2c3. */}
         {entry.frontDoor && !entry.undoable && !undone ? (
-          <StatusPill status="review" size="sm" dot={false}>
+          <StatusPill status="overrun" size="sm" dot={false}>
             no undo
           </StatusPill>
         ) : (
           <span
             className="ag-kicker"
-            style={{ flex: '0 0 auto', color: entry.wrote && !undone ? 'var(--accent)' : 'var(--fg-4)' }}
+            style={{ flex: '0 0 auto', color: entry.wrote && !undone ? 'var(--job-violet-tag-fg)' : 'var(--fg-4)' }}
           >
             {undone ? 'undone' : entry.wrote ? 'wrote' : 'read'}
           </span>
@@ -892,7 +952,7 @@ function Row({ entry, timezone, first }: { entry: AtlasLogEntry; timezone: strin
   );
 }
 
-function Nothing({ filtered, scope }: { filtered: boolean; scope: AtlasLogScope }) {
+function Nothing({ filtered, typed, scope }: { filtered: boolean; typed: string; scope: AtlasLogScope }) {
   return (
     <section
       style={{
@@ -909,13 +969,15 @@ function Nothing({ filtered, scope }: { filtered: boolean; scope: AtlasLogScope 
       >
         <Icon name={filtered ? 'search-x' : 'scroll-text'} size={22} />
       </span>
-      <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-md)', color: 'var(--fg-2)' }}>
-        {filtered
-          ? 'Nothing in the log matches that.'
+      {/* 29-1P14c: his approved words, lit. */}
+      <LitLine
+        text={filtered
+          ? typed === '' ? 'Nothing in the log matches that.' : `Nothing in the log matches **“${litSafe(typed)}”**.`
           : scope === 'today'
             ? 'Atlas has not done anything today.'
-            : 'Nothing in the log yet.'}
-      </span>
+            : '**Nothing yet.** Every change Atlas makes shows here, with **Revert**.'}
+        style={{ font: 'var(--type-body)', fontSize: 'var(--text-md)', color: 'var(--fg-3)' }}
+      />
       {!filtered && (
         <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', maxWidth: '48ch', textWrap: 'pretty' }}>
           Every action Atlas takes lands here the moment it happens — including the ones it only looked at.
@@ -935,16 +997,25 @@ function Nothing({ filtered, scope }: { filtered: boolean; scope: AtlasLogScope 
 function Unavailable({
   loading,
   status,
+  fromCloud,
   problem,
   onRetry,
 }: {
   loading: boolean;
   status: string;
+  /** Reading the cloud copy because the laptop is asleep (BIG-4). */
+  fromCloud: boolean;
   problem: { message: string; tooOld: boolean } | null;
   onRetry: () => void;
 }) {
   const body =
-    status === 'unconfigured'
+    fromCloud
+      ? {
+          icon: (problem !== null ? 'circle-alert' : 'scroll-text') as IconName,
+          title: problem !== null ? 'The laptop is asleep, and the cloud copy did not answer.' : 'Nothing to show yet.',
+          detail: problem?.message ?? '',
+        }
+      : status === 'unconfigured'
       ? {
           icon: 'server' as IconName,
           title: 'No Atlas is configured.',
@@ -972,8 +1043,8 @@ function Unavailable({
               }
             : {
                 icon: 'scroll-text' as IconName,
-                title: loading ? 'Reading the laptop…' : 'Nothing to show yet.',
-                detail: loading ? '' : 'Atlas answered, but sent no log.',
+                title: 'Nothing to show yet.',
+                detail: 'Atlas answered, but sent no log.',
               };
 
   return (
@@ -999,10 +1070,24 @@ function Unavailable({
         </span>
       )}
       {!loading && (
-        <Button size="sm" variant="glass" iconLeft={<Icon name="refresh-cw" size={14} />} onClick={onRetry}>
+        <SoftButton size="sm" icon={<Icon name="refresh-cw" size={14} />} onClick={onRetry}>
           Try again
-        </Button>
+        </SoftButton>
       )}
+    </section>
+  );
+}
+
+/** A day of the log on its way: its heading, then turns shaped like `TurnCard`s (29-1P14d2). */
+function LogWaiting() {
+  return (
+    <section role="status" aria-busy="true" aria-label="Reading the log" style={{ display: 'grid', gap: 'var(--sp-6)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)' }}>
+        <Bone width={96} height={18} radius="var(--r-md)" />
+        <span style={{ flex: 1, height: 1, background: 'var(--line-faint)' }} />
+        <Bone width={56} height={9} />
+      </div>
+      <SkeletonRows rows={4} lead="square" sub card label="Reading the log" />
     </section>
   );
 }

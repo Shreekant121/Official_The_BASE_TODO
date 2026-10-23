@@ -1,6 +1,8 @@
 import {
   DEFAULT_LISTS,
   mergeFocusLogs,
+  upgradeFocusLogTags,
+  upgradeTaskNotesAndTags,
   upgradeTaskRecurrence,
   upgradeTaskScoring,
   type FocusLogEntry,
@@ -72,10 +74,11 @@ export function buildSyncPayload(state: SyncPayload): SyncPayload {
  * hours, and a reader that defaulted it to `0` would push a zero back and set
  * the focus session to nothing the next time it saved.
  *
- * The two migrations are not belt-and-braces either. This document carries **no
+ * The migrations are not belt-and-braces either. This document carries **no
  * schema version**, so `useStore`'s persist migration never sees it: a snapshot
  * written before repeats became RRULE strings, or before the two importance
- * fields merged into one dial, would put the old shapes straight back — and an
+ * fields merged into one dial, or before notes and tags left (OPT-3), would put
+ * the old shapes straight back — and an
  * unmigrated `humanOverride` reads as *scored zero* rather than *not judged*,
  * which empties Needs Attention.
  *
@@ -90,11 +93,11 @@ export function hydrateFromPayload(
 ): Required<Omit<SyncPayload, 'focusLog'>> & { focusLog: FocusLogEntry[] } {
   return {
     taskLists: data.taskLists.length > 0 ? data.taskLists : DEFAULT_LISTS,
-    backlogTasks: upgradeTaskScoring(upgradeTaskRecurrence(data.backlogTasks)),
-    tasks: upgradeTaskScoring(upgradeTaskRecurrence(data.tasks ?? [])),
+    backlogTasks: upgradeTaskNotesAndTags(upgradeTaskScoring(upgradeTaskRecurrence(data.backlogTasks))),
+    tasks: upgradeTaskNotesAndTags(upgradeTaskScoring(upgradeTaskRecurrence(data.tasks ?? []))),
     sessionDuration: data.sessionDuration ?? 14400,
     taskTimeMemory: data.taskTimeMemory ?? {},
     projects: data.projects ?? [],
-    focusLog: mergeFocusLogs(localFocusLog, data.focusLog),
+    focusLog: upgradeFocusLogTags(mergeFocusLogs(localFocusLog, data.focusLog)),
   };
 }

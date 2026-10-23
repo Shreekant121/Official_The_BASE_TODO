@@ -24,6 +24,8 @@
  * (its live timer). Both ride on every write as `ShareDocExtras`.
  */
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { withResolvedShareCover } from './covers/coverRef';
+import { coverDataUrl } from './covers/coverCache';
 import { db, auth } from './firebase';
 import {
   buildShareDoc, type PublicLiveRun, type PublicShareDoc, type ShareDocExtras,
@@ -95,7 +97,10 @@ function extras(focusLog: FocusLogEntry[] | undefined): ShareDocExtras {
 }
 
 async function writeShare(payload: PublicShareDoc): Promise<void> {
-  await setDoc(doc(db, 'publicShares', payload.shareId), payload);
+  // A stranger cannot open `users/{uid}/covers`, so the picture itself goes
+  // into the share, never the `cover:` pointer (lib/covers/).
+  const published = await withResolvedShareCover(payload, coverDataUrl);
+  await setDoc(doc(db, 'publicShares', payload.shareId), published);
 }
 
 /*
@@ -128,9 +133,11 @@ export async function shareProject(
   allLists: TaskList[],
   allTasks: Task[],
   focusLog: FocusLogEntry[] | undefined = useStore.getState().focusLog,
+  /** Every project, so the ones inside this one are published with it (BIG-2). */
+  allProjects: Project[] = useStore.getState().projects,
 ): Promise<void> {
   await writeShare(buildShareDoc(
-    shareId, ownerId, ownerName(), { type: 'project', project, allLists, allTasks }, extras(focusLog),
+    shareId, ownerId, ownerName(), { type: 'project', project, allLists, allTasks, allProjects }, extras(focusLog),
   ));
 }
 
@@ -175,7 +182,7 @@ async function reconcileShares(
     if (l.shareId) jobs.push(shareList(l.shareId, ownerId, l, backlogTasks, focusLog).catch(() => {}));
   }
   for (const p of projects) {
-    if (p.shareId) jobs.push(shareProject(p.shareId, ownerId, p, taskLists, backlogTasks, focusLog).catch(() => {}));
+    if (p.shareId) jobs.push(shareProject(p.shareId, ownerId, p, taskLists, backlogTasks, focusLog, projects).catch(() => {}));
   }
   await Promise.allSettled(jobs);
 }

@@ -17,9 +17,8 @@ import { ASK_REFUSAL_PREFIX } from '../askCard';
  *
  * **What a rebuilt turn cannot have, and does not pretend to.** `durationMs`
  * on a tool call is measured while the call happens and is not in the log, so
- * it comes back as 0 and the chip shows no timing. `elapsedMs`, `usage` and
- * the turn's cost (item 12) are the same: measured live, never stored, absent
- * on reload.
+ * it comes back as 0 and the chip shows no timing. `elapsedMs` and `usage` are
+ * the same: measured live, never stored, absent on reload.
  *
  * **ITEM 12: THE REASONING COMES BACK, AND ITS DURATION DOES NOT.** A thinking
  * part is in the message log — that is the whole reason `agent/types.ts` made

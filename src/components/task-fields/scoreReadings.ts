@@ -33,10 +33,10 @@ import { LINEAR_CEILING, TUNING, type ScoreBreakdown } from '../../lib/priority'
 const DAY = 86_400_000;
 
 /**
- * The deadline, in words, plus whether it is close enough to say so in amber.
+ * The deadline, in words, plus whether it is close enough to say so in coral.
  *
- * The six bands are the source's copy; the points beside them are ours. Amber
- * is the top step — overdue, or inside the day.
+ * The six bands are the source's copy; the points beside them are ours. Coral
+ * (amber until 29-1P2c2) is the top step — overdue, or inside the day.
  *
  * Note this measures to the **deadline**, while the score measures to the
  * **latest start** (`deadline − duration`). That is not a disagreement: this

@@ -1,0 +1,155 @@
+/* ---------------------------------------------------------------
+   The design system's buttons (29-1P1, BIG-15) — their states.
+
+   Each button is a component beside this file, and its header says when to
+   use it; this file holds only what inline styles cannot: hover, press, a
+   held state, and the focus ring's companion rule. Every class is `ds-` and
+   reads the tokens in `tokens/v3.css`, which exist only inside `[data-v3]`
+   (the whole app since V3-9).
+
+   A button's colour arrives as custom properties set inline by its
+   component (`--ds-gel`, `--ds-glow`…), taken from one colour's `--job-*`
+   set, so one rule here draws all ten colours.
+
+   Performance rules (CLAUDE.md): a glow is a still shadow, nothing loops,
+   and the hold and the slide animate only while a finger is on them.
+   --------------------------------------------------------------- */
+
+/* --- Gel: the lit button, with a tile or plain -------------------- */
+[data-v3] .ds-gel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: var(--tracking-ui);
+  background-image: var(--ds-gel);
+  color: var(--ds-ink);
+  box-shadow: var(--ds-rim), var(--ds-glow);
+  transition:
+    transform var(--dur-slow) var(--ease-springy),
+    filter var(--dur-fast) var(--ease-glass),
+    box-shadow var(--dur-fast) var(--ease-glass);
+}
+[data-v3] .ds-gel:not(:disabled):hover { filter: brightness(1.06) saturate(1.05); }
+[data-v3] .ds-gel:not(:disabled):active {
+  transform: scale(0.975);
+  box-shadow: var(--ds-rim), var(--ds-glow-sm);
+  transition-duration: var(--dur-instant);
+}
+[data-v3] .ds-gel:disabled { opacity: 0.5; cursor: default; }
+
+/* --- Soft: raised, pressed in while held or while on --------------- */
+[data-v3] .ds-soft {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  height: 44px;
+  padding: 0 var(--sp-6);
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--fg-2);
+  font: var(--type-label);
+  background-image: var(--soft-fill);
+  box-shadow: var(--soft-raised);
+  transition: box-shadow var(--dur-fast) var(--ease-glass), color var(--dur-fast) var(--ease-glass);
+}
+[data-v3] .ds-soft:not(:disabled):hover { color: var(--fg-1); }
+[data-v3] .ds-soft:not(:disabled):active,
+[data-v3] .ds-soft[aria-pressed='true'],
+[data-v3] .ds-soft[aria-expanded='true'],
+[data-v3] .ds-soft[data-held='true'] { box-shadow: var(--soft-pressed); color: var(--fg-1); }
+[data-v3] .ds-soft:disabled { opacity: 0.42; cursor: not-allowed; }
+[data-v3] .ds-soft--sm { height: 36px; padding: 0 var(--sp-5); font-size: var(--text-sm); }
+[data-v3] .ds-soft--round { width: 44px; padding: 0; border-radius: var(--r-circle); }
+[data-v3] .ds-soft--round.ds-soft--sm { width: 36px; }
+/* OPT-9: the project's Ask AI button glows Atlas's violet, and since 29-1P2c3
+   every other soft ✦ button does (the Dashboard's Ask Atlas, the Score
+   screen's Ask AI). (The list and task ones did too until 2026-10-07; they
+   are a plain violet glyph now, `askInk`.)
+   Same specificity as the hover rule above and after it, so the glyph stays
+   violet under the pointer. */
+[data-v3] .ds-soft.ds-ask { color: var(--job-violet-tag-fg); box-shadow: var(--soft-raised), var(--job-violet-halo); }
+[data-v3] .ds-soft.ds-ask:not(:disabled):active,
+[data-v3] .ds-soft.ds-ask[aria-pressed='true'] { color: var(--job-violet-ink); box-shadow: var(--soft-pressed), var(--job-violet-halo-on); }
+
+/* --- Solid white: a strong, calm confirm --------------------------- */
+[data-v3] .ds-white {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  height: 48px;
+  padding: 0 var(--sp-7);
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  font: var(--weight-medium) var(--text-md) / 1 var(--font-sans);
+  letter-spacing: var(--tracking-ui);
+  color: var(--fg-on-light);
+  background-color: var(--fg-1);
+  box-shadow: 0 10px 30px -12px oklch(1 0 0 / 0.25);
+  transition: transform var(--dur-slow) var(--ease-springy), filter var(--dur-fast) var(--ease-glass);
+}
+[data-v3] .ds-white:not(:disabled):hover { filter: brightness(0.97); }
+[data-v3] .ds-white:not(:disabled):active { transform: scale(0.975); transition-duration: var(--dur-instant); }
+[data-v3] .ds-white:disabled { opacity: 0.42; cursor: not-allowed; }
+[data-v3] .ds-white--sm { height: 36px; padding: 0 var(--sp-5); gap: var(--sp-3); font-size: var(--text-sm); }
+
+/* --- Dot arrow link: "See all" ------------------------------------- */
+[data-v3] .ds-dotlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  cursor: pointer;
+  font: var(--type-label);
+  color: var(--fg-2);
+  transition: color var(--dur-fast) var(--ease-glass);
+}
+[data-v3] .ds-dotlink > svg { transition: transform var(--dur-base) var(--ease-springy); }
+[data-v3] .ds-dotlink:hover { color: var(--fg-1); }
+[data-v3] .ds-dotlink:hover > svg { transform: translateX(3px); }
+
+/* --- Hold to confirm and slide to start: no touch sheet, no text pick --- */
+[data-v3] .ds-hold,
+[data-v3] .ds-slide {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+[data-v3] .ds-hold { overflow: hidden; touch-action: manipulation; }
+[data-v3] .ds-slide { touch-action: none; }
+
+/* --- The focus ring that glides (idea 70) --------------------------
+   `ui/core/FocusGlide.tsx` draws one ring for the whole app and slides it
+   from control to control while he uses the keyboard. While it is up, every
+   control's own outline is hidden so there is only ever one ring; with the
+   mouse or a finger nothing here applies and the outlines are as they were. */
+.ds-focus-glide {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow:
+    0 0 0 2px var(--focus-ring-color),
+    0 0 16px 2px color-mix(in oklch, var(--focus-ring-color) 55%, transparent);
+  transition:
+    transform var(--dur-slow) var(--ease-glide),
+    width var(--dur-slow) var(--ease-glide),
+    height var(--dur-slow) var(--ease-glide),
+    border-radius var(--dur-slow) var(--ease-glide),
+    opacity var(--dur-base) var(--ease-glass);
+}
+:root[data-focus-glide='on'] [data-v3] :focus-visible { outline-color: transparent !important; }

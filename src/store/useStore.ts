@@ -15,6 +15,9 @@ import { rruleFromLegacyRule } from '../lib/recurrence';
    get wrong. */
 import { durationMinutes, hasEmergencyLapsed } from '../lib/priority';
 import { affectsDeadlines, isQuietPlan, planDeadlineCascade, type DeadlinePlan } from '../lib/deadlineMath';
+import { ignoredWorkOf } from '../lib/ignoredWork';
+import { planProjectMove } from '../lib/projectTree';
+import type { ProjectCoverStyle } from '../lib/projectCover';
 import { useTrashStore } from './useTrashStore';
 import { useArchiveStore } from './useArchiveStore';
 import { useUIStore } from './useUIStore';
@@ -23,11 +26,41 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
-  color: string;
   icon?: string;
   imageUrl?: string;
+  /**
+   * How the cover is drawn when there is no photo (29-1P8a, idea 149): one of
+   * six styles, its colours and Shuffle's seed. Absent means the default,
+   * derived from the id. Read it only through `lib/projectCover.ts`.
+   */
+  cover?: ProjectCoverStyle;
   createdAt: number;
+  /** Position among its siblings — the projects sharing its parent (BIG-2). */
   order: number;
+  /**
+   * The project this one sits inside (BIG-2), absent at the top level. Never
+   * read it directly: a parent that is gone, or a cycle two devices wrote at
+   * once, makes it lie. `lib/projectTree.ts` is the one reader.
+   */
+  parentId?: string;
+  /**
+   * Ignored work (BIG-3): this project and everything inside it, at any depth,
+   * is never scored, offered or pushed. Never read it directly — the flag that
+   * counts may be on a project above; `lib/ignoredWork.ts` is the one reader.
+   */
+  ignored?: boolean;
+  /**
+   * Time on this project and everything inside it doesn't count as worked
+   * (BIG-6, 29-1b). `lib/workedTime.ts` is the one reader.
+   */
+  notWorked?: boolean;
+  /**
+   * The day he wants it finished by, `YYYY-MM-DD` (29-1P9b, idea 156, his
+   * pick C): the coral line on the project's "when it'll be done" chart. It
+   * never moves on its own, unlike a task's deadline. Read it through
+   * `lib/projectForecast.ts` (`validDay`).
+   */
+  finishBy?: string;
   /** Public share doc id — presence means this project has a live read-only public page at `/s/{shareId}` (see `lib/publicShare.ts`). */
   shareId?: string;
   /** SimpleURL short-link keyword + branded domain for the public share URL (see `lib/simpleUrl.ts`). */
@@ -129,6 +162,57 @@ export function upgradeTaskRecurrence(tasks: Task[]): Task[] {
       recurrenceRule: task.recurrenceRule ?? rruleFromLegacyRule(task.customRecurrence),
     };
     delete upgraded.customRecurrence;
+    return upgraded;
+  });
+}
+
+/** A task as it may still arrive from before OPT-3. */
+type TaskWithOldFields = Task & { notes?: unknown; tags?: unknown };
+
+function hasNotesOrTags(task: Task | undefined): boolean {
+  return !!task && ('notes' in task || 'tags' in task);
+}
+
+/**
+ * Notes and tags left the app at OPT-3 — Shreekant, 2026-10-06: *"description
+ * is enough"*, and tags *"entirely from the software"*. His call on what was
+ * already stored: **a task's notes are added to the end of its description**,
+ * so nothing he wrote is lost, and **its tags are deleted**.
+ *
+ * Applied at every door tasks come in through, for the reason
+ * `upgradeTaskRecurrence` above is — the persist migration, the unversioned
+ * cloud document (`hydrateFromPayload`, which `mcp/` uses too), and Restore
+ * from the Trash or the Archive, which keep whole tasks in their old shape.
+ * Folding is safe to repeat: the notes key is removed once folded, and notes
+ * the description already contains are dropped rather than added twice.
+ * Returns the array it was given when there was nothing to change, so the
+ * sync path is not handed a new reference on every snapshot.
+ */
+export function upgradeTaskNotesAndTags(tasks: Task[]): Task[] {
+  if (!Array.isArray(tasks)) return [];
+  if (!tasks.some(hasNotesOrTags)) return tasks;
+  return tasks.map((task) => {
+    if (!hasNotesOrTags(task)) return task;
+    const upgraded: TaskWithOldFields = { ...task };
+    const notes = typeof upgraded.notes === 'string' ? upgraded.notes.trim() : '';
+    delete upgraded.notes;
+    delete upgraded.tags;
+    const description = upgraded.description?.trim() ?? '';
+    if (notes && !description.includes(notes)) {
+      upgraded.description = description ? `${description}\n\n${notes}` : notes;
+    }
+    return upgraded;
+  });
+}
+
+/** The focus log's copy of a task's tags, removed for the same reason. */
+export function upgradeFocusLogTags(entries: FocusLogEntry[]): FocusLogEntry[] {
+  if (!Array.isArray(entries)) return [];
+  if (!entries.some((entry) => entry && 'tags' in entry)) return entries;
+  return entries.map((entry) => {
+    if (!('tags' in entry)) return entry;
+    const upgraded: FocusLogEntry & { tags?: unknown } = { ...entry };
+    delete upgraded.tags;
     return upgraded;
   });
 }
@@ -456,7 +540,6 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  notes?: string;
   status: TaskStatus;
   priority?: TaskPriority;
   allocatedTime?: number;
@@ -497,10 +580,23 @@ export interface Task {
   occurrence?: number;
   seriesAnchor?: string;
   reminderMinutes?: number;
-  tags?: string[];
   links?: TaskLink[];
   imageUrl?: string;
   assignee?: string;
+  /**
+   * When `assignee` last changed to someone (29-1P13): the Dashboard's
+   * "Waiting on" counts the days from it. Stamped by `applyTaskUpdate`, so
+   * every path that names a person — the sheet, Atlas — gets it; a task
+   * handed over before it existed has none and shows no count.
+   */
+  assignedAt?: number;
+  /**
+   * Sent to "this evening" (29-1c2, idea 38): the deadline it had (`was`,
+   * absent if none) and the one it was given (`to`). Bringing it back restores
+   * `was` only while the deadline is still `to` — changed in between, back is
+   * 6pm. Written and cleared only by `eveningPatch` (`lib/dashboard/timeline.ts`).
+   */
+  beforeEvening?: { was?: string; to: string };
   estimatedTime?: number;
   completedAt?: number;
   createdAt?: number;
@@ -552,6 +648,15 @@ export interface Task {
    */
   deadlineIsFixed?: boolean;
   /**
+   * 29-2d1: the event this task is due before ("Buy running shoes" before the
+   * marathon). Its deadline is the event's (`linkedDeadline`, at the start, or
+   * 6pm the day before an all-day one) and follows it when the event's date is
+   * changed (`useEventStore.updateEvent`). Deadline maths reads it as fixed,
+   * and any other write of `deadline` drops it (`applyTaskUpdate`). Lifted off
+   * when the event is deleted, the date kept. See `lib/events/eventLinks.ts`.
+   */
+  eventId?: string;
+  /**
    * D2 — task dependencies. Ids of other top-level tasks (in any project or
    * list) that have to be completed before this one.
    *
@@ -573,6 +678,13 @@ export interface Task {
    * only door tasks come in through.
    */
   dependsOn?: string[];
+  /**
+   * A milestone (29-1P9b, idea 155): one of the project's big steps, drawn on
+   * the line behind its "40% done". What it waits on is its own `dependsOn`
+   * (his call), so this flag adds nothing to the graph and nothing to the
+   * score. Absent, never `false` — the sheet removes the key when switched off.
+   */
+  milestone?: boolean;
   /** Monetary value of this task in Indian Rupees — rolls up into its list/project totals (see `taskListValueINR`/`projectValueINR`). */
   valueINR?: number;
   /**
@@ -639,18 +751,38 @@ export interface Task {
   /** Link end date for a task shared on its own (see `Project.shareExpiresOn`). */
   shareExpiresOn?: string;
   /**
-   * Skill this task's focused time counts towards. Snapshotted into every
-   * `FocusLogEntry` written for the task, which is what lets a skill's
-   * progress be "hours logged vs target hours".
+   * A skill this task's focus time was meant to count towards. **Written by
+   * nothing since FIX-12** (audit B2): nothing set it and nothing showed it.
+   * Old values are left where they are, read by nothing.
    */
   skillId?: string;
+  /**
+   * Ignored work (BIG-3): never scored, never offered by Smart Start or Needs
+   * Attention, never pushed by deadline maths — still on its board. Its list or
+   * a project above can ignore it too, so ask `lib/ignoredWork.ts`, not this.
+   */
+  ignored?: boolean;
+  /**
+   * Doesn't count as worked (BIG-6, 29-1b): `true` doesn't count, `false`
+   * **counts anyway** under a list or project that doesn't, absent = as they
+   * say. Ask `lib/workedTime.ts`, not this.
+   */
+  notWorked?: boolean;
 }
+
+/** What `setIgnored` turns the switch on (BIG-3). */
+import type { IgnoreSubject as IgnoreTarget } from '../lib/ignoredWork';
+export type { IgnoreTarget };
 
 export interface TaskList {
   id: string;
   title: string;
   projectId?: string;
   order?: number;
+  /** Ignored work (BIG-3) — every task in the list. Read through `lib/ignoredWork.ts`. */
+  ignored?: boolean;
+  /** Doesn't count as worked (BIG-6, 29-1b) — every task in it. Read through `lib/workedTime.ts`. */
+  notWorked?: boolean;
   /** Public share doc id — presence means this list has a live read-only public page at `/s/{shareId}` (see `lib/publicShare.ts`). */
   shareId?: string;
   /** SimpleURL short-link keyword + branded domain for the public share URL (see `lib/simpleUrl.ts`). */
@@ -704,9 +836,10 @@ export function formatINR(value: number): string {
  * merged span, so `startedAt`/`endedAt` always bound real elapsed wall-clock
  * time and never swallow a paused gap.
  *
- * Project / list / tags / skill are *snapshots* taken at write time rather
+ * Project / list are *snapshots* taken at write time rather
  * than resolved on read, so history stays meaningful after a task is moved
- * between lists, retagged, or deleted outright.
+ * between lists or deleted outright. (A `tags` snapshot was here until OPT-3
+ * took tags out of the app; `upgradeTaskNotesAndTags` strips old ones.)
  */
 export interface FocusLogEntry {
   id: string;
@@ -714,7 +847,7 @@ export interface FocusLogEntry {
   taskTitle: string;
   projectId?: string;
   listId?: string;
-  tags?: string[];
+  /** Not written since FIX-12 (audit B2); old entries keep theirs. */
   skillId?: string;
   /** Wall-clock seconds worked in this stretch (`endedAt - startedAt`). */
   seconds: number;
@@ -722,6 +855,14 @@ export interface FocusLogEntry {
   startedAt: number;
   /** Epoch ms. */
   endedAt: number;
+  /**
+   * 29-1P10a, idea 96: "When this ends, I'll have…", as he wrote it before the
+   * task's clock started. Only on the last entry of a task's run — see
+   * `lib/focusIntent.ts` for why never on every stretch.
+   */
+  intent?: string;
+  /** Mark done's answer to that line. "Not yet" kept the task open, so it is never here. */
+  outcome?: 'yes' | 'partly';
 }
 
 /**
@@ -754,7 +895,12 @@ export function mergeFocusLogs(
 ): FocusLogEntry[] {
   const byId = new Map<string, FocusLogEntry>();
   for (const entry of [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])]) {
-    if (entry && typeof entry.id === 'string') byId.set(entry.id, entry);
+    if (!entry || typeof entry.id !== 'string') continue;
+    /* The union, not the later copy: an entry is written once and only ever
+       gains `intent`/`outcome` afterwards (29-1P10a), so a cloud copy from
+       before that stamp must not wipe it off this device's. */
+    const prev = byId.get(entry.id);
+    byId.set(entry.id, prev ? { ...prev, ...entry } : entry);
   }
   const merged = [...byId.values()].sort((x, y) => x.startedAt - y.startedAt);
   return merged.length > FOCUS_LOG_LIMIT ? merged.slice(merged.length - FOCUS_LOG_LIMIT) : merged;
@@ -893,17 +1039,36 @@ interface AppState {
    * project, or the archive document is full), in which case nothing moved.
    */
   archiveProject: (id: string) => boolean;
+  /** Reorders one set of siblings — the ids given, and only those. */
   reorderProjects: (orderedIds: string[]) => void;
+  /**
+   * BIG-2 — puts a project inside another (`null`: the top level), last among
+   * its new siblings, with everything it holds. `false` when that would put it
+   * inside itself or something under it, or names nothing.
+   */
+  moveProject: (id: string, parentId: string | null) => boolean;
 
   taskLists: TaskList[];
   backlogTasks: Task[];
   addTaskList: (title: string, projectId?: string) => TaskList;
   renameTaskList: (id: string, title: string) => void;
   updateTaskList: (id: string, updates: Partial<TaskList>) => void;
+  /**
+   * Ignored work (BIG-3): turn the switch on a task, a list or a project.
+   * Turning it on also takes everything it now covers out of today's queue —
+   * his call, 2026-09-29. Turning it off puts nothing back.
+   */
+  setIgnored: (target: IgnoreTarget, ignored: boolean) => void;
+  /**
+   * "Doesn't count as worked" (BIG-6, 29-1b). `undefined` removes the switch;
+   * `false` is a task's "counts anyway" and only means anything on a task.
+   */
+  setNotWorked: (target: IgnoreTarget, value: boolean | undefined) => void;
   /** Soft delete — cascades through the list's tasks, into the Trash. See `applyDeletion`. */
   deleteTaskList: (id: string) => void;
   reorderTaskLists: (projectId: string | undefined, orderedIds: string[]) => void;
-  addBacklogTask: (title: string, listId: string, parentId?: string) => void;
+  /** Returns the new task's id (29-1c1: the quick-add note's Undo, the + dropped into a list). */
+  addBacklogTask: (title: string, listId: string, parentId?: string) => string;
   updateBacklogTask: (id: string, updates: Partial<Task>) => void;
   /**
    * Soft delete, into the Trash. Clears today's focus queue (including any
@@ -1055,6 +1220,19 @@ function applyTaskUpdate(
     }
   }
 
+  /* 29-2d1: a linked task's date is the event's. A deadline written by anything
+     but the link itself (the event following, the sheet, which always says
+     `eventId`) is a date set by hand, and a date set by hand wins: the link goes. */
+  if (existing.eventId && 'deadline' in updates && !('eventId' in updates) && updates.deadline !== existing.deadline) {
+    written = { ...written, eventId: undefined };
+  }
+
+  /* Handed to someone new, or taken back: when, for "Waiting on" (29-1P13). */
+  const who = (t: Partial<Task>) => (t.assignee ?? '').trim();
+  if ('assignee' in updates && !('assignedAt' in updates) && who(updates) !== who(existing)) {
+    written = { ...written, assignedAt: who(updates) ? Date.now() : undefined };
+  }
+
   const transition: RecurrenceTransition | null = planRecurrenceTransition(state, existing, after, {
     now: new Date(),
     timeZone: resolveUserTimeZone(),
@@ -1074,7 +1252,10 @@ function applyTaskUpdate(
      from, so a chain settles against the date that was actually written. */
   let deadlines: DeadlinePlan | null = null;
   if (affectsDeadlines(existing, written)) {
-    const plan = planDeadlineCascade(backlogTasks, { timeZone: resolveUserTimeZone() });
+    const plan = planDeadlineCascade(backlogTasks, {
+      timeZone: resolveUserTimeZone(),
+      ignored: ignoredWorkOf(backlogTasks, state.taskLists, state.projects).ids,
+    });
     if (!isQuietPlan(plan)) {
       deadlines = plan;
       const byId = new Map(plan.patches.map((patch) => [patch.taskId, patch]));
@@ -1115,11 +1296,14 @@ export const useStore = create<AppState>()(
 
       projects: [],
       addProject: (data) => {
+        // Last among the siblings it joins (BIG-2). The whole array's length
+        // did that job while every project was a sibling of every other.
+        const siblings = get().projects.filter((p) => (p.parentId ?? null) === (data.parentId ?? null));
         const project: Project = {
           ...data,
           id: crypto.randomUUID(),
           createdAt: Date.now(),
-          order: get().projects.length,
+          order: siblings.reduce((max, p) => Math.max(max, p.order), -1) + 1,
         };
         set((state) => ({ projects: [...state.projects, project] }));
         return project;
@@ -1143,6 +1327,12 @@ export const useStore = create<AppState>()(
           const leftovers = state.projects.filter((p) => !orderedIds.includes(p.id));
           return { projects: [...reordered, ...leftovers] };
         }),
+      moveProject: (id, parentId) => {
+        const next = planProjectMove(get().projects, id, parentId);
+        if (!next) return false;
+        set({ projects: next });
+        return true;
+      },
 
       taskLists: DEFAULT_LISTS,
       backlogTasks: [],
@@ -1162,6 +1352,52 @@ export const useStore = create<AppState>()(
         set((state) => ({
           taskLists: state.taskLists.map((l) => (l.id === id ? { ...l, ...updates } : l)),
         })),
+
+      setIgnored: (target, ignored) =>
+        set((state) => {
+          // Cleared by removing the key, never by writing `false` — an absent
+          // flag is the default and a synced document stays as it was.
+          const flag = <T extends { ignored?: boolean }>(record: T): T => {
+            const { ignored: _was, ...rest } = record;
+            void _was;
+            return (ignored ? { ...rest, ignored: true } : rest) as T;
+          };
+          const projects =
+            target.kind === 'project'
+              ? state.projects.map((p) => (p.id === target.id ? flag(p) : p))
+              : state.projects;
+          const taskLists =
+            target.kind === 'list'
+              ? state.taskLists.map((l) => (l.id === target.id ? flag(l) : l))
+              : state.taskLists;
+          const backlogTasks =
+            target.kind === 'task'
+              ? state.backlogTasks.map((t) => (t.id === target.id ? flag(t) : t))
+              : state.backlogTasks;
+
+          let tasks = state.tasks.map((t) => (target.kind === 'task' && t.id === target.id ? flag(t) : t));
+          if (ignored) {
+            const work = ignoredWorkOf(backlogTasks, taskLists, projects);
+            tasks = tasks.filter((t) => !work.has(t));
+          }
+          return { projects, taskLists, backlogTasks, tasks };
+        }),
+
+      /* Written straight onto the record, like `setIgnored`: a flag, not a
+         status, so it has no business in `updateBacklogTask`'s path. Only the
+         backlog's copy is read (`lib/workedTime.ts`), so the queue is left be. */
+      setNotWorked: (target, value) =>
+        set((state) => {
+          const flag = <T extends { notWorked?: boolean }>(record: T): T => {
+            const { notWorked: _was, ...rest } = record;
+            void _was;
+            const v = target.kind === 'task' ? value : value ? true : undefined;
+            return (v === undefined ? rest : { ...rest, notWorked: v }) as T;
+          };
+          if (target.kind === 'project') return { projects: state.projects.map((p) => (p.id === target.id ? flag(p) : p)) };
+          if (target.kind === 'list') return { taskLists: state.taskLists.map((l) => (l.id === target.id ? flag(l) : l)) };
+          return { backlogTasks: state.backlogTasks.map((t) => (t.id === target.id ? flag(t) : t)) };
+        }),
 
       renameTaskList: (id, title) =>
         set((state) => ({
@@ -1218,6 +1454,7 @@ export const useStore = create<AppState>()(
         } else {
           set((state) => ({ backlogTasks: [newTask, ...state.backlogTasks] }));
         }
+        return newTask.id;
       },
 
       updateBacklogTask: (id, updates) => {
@@ -1383,7 +1620,6 @@ export const useStore = create<AppState>()(
             ? state.taskLists.find((l) => l.id === draft.listId)?.projectId
             : undefined;
           if (projectId) entry.projectId = projectId;
-          if (!entry.tags || entry.tags.length === 0) delete entry.tags;
 
           const next = [...state.focusLog, entry];
           return {
@@ -1489,7 +1725,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'mutineer-os-storage',
-      version: 9,
+      version: 10,
       migrate: (persisted) => {
         const state = persisted as Record<string, unknown>;
         if (!state.taskLists || (state.taskLists as TaskList[]).length === 0) {
@@ -1516,6 +1752,11 @@ export const useStore = create<AppState>()(
         // changed no task's score and no task's rank at the time.
         state.backlogTasks = upgradeTaskScoring(state.backlogTasks as Task[]);
         state.tasks = upgradeTaskScoring(state.tasks as Task[]);
+        // v10 — notes and tags left the app (OPT-3). Notes fold into the
+        // description; tags are deleted, his call.
+        state.backlogTasks = upgradeTaskNotesAndTags(state.backlogTasks as Task[]);
+        state.tasks = upgradeTaskNotesAndTags(state.tasks as Task[]);
+        state.focusLog = upgradeFocusLogTags(state.focusLog as FocusLogEntry[]);
         return state as unknown as AppState;
       },
     }

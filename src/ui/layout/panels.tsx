@@ -91,8 +91,8 @@ export interface KickerProps {
   trail?: ReactNode;
   /**
    * Ink for the run itself. The mockups' own `Kicker` takes one and spends it
-   * on exactly two things: amber while the field it names is outstanding, and
-   * accent once it is satisfied. Defaults to `--fg-3`; do not reach for it to
+   * on exactly two things: a warning while the field it names is outstanding
+   * (grey since 29-1P2c2), and done once it is satisfied. Defaults to `--fg-3`; do not reach for it to
    * tell two labels apart.
    */
   tone?: string;
@@ -134,6 +134,12 @@ export interface MetaKickerProps {
   children?: ReactNode;
   /** Ink for the glyph and the run. See `KickerProps.tone`. */
   tone?: string;
+  /**
+   * Ink for the glyph alone, over `tone`. A date's calendar glyph is sky
+   * while its words stay grey (29-1P2c2, his call: the colour says "this is a
+   * date" without making every row louder).
+   */
+  iconTone?: string;
   style?: CSSProperties;
 }
 
@@ -154,7 +160,7 @@ export interface MetaKickerProps {
  * `sessionDuration`, so it is shared now — two copies of one vocabulary is
  * how two screens start disagreeing.
  */
-export function MetaKicker({ icon, children, tone = 'var(--fg-3)', style }: MetaKickerProps) {
+export function MetaKicker({ icon, children, tone = 'var(--fg-3)', iconTone, style }: MetaKickerProps) {
   return (
     <span
       style={{
@@ -169,7 +175,7 @@ export function MetaKicker({ icon, children, tone = 'var(--fg-3)', style }: Meta
         ...style,
       }}
     >
-      {icon && <Icon name={icon} size={13} />}
+      {icon && <Icon name={icon} size={13} style={iconTone ? { color: iconTone } : undefined} />}
       {children}
     </span>
   );

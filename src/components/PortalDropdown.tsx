@@ -47,6 +47,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useOverlayDismiss } from '../lib/useOverlayDismiss';
 import { Z } from '../lib/zLayers';
 import { useMotion, useV3, v3Attr } from '../ui';
+import { useHoldSlide } from '../ui/core/useHoldSlide';
 
 
 interface PortalDropdownProps {
@@ -64,6 +65,13 @@ interface PortalDropdownProps {
    */
   align?: 'left' | 'right';
   className?: string;
+  /**
+   * How this picker opens. Given, a press held on the trigger opens it under
+   * the finger and letting go on an option picks it (idea 75, 29-1P6a —
+   * `ui/core/useHoldSlide.ts`); a tap still goes through the trigger's own
+   * `onClick` as before.
+   */
+  onOpen?: () => void;
 }
 
 export function PortalDropdown({
@@ -75,6 +83,7 @@ export function PortalDropdown({
   upward = false,
   align = 'left',
   className = '',
+  onOpen,
 }: PortalDropdownProps) {
   // Raw trigger rect + viewport size; the panel's own coordinates are derived
   // from these at render time.
@@ -88,6 +97,14 @@ export function PortalDropdown({
      scope's motion table rather than `--ease-glass` (V3-1). */
   const v3 = useV3();
   const motionTokens = useMotion();
+
+  /* Idea 75. A picker that gives no `onOpen` keeps tap-only. */
+  useHoldSlide(triggerRef, {
+    isOpen: isOpen || !onOpen,
+    open: () => onOpen?.(),
+    close: onClose,
+    panel: () => dropdownRef.current,
+  });
 
   // Update position (and the trigger's own width, used as the dropdown's
   // default width when the caller doesn't pass an explicit `width`) whenever

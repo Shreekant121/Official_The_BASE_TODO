@@ -52,8 +52,10 @@ export type ScoreTone = 'accent' | 'cyan' | 'amber' | 'rose' | 'violet' | 'neutr
 export const SCORE_TONE_VAR: Record<ScoreTone, string> = {
   accent:  'var(--accent)',
   cyan:    'var(--hue-cyan)',
-  amber:   'var(--hue-amber)',
-  rose:    'var(--hue-rose)',
+  /* 29-1P2c2: warming is a warning (grey) and Red Alert is coral; the tone
+     names stay so the tests and callers do not move. */
+  amber:   'var(--status-warn)',
+  rose:    'var(--job-coral)',
   violet:  'var(--hue-violet)',
   neutral: 'var(--fg-3)',
 };
@@ -73,10 +75,10 @@ const WARMING_W = 0.25;
  * The hue a reading of this score is tinted with — **read off `W`, not off the
  * number**.
  *
- * Rose is Red Alert and nothing else, which is the whole point of colouring by
+ * Rose (drawn coral since 29-1P2c2) is Red Alert and nothing else, which is the whole point of colouring by
  * `W`: the badge and the tint are one fact said twice, and cannot drift apart
- * the way a raw-score cut and a sigmoid cut would. Amber is a task on the
- * shoulder of its curve — "this is coming" — and violet is a scored task that
+ * the way a raw-score cut and a sigmoid cut would. Amber (drawn as a grey
+ * warning since 29-1P2c2) is a task on the shoulder of its curve — "this is coming" — and violet is a scored task that
  * is simply not urgent yet, which is the backburner hue and the right one for
  * it.
  *

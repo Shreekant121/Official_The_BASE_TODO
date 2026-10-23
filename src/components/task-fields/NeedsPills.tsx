@@ -10,9 +10,10 @@
  * missing, so the row moved here and both read it. The four things it can name
  * are in `needs.ts`.
  *
- * The pills are `StatusPill status="review"`, not a hand-rolled amber chip:
- * UI-25 settled that the `--status-*` set is this app's tone vocabulary, and
- * amber-means-needs-a-decision is what `review` is. `All set` is `done`.
+ * The pills are `StatusPill status="review"`, not a hand-rolled chip: UI-25
+ * settled that the `--status-*` set is this app's tone vocabulary, and
+ * "needs a look" is what `review` is — grey with its triangle since 29-1P2c2
+ * (the mockup's amber is gold's hue, and gold is rewards). `All set` is `done`.
  *
  * `onJump` is the sheet's half. With it, each pill becomes a button that
  * scrolls its field into view and rings it; without it the markup is exactly

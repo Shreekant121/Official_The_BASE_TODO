@@ -54,7 +54,9 @@ import { db } from '../lib/firebase';
 import { formatINR } from '../store/useStore';
 import { getInrToUsdRate, convertInrToUsd, formatUSD } from '../lib/exchangeRate';
 import type { PublicShareDoc, PublicSubtask, PublicTask } from '../lib/publicShare';
-import { Button, Icon, Input, Skeleton, Textarea, type IconName } from '../ui';
+import {
+  Button, Icon, Input, SegmentedControl, Skeleton, SoftButton, Textarea, WhiteButton, type IconName,
+} from '../ui';
 import { devShareFixture } from '../lib/devShareFixture';
 import { useNow } from '../lib/useNow';
 import {
@@ -64,7 +66,7 @@ import {
 } from '../lib/shareSubmissions';
 import {
   clockText, dueLine, durationText, estimateText, initials, isClosed, liveRunShown, longDate,
-  readSummary, shareTasks, workPhase, workSummary, type Summary, type WorkPhase,
+  projectListsDeep, readSummary, shareTasks, workPhase, workSummary, type Summary, type WorkPhase,
 } from '../lib/shareView';
 
 type Currency = 'INR' | 'USD';
@@ -88,6 +90,9 @@ const hueOf = (i: number, alpha?: number) =>
 /** The emerald wash the design gives everything live. */
 const LIVE_FILL = 'oklch(0.70 0.15 162 / 0.12)';
 const LIVE_RING = 'inset 0 0 0 1px oklch(0.70 0.15 162 / 0.35)';
+/** Lime's, for what is his to do or already done (29-1P2c1: emerald is only live). */
+const MINE_FILL = 'var(--job-lime-wash)';
+const MINE_RING = 'inset 0 0 0 1px var(--job-lime-line)';
 
 /** Stable empty map so a non-outsourcing share doesn't re-render on every pass. */
 const NO_SUBMISSIONS: Record<string, ShareSubmission> = {};
@@ -132,14 +137,16 @@ function Pulse() {
       aria-hidden="true"
       style={{
         width: 7, height: 7, flex: '0 0 auto', borderRadius: 'var(--r-circle)',
+        /* Steady, not pulsing: a client can leave this page open all day, and a
+           loop that never ends redraws the whole screen every frame
+           (StatusPill.tsx has the measurement). */
         background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)',
-        animation: 'var(--kf-pulse) 1.6s var(--ease-glass) infinite',
       }}
     />
   );
 }
 
-function Track({ value, height, fill = 'var(--accent)' }: { value: number; height: number; fill?: string }) {
+function Track({ value, height, fill = 'var(--job-lime)' }: { value: number; height: number; fill?: string }) {
   return (
     <div
       style={{
@@ -158,7 +165,7 @@ function Track({ value, height, fill = 'var(--accent)' }: { value: number; heigh
   );
 }
 
-function MetaItem({ icon, children, ink = 'var(--fg-3)' }: { icon?: IconName; children: ReactNode; ink?: string }) {
+function MetaItem({ icon, children, ink = 'var(--fg-3)', iconInk }: { icon?: IconName; children: ReactNode; ink?: string; iconInk?: string }) {
   return (
     <span
       style={{
@@ -166,7 +173,7 @@ function MetaItem({ icon, children, ink = 'var(--fg-3)' }: { icon?: IconName; ch
         font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: ink, fontVariantNumeric: 'tabular-nums',
       }}
     >
-      {icon && <Icon name={icon} size={13} style={{ color: 'inherit' }} />}
+      {icon && <Icon name={icon} size={13} style={{ color: iconInk ?? 'inherit' }} />}
       {children}
     </span>
   );
@@ -361,17 +368,18 @@ function WorkArea({ task, phase, sub, worker }: {
           />
           <FormError text={error} />
           <FormButtons onCancel={() => worker.setOpenForm(null)}>
-            <Button
-              disabled={!filesLink}
-              loading={busy}
-              iconLeft={<Icon name="send" size={16} />}
+            {/* A form's yes: solid white since 29-1P2, as every dialog's. */}
+            <WhiteButton
+              disabled={!filesLink || busy}
+              aria-busy={busy || undefined}
+              icon={<Icon name="send" size={16} />}
               onClick={() => filesLink && void run(
                 () => submitWork(worker.shareId, task.id, sub?.workerName || worker.name, filesLink, note),
                 'Your work did not send. Nothing was lost; try again in a minute.',
               )}
             >
-              Submit
-            </Button>
+              {busy ? 'Sending…' : 'Submit'}
+            </WhiteButton>
           </FormButtons>
         </div>
       ) : (
@@ -379,8 +387,8 @@ function WorkArea({ task, phase, sub, worker }: {
           <span
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 36, padding: '0 var(--sp-4)',
-              borderRadius: 'var(--r-pill)', background: LIVE_FILL, boxShadow: LIVE_RING,
-              color: 'var(--accent-lift)', font: 'var(--type-label)', fontSize: 'var(--text-sm)',
+              borderRadius: 'var(--r-pill)', background: MINE_FILL, boxShadow: MINE_RING,
+              color: 'var(--job-lime-text)', font: 'var(--type-label)', fontSize: 'var(--text-sm)',
             }}
           >
             <Icon name="hourglass" size={15} style={{ color: 'inherit' }} />
@@ -398,9 +406,12 @@ function WorkArea({ task, phase, sub, worker }: {
             >
               Release
             </Button>
-            <Button iconLeft={<Icon name="send" size={16} />} onClick={() => { setError(null); worker.setOpenForm(task.id); }}>
+            {/* Soft since 29-1P2: it opens the form, whose Submit is the yes.
+                A page of task cards would otherwise be a column of strong
+                buttons, none of them the one. */}
+            <SoftButton icon={<Icon name="send" size={16} />} onClick={() => { setError(null); worker.setOpenForm(task.id); }}>
               Submit work
-            </Button>
+            </SoftButton>
           </div>
           <FormError text={error} />
         </div>
@@ -437,16 +448,16 @@ function WorkArea({ task, phase, sub, worker }: {
         </span>
         <FormError text={error} />
         <FormButtons onCancel={() => worker.setOpenForm(null)}>
-          <Button
-            disabled={!canClaim}
-            loading={busy}
+          <WhiteButton
+            disabled={!canClaim || busy}
+            aria-busy={busy || undefined}
             onClick={() => void run(
               async () => { await claimTask(worker.shareId, task.id, worker.name, worker.email); worker.refreshClaims(); },
               'Could not claim it. Try again in a minute.',
             )}
           >
-            Claim it
-          </Button>
+            {busy ? 'Claiming…' : 'Claim it'}
+          </WhiteButton>
         </FormButtons>
       </div>
     ) : (
@@ -454,7 +465,7 @@ function WorkArea({ task, phase, sub, worker }: {
         <span style={{ flex: '1 1 180px', font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
           Claim it and it shows as yours.
         </span>
-        <Button onClick={() => { setError(null); worker.setOpenForm(task.id); }}>Claim task</Button>
+        <SoftButton onClick={() => { setError(null); worker.setOpenForm(task.id); }}>Claim task</SoftButton>
       </div>
     );
   })();
@@ -469,17 +480,17 @@ function WorkArea({ task, phase, sub, worker }: {
 // ─── Task card ───────────────────────────────────────────────────────────────
 
 const READ_STATE = {
-  done: { pill: 'Done', ink: 'var(--accent)', line: 'oklch(0.70 0.15 162 / 0.35)', bar: 'var(--accent)', ring: 'none' },
+  done: { pill: 'Done', ink: 'var(--job-lime)', line: 'oklch(0.84 0.17 130 / 0.35)', bar: 'var(--job-lime)', ring: 'none' },
   progress: { pill: 'In progress', ink: 'var(--status-running)', line: 'var(--line-soft)', bar: 'var(--status-running)', ring: 'inset 0 0 0 2px var(--status-running)' },
   next: { pill: 'Up next', ink: 'var(--fg-3)', line: 'var(--line-faint)', bar: 'var(--fg-3)', ring: 'inset 0 0 0 1px var(--line-strong)' },
 } as const;
 
 const WORK_STATE: Record<WorkPhase, { pill: string; ink: string; line: string; ring: string }> = {
   open: { pill: 'Open', ink: 'var(--fg-2)', line: 'var(--line-soft)', ring: 'inset 0 0 0 1px var(--line-strong)' },
-  mine: { pill: 'Claimed by you', ink: 'var(--accent)', line: 'oklch(0.70 0.15 162 / 0.35)', ring: 'inset 0 0 0 2px var(--accent)' },
+  mine: { pill: 'Claimed by you', ink: 'var(--job-lime)', line: 'oklch(0.84 0.17 130 / 0.35)', ring: 'inset 0 0 0 2px var(--job-lime)' },
   sent: { pill: 'In review', ink: 'var(--status-queued)', line: 'var(--line-soft)', ring: 'none' },
   taken: { pill: 'Claimed', ink: 'var(--fg-4)', line: 'var(--line-soft)', ring: 'inset 0 0 0 1px var(--line-faint)' },
-  approved: { pill: 'Approved', ink: 'var(--accent)', line: 'oklch(0.70 0.15 162 / 0.35)', ring: 'none' },
+  approved: { pill: 'Approved', ink: 'var(--job-lime)', line: 'oklch(0.84 0.17 130 / 0.35)', ring: 'none' },
 };
 
 interface CardCtx {
@@ -509,7 +520,7 @@ function TaskCard({ task, ctx, hue, index, standalone = false }: {
   const sub = ctx.submissions[task.id];
   const phase = ctx.worker ? workPhase(task, sub, ctx.claims) : null;
   const read = task.done ? READ_STATE.done : task.status === 'in-progress' ? READ_STATE.progress : READ_STATE.next;
-  const look = phase ? { ...WORK_STATE[phase], bar: 'var(--accent)' } : read;
+  const look = phase ? { ...WORK_STATE[phase], bar: 'var(--job-lime)' } : read;
   const busy = phase ? phase === 'mine' || phase === 'sent' : task.status === 'in-progress' && !task.done;
   const due = dueLine(task, ctx.now);
   const running = ctx.people && ctx.liveTaskId === task.id;
@@ -526,7 +537,7 @@ function TaskCard({ task, ctx, hue, index, standalone = false }: {
     ? `linear-gradient(155deg, ${hueOf(hue, busy ? 0.12 : 0.06)}, ${hueOf(hue, 0.01)} 60%), `
     : '';
   const dotDone = phase ? phase === 'sent' || phase === 'approved' : task.done;
-  const dotFill = phase === 'sent' ? 'var(--status-queued)' : 'var(--accent)';
+  const dotFill = phase === 'sent' ? 'var(--status-queued)' : 'var(--job-lime)';
   const value = task.valueINR ? ctx.money(task.valueINR) : null;
   const indent = standalone ? 0 : 'calc(22px + var(--sp-4))';
 
@@ -586,7 +597,12 @@ function TaskCard({ task, ctx, hue, index, standalone = false }: {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--sp-2) var(--sp-5)', paddingLeft: indent }}>
         <Pill ink={look.ink} line={look.line}>{look.pill}</Pill>
-        {due && <MetaItem icon="calendar" ink={due.late ? 'var(--status-review)' : 'var(--fg-3)'}>{due.text}</MetaItem>}
+        {/* A date is sky; late is coral (29-1P2c2, his call). */}
+        {due && (
+          <MetaItem icon="calendar" ink={due.late ? 'var(--job-coral-tag-fg)' : 'var(--fg-3)'} iconInk={due.late ? undefined : 'var(--job-sky)'}>
+            {due.text}
+          </MetaItem>
+        )}
         {task.estimatedTime ? <MetaItem icon="clock">{estimateText(task.estimatedTime)}</MetaItem> : null}
         {task.subtaskTotal > 0 && (
           <MetaItem>
@@ -728,38 +744,16 @@ function SummaryCard({ summary, currency, setCurrency, rate, usd }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
           {showTrack ? <Track value={summary.progress} height={6} /> : <span style={{ flex: 1 }} />}
           {summary.hasMoney && (
-            <div
-              role="group"
-              aria-label="Currency"
-              style={{
-                display: 'flex', gap: 2, padding: 3, borderRadius: 'var(--r-pill)',
-                backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
-              }}
-            >
-              {(['INR', 'USD'] as Currency[]).map((c) => {
-                const on = currency === c;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    aria-pressed={on}
-                    aria-label={c === 'INR' ? 'Show amounts in rupees' : 'Show amounts in US dollars'}
-                    onClick={() => setCurrency(c)}
-                    style={{
-                      minWidth: 56, height: 36, padding: '0 var(--sp-4)', border: 0, cursor: 'pointer',
-                      borderRadius: 'var(--r-pill)', whiteSpace: 'nowrap',
-                      backgroundColor: 'transparent',
-                      backgroundImage: on ? 'var(--glass-fill-solid)' : 'none',
-                      boxShadow: on ? 'var(--glass-rim-3), var(--glass-cast-1)' : 'none',
-                      color: on ? 'var(--fg-1)' : 'var(--fg-3)',
-                      font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', transition: 'var(--t-hover)',
-                    }}
-                  >
-                    {c === 'INR' ? '₹ INR' : '$ USD'}
-                  </button>
-                );
-              })}
-            </div>
+            /* A view switch, so the soft pressed-in one since 29-1P2. */
+            <SegmentedControl
+              size="sm"
+              look="soft"
+              aria-label="Show amounts in"
+              options={[{ value: 'INR', label: '₹ INR' }, { value: 'USD', label: '$ USD' }]}
+              value={currency}
+              onChange={(c) => setCurrency(c as Currency)}
+              style={{ flex: '0 0 auto', minWidth: 132, font: 'var(--type-numeric)', fontSize: 'var(--text-sm)' }}
+            />
           )}
         </div>
       )}
@@ -881,7 +875,8 @@ export default function SharePage() {
   const live = people ? liveRunShown(share, now) : null;
   const liveTask = live ? tasks.find((t) => t.id === live.taskId) : undefined;
   const cover = people ? share.project?.coverUrl : undefined;
-  const lists = share.project?.lists ?? [];
+  // The whole tree's lists, a project inside's titled with its path (BIG-2).
+  const lists = projectListsDeep(share.project);
 
   const worker: WorkerCtx | undefined = contributionsOn && shareId
     ? {
@@ -924,7 +919,7 @@ export default function SharePage() {
   /* Sections: a project's lists, or the one list or task the link is for. A
      list or task needs no heading of its own — the hero is its heading. */
   const groups = share.type === 'project'
-    ? lists.map((l, i) => ({ id: l.id, name: l.title, tasks: l.tasks, hue: people ? i : null }))
+    ? lists.map(({ list: l, title }, i) => ({ id: l.id, name: title, tasks: l.tasks, hue: people ? i : null }))
     : [{ id: 'only', name: null as string | null, tasks, hue: null as number | null }];
   let cardIndex = 2;
 
@@ -948,7 +943,7 @@ export default function SharePage() {
             <img src={cover} alt="" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} />
             {/* The phases, each as wide as its share of the tasks. */}
             <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 6, display: 'flex' }}>
-              {lists.map((l, i) => l.tasks.length > 0 && (
+              {lists.map(({ list: l }, i) => l.tasks.length > 0 && (
                 <span key={l.id} style={{ flex: l.tasks.length, background: hueOf(i) }} />
               ))}
             </div>

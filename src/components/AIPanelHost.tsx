@@ -12,7 +12,8 @@
  * object stops existing — deleted here, in another tab, or by Atlas — the
  * panel closes itself rather than naming something that is gone.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { resolveUserTimeZone } from '../lib/agent/dates';
 import { buildSubject, subjectKey, type PanelSubjectRef, type ScoreField } from '../lib/aiPanel';
@@ -31,7 +32,8 @@ import {
 import { useAtlasStore } from '../lib/atlas/atlasStore';
 import { useModelStore } from '../lib/agent/modelStore';
 import { AIPanel, type AIPanelDock } from '../ui/overlay/AIPanel';
-import ModelPicker from './ModelPicker';
+import { catalogLink } from '../lib/atlas/remembered';
+import { ModelSideSwitch } from './chat/ModelSideSwitch';
 
 interface AIPanelHostProps {
   subject: PanelSubjectRef;
@@ -43,13 +45,16 @@ interface AIPanelHostProps {
    * fills, and the panel opens by asking rather than by waiting.
    */
   scoreMissing?: ScoreField[];
+  /** Laid over the panel's own geometry — BIG-5's panel fills a whole board's pane. */
+  style?: CSSProperties;
 }
 
-export default function AIPanelHost({ subject: ref, dock, onClose, scoreMissing }: AIPanelHostProps) {
+export default function AIPanelHost({ subject: ref, dock, onClose, scoreMissing, style }: AIPanelHostProps) {
   const projects = useStore((s) => s.projects);
   const taskLists = useStore((s) => s.taskLists);
   const backlogTasks = useStore((s) => s.backlogTasks);
   const [timezone] = useState(resolveUserTimeZone);
+  const navigate = useNavigate();
 
   const { kind, id } = ref;
   const subject = useMemo(
@@ -64,7 +69,7 @@ export default function AIPanelHost({ subject: ref, dock, onClose, scoreMissing 
      the laptop asked on open, because the panel may be the first thing in
      this session to need an answer from it. */
   useAtlasStore((s) => s.status);
-  useModelStore((s) => s.selectedKey);
+  useModelStore((s) => s.choice);
   useModelStore((s) => s.local);
   useModelStore((s) => s.loading);
   useEffect(() => {
@@ -99,17 +104,25 @@ export default function AIPanelHost({ subject: ref, dock, onClose, scoreMissing 
       answeredBy={whoAnswers() ?? undefined}
       placeholder={subject.placeholder}
       dock={dock}
+      style={style}
       onClose={onClose}
       onSend={(text) => sendMessage(subject, text, { mode: fill ? 'fill' : 'auto', shown: true })}
       onStop={() => stopTurn(key)}
       undoFor={undoFor}
       onUndo={(turn) => void undoTurn(key, turn)}
       onDecide={(itemId, decision) => void decide(key, itemId, decision)}
-      /* The chat screen's own picker, so there is one answer to "which model"
-         on this device: a pick here is what `/chat` uses next, and the other
-         way round. Each turn reads it when it starts, so a change applies from
-         the next message — a turn already running finishes on its model. */
-      footer={<ModelPicker />}
+      /* 29-1P15b, idea 94: "Remembered" opens the note in the Catalog, and
+         the panel closes so it is not left over the note. */
+      onOpenNote={(path) => {
+        onClose();
+        navigate(catalogLink(path));
+      }}
+      /* The chat screen's own Local | Cloud switch (OPT-8), so there is one
+         answer to "which model" on this device: a flip here is what `/chat`
+         uses next, and the other way round. Each turn reads it when it starts,
+         so a change applies from the next message — a turn already running
+         finishes on its model. The two defaults are in Settings → Atlas. */
+      footer={<ModelSideSwitch />}
     />
   );
 }

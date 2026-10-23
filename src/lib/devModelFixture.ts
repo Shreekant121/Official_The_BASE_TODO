@@ -21,8 +21,8 @@
  * store a choice and change nothing else.
  *
  * The entries are what Shreekant's own machine and key report, so the baseline
- * shows the picker as he sees it — four hosted, three local, and the 4B one lit
- * because `resolveSelection` prefers it when Ollama is reachable.
+ * shows the picker as he sees it — four hosted, three Claude and ChatGPT, three
+ * local, and Gemini Flash lit because `resolveSelection` prefers it since BIG-1.
  *
  * HOW IT IS KEPT OUT OF THE SHIPPED BUNDLE
  * ----------------------------------------
@@ -91,6 +91,14 @@ export function devModelFixture(search: string): ModelCatalogue | null {
       { key: 'ollama:qwen3.5:9b', provider: 'ollama', id: 'qwen3.5:9b', label: 'qwen3.5:9b', detail: '9.7B · 6.6 GB' },
       { key: 'ollama:gemma4:e4b', provider: 'ollama', id: 'gemma4:e4b', label: 'gemma4:e4b', detail: '8.0B · 9.6 GB' },
     ],
+    /* BIG-1: what the laptop lists for one Claude key and one ChatGPT key —
+       real ids, in the shape `parseCloudModels` produces. */
+    cloud: [
+      { key: 'anthropic:claude-sonnet-5', provider: 'anthropic', id: 'claude-sonnet-5', label: 'Claude Sonnet 5', detail: 'Claude' },
+      { key: 'anthropic:claude-haiku-4-5', provider: 'anthropic', id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', detail: 'Claude' },
+      { key: 'openai:gpt-5-mini', provider: 'openai', id: 'gpt-5-mini', label: 'gpt-5-mini', detail: 'ChatGPT' },
+    ],
+    cloudError: null,
     hostedWithoutChat: 0,
     localWithoutTools: 0,
     hostedError: null,

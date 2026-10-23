@@ -133,7 +133,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import LoginAuraScene from '../components/login/LoginAuraScene';
-import { Button, GlassFilters, Icon, Input } from '../ui';
+import { Button, GelButton, GlassFilters, Icon, Input } from '../ui';
 import type { IconName } from '../ui';
 
 type Mode = 'signin' | 'signup' | 'forgot';
@@ -675,17 +675,20 @@ export default function LoginPage() {
                     </div>
                   )}
 
-                  {/* The one loud control on this screen. */}
-                  <Button
+                  {/* The one loud control on this screen: the design system's
+                      plain gel since 29-1P2, emerald as V3's gel was (P2c
+                      judges the colour). No tile — that is the orange Start. */}
+                  <GelButton
                     type="submit"
-                    variant="gel"
-                    size="lg"
+                    tile={false}
+                    colour="emerald"
                     block
-                    loading={isLoading}
+                    disabled={isLoading}
+                    aria-busy={isLoading || undefined}
                     style={{ marginTop: 'var(--sp-3)' }}
                   >
                     {isLoading ? copy.busy : copy.cta}
-                  </Button>
+                  </GelButton>
                 </form>
               )}
 
@@ -699,7 +702,7 @@ export default function LoginPage() {
                     gap: 'var(--sp-4)',
                     padding: 'var(--sp-4) var(--sp-5)',
                     borderRadius: 'var(--r-sm)',
-                    backgroundImage: 'var(--glass-tint-rose)',
+                    backgroundImage: 'var(--glass-tint-coral)',
                     boxShadow: 'var(--glass-rim-2)',
                     animation: condense(),
                   }}

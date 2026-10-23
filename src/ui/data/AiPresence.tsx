@@ -41,6 +41,22 @@
  *      `requestAnimationFrame` itself). The source animated for ever.
  *   4. **Reduced motion draws one frame and stops**, the source's own rule.
  *
+ *   5. **The fallback is not for ever (2026-10-06).** He saw it ripple, then go
+ *      plain "later", and come back only on a reload: both ways in that can
+ *      happen mid-session — Android taking the context back when the tablet
+ *      locks or he switches apps, or one busy stretch tipping the watchdog —
+ *      were one-way, and the chat is a kept screen, so it stayed plain until
+ *      the page was reloaded. Now an orb that fell back for either reason tries
+ *      the shader again on a **fresh canvas** (a canvas keeps one context for
+ *      life, so the old one cannot be revived) whenever he comes back to it:
+ *      the tab shown again, or its screen shown again. A context loss retries
+ *      every time; a slow verdict at most `SLOW_RETRIES` times per orb, so a
+ *      device that really cannot draw it is not made to stutter on every
+ *      return. No WebGL, or a shader that will not build, never retries.
+ *      And the watchdog needs `STRIKES` slow verdicts in a row before it acts,
+ *      so one busy moment (a turn streaming, the screen opening) no longer
+ *      decides it. `data-presence-why` says which way it fell back.
+ *
  * The loop's clock is the sum of `requestAnimationFrame`'s own deltas, never
  * the wall clock. **That alone does not make `npm run shots` reproducible**:
  * the harness's fake clock drives rAF but keeps flowing in real time between
@@ -141,6 +157,10 @@ const SAMPLES = 6;
  * it, but not by much, so a phone-class GPU should expect to step down.
  */
 const BUDGET_MS = 8;
+/** Slow verdicts in a row before the watchdog steps down or hands over. */
+const STRIKES = 2;
+/** How many times an orb that was judged too slow tries the shader again. */
+const SLOW_RETRIES = 2;
 /** Frame intervals are clamped to this for the animation, so a pause resumes smoothly. */
 const MAX_STEP_S = 0.05;
 
@@ -176,6 +196,16 @@ export function AiPresence({
      never drawn above 1.5x there, however dense the screen. */
   const coarse = useMedia('(pointer: coarse)');
   const [mode, setMode] = useState<'gl' | 'css'>(() => (canUseWebGL() ? 'gl' : 'css'));
+  /**
+   * Why it is drawing CSS, which decides whether it may try again: `lost`
+   * (the browser took the context back) and `slow` (the watchdog) retry,
+   * `broken` (no WebGL, a shader that will not build) never does.
+   */
+  const [why, setWhy] = useState<'lost' | 'slow' | 'broken' | null>(() => (canUseWebGL() ? null : 'broken'));
+  /** Retries spent on a slow verdict. A ref: it changes nothing on screen. */
+  const slowRetries = useRef(0);
+  /** A fresh `<canvas>` per attempt — see note 5 in the header. */
+  const [attempt, setAttempt] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   /* What the running loop reads each frame. Written after render, never
@@ -193,7 +223,10 @@ export function AiPresence({
     if (mode !== 'gl') return undefined;
     const cv = canvasRef.current;
     if (cv === null) return undefined;
-    const toCss = () => setMode('css');
+    const toCss = (reason: 'lost' | 'slow' | 'broken' = 'broken') => {
+      setWhy(reason);
+      setMode('css');
+    };
 
     const gl = cv.getContext('webgl', { premultipliedAlpha: false, antialias: true, alpha: true });
     if (gl === null) {
@@ -239,7 +272,7 @@ export function AiPresence({
        the answer; trying to restore would flicker between the two. */
     const onLost = (event: Event) => {
       event.preventDefault();
-      toCss();
+      toCss('lost');
     };
     cv.addEventListener('webglcontextlost', onLost);
 
@@ -248,7 +281,7 @@ export function AiPresence({
     let onScreen = true;
     let last = -1;
     let clock = 0, amp = TARGET.idle[0], freq = TARGET.idle[1], sp = 0, vl = 0;
-    let rung = 0, frames = 0;
+    let rung = 0, frames = 0, strikes = 0;
     let costs: number[] = [];
     const pixel = new Uint8Array(4);
 
@@ -303,14 +336,20 @@ export function AiPresence({
       costs = [];
       /* Left on the canvas for whoever opens DevTools on the tablet. */
       cv.dataset.costMs = median.toFixed(1);
-      if (median <= BUDGET_MS) return true;
+      if (median <= BUDGET_MS) {
+        strikes = 0;
+        return true;
+      }
+      strikes += 1;
+      if (strikes < STRIKES) return true;
+      strikes = 0;
       if (rung < RESOLUTION_STEPS.length - 1) {
         rung += 1;
         frames = 0; // a fresh warm-up at the new size
         cv.dataset.scale = String(RESOLUTION_STEPS[rung]);
         return true;
       }
-      toCss();
+      toCss('slow');
       return false;
     };
 
@@ -367,7 +406,52 @@ export function AiPresence({
          React has already removed the node by the time this runs. */
       if (!cv.isConnected) gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
-  }, [mode, reduce, coarse]);
+  }, [mode, reduce, coarse, attempt]);
+
+  /*
+   * Back to the shader when he comes back to it (note 5). Two kinds of "back":
+   * the tab coming to the front — the tablet unlocked, or Brave brought back
+   * from another app, which is when Android hands contexts back — and the
+   * screen shown again: a kept screen hidden by `<Activity>` loses its effects
+   * and gets them back when it is shown, which the second effect below sees.
+   * A fallback that happens while he is looking waits for the next return.
+   */
+  const retry = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (mode !== 'css' || why === null || why === 'broken') {
+      retry.current = () => {};
+      return undefined;
+    }
+    retry.current = () => {
+      if (why === 'slow') {
+        if (slowRetries.current >= SLOW_RETRIES) return;
+        slowRetries.current += 1;
+      }
+      retry.current = () => {};
+      setWhy(null);
+      setAttempt((n) => n + 1);
+      setMode('gl');
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') retry.current();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [mode, why]);
+
+  /* Set by the cleanup, so the next set-up knows it is a showing-again rather
+     than a first mount. React's development double-mount trips it on load too,
+     where `retry` is a no-op because nothing has fallen back. */
+  const wasHidden = useRef(false);
+  useEffect(() => {
+    if (wasHidden.current) {
+      wasHidden.current = false;
+      queueMicrotask(() => retry.current());
+    }
+    return () => {
+      wasHidden.current = true;
+    };
+  }, []);
 
   const box = typeof size === 'number' ? `${size}px` : size;
   /* The fallback's band layer turns once per this many ms. */
@@ -382,6 +466,7 @@ export function AiPresence({
       /* Which of the two it is drawing. For a test, or DevTools on the tablet:
          there is no other way to tell from outside that it fell back. */
       data-presence={mode}
+      data-presence-why={why ?? undefined}
       style={{
         position: 'relative', width: box, height: box, flex: '0 0 auto',
         filter: dim ? 'grayscale(1) brightness(0.55)' : undefined,
@@ -399,7 +484,7 @@ export function AiPresence({
         }}
       />
       {mode === 'gl' ? (
-        <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+        <canvas key={attempt} ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
       ) : (
         /* THE FALLBACK. The shader's sphere sits in the middle ~62% of its
            square (camera at 3.4, field 1.45/2.6), so this disc takes the same

@@ -77,7 +77,6 @@ export function devLogFixture(): AtlasLogIndex | null {
       conversationTitle: 'Empire invoices — Rahul',
       model: 'gemma4:e4b',
       provider: 'ollama',
-      costRupees: 0,
       revertedAt: null,
       entries: [
         entry({
@@ -134,7 +133,6 @@ export function devLogFixture(): AtlasLogIndex | null {
       conversationTitle: 'Empire invoices — Rahul',
       model: 'gemini-flash-latest',
       provider: 'gemini',
-      costRupees: 1.2,
       revertedAt: null,
       entries: [
         entry({
@@ -173,7 +171,6 @@ export function devLogFixture(): AtlasLogIndex | null {
       conversationTitle: 'Morning triage',
       model: 'gemma4:e4b',
       provider: 'ollama',
-      costRupees: 0,
       revertedAt: `${TODAY}T11:19:00+05:30`,
       entries: [
         entry({
@@ -215,7 +212,6 @@ export function devLogFixture(): AtlasLogIndex | null {
       conversationTitle: 'Studio lease terms',
       model: null,
       provider: null,
-      costRupees: 0,
       revertedAt: null,
       entries: [
         entry({
@@ -259,7 +255,6 @@ export function devLogFixture(): AtlasLogIndex | null {
       conversationTitle: 'Studio lease terms',
       model: 'gemma4:e4b',
       provider: 'ollama',
-      costRupees: 0,
       revertedAt: null,
       entries: [
         entry({
@@ -296,7 +291,6 @@ export function devLogFixture(): AtlasLogIndex | null {
     counts: {
       entries: todayEntries.length,
       undoable: todayEntries.filter((item) => item.undoable).length,
-      spent: turns.reduce((total, turn) => total + (turn.costRupees ?? 0), 0),
       frontDoor: [...todayEntries, ...yesterday.flatMap((turn) => turn.entries)].filter((item) => item.frontDoor).length,
     },
     undoRetentionDays: 30,

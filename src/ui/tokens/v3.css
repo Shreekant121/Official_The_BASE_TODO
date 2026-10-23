@@ -2,7 +2,7 @@
    V3 — the v4 design's material, behind one switch (V3-1).
 
    Everything a screen needs to wear the V3 redesign: the tokens, the
-   motion, the glass (with the lens), the page, the gel and soft
+   motion, the glass, the page, the gel and soft
    materials. NONE OF IT APPLIES UNTIL A SCREEN ASKS. Shreekant chose
    (2026-09-23) to move one screen at a time, steps 6 to 14 of the
    queue, so this file re-declares the system on `[data-v3]` rather
@@ -27,13 +27,15 @@
      - "Inter" in the font stacks became "Inter Variable", "Inter":
        the face is self-hosted below, under Fontsource's name.
 
-   FOUR DEPARTURES FROM THE BUNDLE, each for a reason written beside it:
+   THREE DEPARTURES FROM THE BUNDLE, each for a reason written beside it:
    the font is self-hosted (no Google Fonts, no unpkg); the keyframes
-   are renamed `ag3-*` and reached through `--kf-*`; the page backdrop
-   keeps UI-37's layers-on-the-element shape instead of v4's
-   `::after` + `background-attachment: fixed`; and the lens is keyed
-   off `<html data-ag-lens>`, which `GlassLens.tsx` sets on Chromium,
-   instead of `_ds_loader.js` rewriting `:root` from a script.
+   are renamed `ag3-*` and reached through `--kf-*`; and the page
+   backdrop keeps UI-37's layers-on-the-element shape instead of v4's
+   `::after` + `background-attachment: fixed`. v4's lens (`_ds_loader.js`,
+   glass that bends and colour-fringes) was ported at V3-1 and DELETED
+   2026-10-06, his call ("remove Glass lens entirely"): it was off by
+   default since 2026-09-30 for stutter, and the 92%-opaque glass showed
+   almost nothing of what it bent. Do not port it back.
 
    Ordering invariant: see the top of src/index.css — the two
    `backdrop-filter` pairs below are `-webkit-` first.
@@ -128,6 +130,7 @@
   --hue-coral: oklch(0.75 0.13 40);
   --hue-amber: oklch(0.80 0.13 82);
   --hue-lime: oklch(0.84 0.15 135);
+  --hue-orange: oklch(0.72 0.19 45);
   --hue-emerald: var(--accent);
   --hue-cyan: oklch(0.76 0.11 215);
   --hue-sky: oklch(0.74 0.12 240);
@@ -148,17 +151,26 @@
   --surface-raised: var(--void-3);
   --status-running: var(--accent);
   --status-queued: var(--hue-cyan);
-  --status-review: var(--hue-amber);
-  --status-done: oklch(0.74 0.15 150);
-  --status-overrun: var(--hue-rose);
-  --status-deadline: var(--hue-coral);
+  /* A "needs a look" is `--status-warn` (29-1P2c2, his call: warnings quiet,
+     grey with their icon, because the old yellow is gold's exact hue and gold
+     is rewards). `--status-review`, the yellow, is gone since 29-1P2c3: what
+     was left on it — Atlas waiting on his OK, or asking him something — is
+     Atlas's, so violet (`--job-violet-*`). */
+  --status-warn: var(--fg-2);
+  --status-done: var(--job-lime); /* 29-1P2c1: done is lime's job */
+  /* 29-1P2c2: failed, broken, over time, overdue, Red Alert and delete are
+     coral's job — "urgent, only what is really about to be missed". */
+  --status-overrun: var(--job-coral);
+  --status-deadline: var(--job-coral);
   --status-backburner: var(--hue-violet);
   --status-archived: var(--hue-grey);
-  --status-ai: var(--hue-violet);
+  --status-ai: var(--job-violet);
   --line-faint: oklch(1 0 0 / 0.06);
   --line-soft: oklch(1 0 0 / 0.08);
   --line-strong: oklch(1 0 0 / 0.18);
-  --focus-ring-color: var(--brand-lift);
+  /* Lime since 29-1P1, his call: the focused control is "the current one",
+     which is lime's job. `ui/core/FocusGlide.tsx` draws the one ring. */
+  --focus-ring-color: var(--job-lime);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
 
@@ -277,12 +289,23 @@
   --gel-amber: radial-gradient(120% 100% at 22% 0%, oklch(0.95 0.10 92), oklch(0.83 0.16 78) 55%, oklch(0.66 0.16 60));
   --gel-coral: radial-gradient(120% 100% at 22% 0%, oklch(0.88 0.10 40), oklch(0.70 0.18 32) 55%, oklch(0.50 0.17 26));
   --gel-sky: radial-gradient(120% 100% at 22% 0%, oklch(0.90 0.08 225), oklch(0.72 0.15 238) 55%, oklch(0.50 0.16 250));
+  /* BIG-6 — the Dashboard's Start, from his "Get Started" reference: the first
+     colour brought in under his goal of a colourful-but-minimal BASE by
+     version 4 (2026-09-30). Brighter at the heart than at the rim, as the
+     reference glows from inside, with its own rim so the edge reads warm. */
+  --gel-orange: radial-gradient(130% 110% at 30% 20%, oklch(0.80 0.17 52), oklch(0.68 0.21 42) 55%, oklch(0.56 0.19 36));
+  --gel-orange-rim: inset 0 1px 1px oklch(1 0.03 60 / 0.55), inset 0 -8px 18px -6px oklch(0.38 0.14 36 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 60 / 0.22);
   --gel-dusk: var(--gel-emerald);
   --gel-lagoon: var(--gel-emerald);
   --glass-live: radial-gradient(90% 70% at 50% 120%, oklch(0.74 0.165 162 / 0.30), transparent 70%), linear-gradient(155deg, oklch(1 0 0 / 0.05), oklch(1 0 0 / 0.015)), var(--glass-floor-layer);
   --soft-fill: linear-gradient(145deg, oklch(0.22 0.006 260), oklch(0.16 0.005 260));
   --soft-raised: 8px 8px 20px oklch(0 0 0 / 0.6), -6px -6px 16px oklch(0.34 0.006 260 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.07);
   --soft-pressed: inset 5px 5px 12px oklch(0 0 0 / 0.6), inset -4px -4px 10px oklch(0.34 0.006 260 / 0.25);
+  /* 29-1P1: the raised pad inside a pressed-in segmented control. */
+  --soft-fill-lift: linear-gradient(145deg, oklch(0.30 0.006 260), oklch(0.20 0.005 260));
+  /* The page's own colour under its masses, a token since 29-1P1 so the
+     dark tint (idea 63) reaches it. */
+  --page-floor: oklch(0.10 0.01 200);
 
   /* --- elevation.css (v4) --- */
   --shadow-0: none;
@@ -302,15 +325,25 @@
   --glow-amber-md: 0 0 30px -2px oklch(0.83 0.16 82 / 0.50), 0 0 80px -12px oklch(0.83 0.16 82 / 0.32);
   --glow-lime-md: 0 0 30px -2px oklch(0.86 0.19 128 / 0.45), 0 0 80px -12px oklch(0.86 0.19 128 / 0.30);
   --glow-rose-md: 0 0 30px -2px oklch(0.70 0.19 18 / 0.55), 0 0 80px -12px oklch(0.70 0.19 18 / 0.36);
+  --glow-orange-md: 0 10px 34px -8px oklch(0.70 0.21 45 / 0.60), 0 0 70px -14px oklch(0.72 0.20 48 / 0.42);
   --glow-white-sm: 0 0 22px -4px oklch(1 0 0 / 0.30);
   --cast-brand: var(--cast-emerald);
   --cast-violet: 0 18px 40px -14px oklch(0.60 0.22 305 / 0.75);
   --cast-magenta: 0 18px 40px -14px oklch(0.62 0.22 348 / 0.7);
   --cast-emerald: 0 18px 40px -14px oklch(0.66 0.16 162 / 0.65);
   --cast-amber: 0 18px 40px -14px oklch(0.78 0.16 75 / 0.55);
+  /* 29-1P1, idea 64: a gel casts its own colour. `Button`'s sky and coral
+     gels borrowed emerald's and magenta's casts until then. */
+  --cast-sky: 0 18px 40px -14px oklch(0.64 0.15 238 / 0.65);
+  --cast-coral: 0 18px 40px -14px oklch(0.64 0.17 32 / 0.65);
   --text-glow-accent: 0 0 26px oklch(0.74 0.165 162 / 0.55);
   --text-glow-brand: var(--text-glow-accent);
   --text-glow-white: 0 0 25px oklch(1 0 0 / 0.22);
+  /* OPT-6: a project's "40% done", in done's lime (`--job-lime`). */
+  --text-glow-lime: 0 0 18px oklch(0.84 0.17 130 / 0.55);
+  /* 29-1P9c: the task sheet's steps as "40%", in white with a white glow (his
+     call over lime) - brighter than --text-glow-white, which is a faint halo. */
+  --text-glow-white-bright: 0 0 16px oklch(1 0 0 / 0.55);
   --elev-chip: var(--shadow-1);
   --elev-card: var(--shadow-3);
   --elev-popover: var(--shadow-4);
@@ -324,6 +357,13 @@
   --ease-exit: cubic-bezier(0.40, 0.00, 1.00, 1.00);
   --ease-settle: cubic-bezier(0.34, 1.32, 0.64, 1);
   --ease-silk: cubic-bezier(0.65, 0, 0.35, 1);
+  /* 29-1P1 — the design system's three new curves (BIG-15). `springy`
+     overshoots a little (a switch's knob, a card landing), `pop` more (a
+     badge or a tick arriving), `glide` never (a ring or a pill sliding
+     between places). Mirrored in `core/motion.ts` for Framer. */
+  --ease-springy: cubic-bezier(0.34, 1.3, 0.64, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-glide: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-instant: 80ms;
   --dur-fast: 140ms;
   --dur-base: 200ms;
@@ -372,33 +412,13 @@
   }
 }
 
-/* --- The lens -----------------------------------------------------
-   REFRACTION and DISPERSION, from `#ag-lens` (`GlassLens.tsx`). v4
-   leads EVERY backdrop token with it, not just the `-refract` ones —
-   in V3 all glass bends. Only where `<html data-ag-lens>` says the
-   engine honours it (Chromium); `GlassSurface` still hands WebKit's
-   prefixed property the plain value either way. */
-:root[data-ag-lens] [data-v3] {
-  --glass-bd-xs: url(#ag-lens) blur(var(--glass-blur-xs)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
-  --glass-bd-sm: url(#ag-lens) blur(var(--glass-blur-sm)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
-  --glass-bd-md: url(#ag-lens) blur(var(--glass-blur-md)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
-  --glass-bd-lg: url(#ag-lens) blur(var(--glass-blur-lg)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
-  --glass-bd-xl: url(#ag-lens) blur(var(--glass-blur-xl)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
-  --glass-bd-sm-refract: var(--glass-bd-sm);
-  --glass-bd-md-refract: var(--glass-bd-md);
-  --glass-bd-lg-refract: var(--glass-bd-lg);
-}
-
 /* --- Touch --------------------------------------------------------
    src/index.css caps every glass surface on a coarse pointer at
    `blur(16px) saturate(1.3)`, `!important`, to fit the tablet's
-   compositing budget — which would also strip the lens and the V3
-   recipe. V3 is lighter than what that cap was written against
-   (its standard pane blurs 12px where the old one blurred 28px), so
-   inside a scope the cap becomes V3's own standard pane instead,
-   lens included on Chromium: Shreekant chose the lens on the tablet
-   too (2026-09-23). If the tablet stutters, THIS is the rule to turn
-   down — drop the `url(#ag-lens)` from the second one first. The
+   compositing budget — which would also strip the V3 recipe. V3 is
+   lighter than what that cap was written against (its standard pane
+   blurs 12px where the old one blurred 28px), so inside a scope the
+   cap becomes V3's own standard pane instead. The
    index.css rule's other lever, `will-change: transform` only, still
    applies. More specific than that rule, so it wins the `!important`
    tie; every surface ends up one value, as it already does there. */
@@ -407,11 +427,6 @@
   [data-v3][style*="backdrop-filter"] {
     -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.1) !important;
     backdrop-filter: blur(12px) saturate(1.8) brightness(1.1) !important;
-  }
-  :root[data-ag-lens] [data-v3] [style*="backdrop-filter"],
-  :root[data-ag-lens] [data-v3][style*="backdrop-filter"] {
-    -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.1) !important;
-    backdrop-filter: url(#ag-lens) blur(12px) saturate(1.8) brightness(1.1) !important;
   }
 }
 
@@ -429,13 +444,25 @@
    which the tablet pays for. The layers stay on the element, where the
    default `background-attachment: scroll` already pins them to its
    box. The grain's `overlay` blend moves to `background-blend-mode`,
-   and its 0.18 opacity is baked into the noise (0.6 x 0.18 = 0.108). */
+   and its 0.18 opacity is baked into the noise (0.6 x 0.18 = 0.108).
+
+   THE MASSES ARE THE SCREEN'S LIGHT (29-1P5a). Each is `--screen-light`
+   (`screenLight.css`: emerald, violet, sky...) darkened with black and
+   thinned with transparent, by the amounts that reproduce the teal they
+   were before from emerald, so Home and the boards look as they did.
+   The four layer variables are registered `inherits: false` (below): they
+   hold the light, which moves during a fade, and an inherited one would
+   restyle every element on the screen on every frame of it. */
+@property --ag-grain { syntax: '*'; inherits: false; }
+@property --ag-grid { syntax: '*'; inherits: false; }
+@property --ag-mass-a { syntax: '*'; inherits: false; }
+@property --ag-mass-b { syntax: '*'; inherits: false; }
 :is([data-v3] .ag-page, .ag-page[data-v3]) {
   --ag-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.108'/%3E%3C/svg%3E");
   --ag-grid: oklch(1 0 0 / 0.045);
-  --ag-mass-a: radial-gradient(60% 55% at 10% 0%, oklch(0.42 0.12 170 / 0.55), transparent 70%);
-  --ag-mass-b: radial-gradient(55% 55% at 100% 100%, oklch(0.36 0.09 165 / 0.35), transparent 70%);
-  background-color: oklch(0.10 0.01 200);
+  --ag-mass-a: radial-gradient(60% 55% at 10% 0%, color-mix(in oklch, color-mix(in oklch, var(--screen-light) 62%, black) 55%, transparent), transparent 70%);
+  --ag-mass-b: radial-gradient(55% 55% at 100% 100%, color-mix(in oklch, color-mix(in oklch, var(--screen-light) 54%, black) 35%, transparent), transparent 70%);
+  background-color: var(--page-floor);
   background-image:
     var(--ag-grain),
     linear-gradient(var(--ag-grid) 1px, transparent 1px),
@@ -449,22 +476,39 @@
 /* Dense data screens: no light band, dimmer masses. */
 :is([data-v3] .ag-page--calm, .ag-page--calm[data-v3]) {
   --ag-grid: oklch(1 0 0 / 0.04);
-  --ag-mass-a: radial-gradient(60% 55% at 10% 0%, oklch(0.40 0.10 170 / 0.35), transparent 70%);
-  --ag-mass-b: radial-gradient(55% 55% at 100% 100%, oklch(0.44 0.08 200 / 0.28), transparent 70%);
+  --ag-mass-a: radial-gradient(60% 55% at 10% 0%, color-mix(in oklch, color-mix(in oklch, var(--screen-light) 60%, black) 35%, transparent), transparent 70%);
+  --ag-mass-b: radial-gradient(55% 55% at 100% 100%, color-mix(in oklch, color-mix(in oklch, var(--screen-light) 63%, black) 28%, transparent), transparent 70%);
 }
-/* One centred emerald pool. */
+/* One centred pool, in the screen's light. */
 :is([data-v3] .ag-page--focal, .ag-page--focal[data-v3]) {
   --ag-grid: oklch(1 0 0 / 0.04);
-  --ag-mass-a: radial-gradient(40% 40% at 50% 50%, oklch(0.55 0.14 165 / 0.45), transparent 70%);
+  --ag-mass-a: radial-gradient(40% 40% at 50% 50%, color-mix(in oklch, color-mix(in oklch, var(--screen-light) 79%, black) 45%, transparent), transparent 70%);
   --ag-mass-b: none;
 }
 /* Brighter, for onboarding, empty states and voice. v4's field is
    still: the old one's drifting pseudo is switched off. */
 :is([data-v3] .ag-page--field, .ag-page--field[data-v3]) {
-  --ag-mass-a: radial-gradient(60% 60% at 15% 10%, oklch(0.50 0.13 168 / 0.7), transparent 70%);
-  --ag-mass-b: radial-gradient(55% 55% at 90% 90%, oklch(0.52 0.11 200 / 0.6), transparent 70%);
+  --ag-mass-a: radial-gradient(60% 60% at 15% 10%, color-mix(in oklch, color-mix(in oklch, var(--screen-light) 71%, black) 70%, transparent), transparent 70%);
+  --ag-mass-b: radial-gradient(55% 55% at 90% 90%, color-mix(in oklch, color-mix(in oklch, var(--screen-light) 74%, black) 60%, transparent), transparent 70%);
 }
 :is([data-v3] .ag-page--field, .ag-page--field[data-v3])::before { content: none; }
+/* The Dashboard's hour sky (idea 14): a third mass, and three colours
+   that `screenLight.css` changes when the hour turns. Its own six-layer
+   list, so the size, repeat and blend lists stay one value per layer. */
+:is([data-v3] .ag-page--sky, .ag-page--sky[data-v3]) {
+  --ag-mass-a: radial-gradient(60% 55% at 8% 0%, color-mix(in oklch, color-mix(in oklch, var(--screen-light) 66%, black) 60%, transparent), transparent 70%);
+  --ag-mass-b: radial-gradient(45% 45% at 92% 4%, color-mix(in oklch, color-mix(in oklch, var(--sky-b) 60%, black) 42%, transparent), transparent 70%);
+  background-image:
+    var(--ag-grain),
+    linear-gradient(var(--ag-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ag-grid) 1px, transparent 1px),
+    var(--ag-mass-a),
+    var(--ag-mass-b),
+    radial-gradient(60% 50% at 60% 100%, color-mix(in oklch, color-mix(in oklch, var(--sky-c) 55%, black) 34%, transparent), transparent 70%);
+  background-size: auto, 72px 72px, 72px 72px, 100% 100%, 100% 100%, 100% 100%;
+  background-repeat: repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
+  background-blend-mode: overlay, normal, normal, normal, normal, normal;
+}
 
 /* --- Gel and soft -------------------------------------------------
    The two materials V3 adds beside glass (readme, "Materials"). Gel is
@@ -479,6 +523,298 @@
 [data-v3] .ag-gel--amber { background: var(--gel-amber); box-shadow: var(--gel-rim), var(--cast-amber); color: var(--fg-on-light); }
 [data-v3] .ag-soft { background: var(--soft-fill); box-shadow: var(--soft-raised); }
 [data-v3] .ag-soft--pressed { box-shadow: var(--soft-pressed); }
+
+/* --- Colour jobs (29-1P1, BIG-15) ---------------------------------
+   BASE's colours since 2026-09-30: ONE COLOUR, ONE JOB, so a colour means
+   the same thing on every screen and he learns it once. The list, and
+   what each is for, is BIG-15's in IMPROVEMENTS.md; `/design` shows them
+   all live. Values are `docs/design/colours-and-buttons.html`'s recipe:
+     orange   go: start, begin, commit
+     emerald  live and brand: something running now
+     lime     highlight: today, done, the current one
+     gold     reward: points, streak flames, rest days
+     coral    urgent: only what is really about to be missed
+     rose     personal and habits: his routine
+     violet   Atlas: anything the AI says or does
+     sky      calendar and dates: events, countdowns, the timeline
+     teal     calm focus: Focus, breathing, brown noise
+     indigo   night and rest: sleep, wake, do-not-disturb
+   Each colour has the same set: the colour itself (a dot, a line), `-gel`
+   with its `-rim` and `-ink` (label) for a lit button, `-glow` — idea 64,
+   a gel casts ITS OWN colour, never black; a still shadow, nothing moves —
+   and `-glow-sm` for a pressed one, `-tile`/`-tile-cast`/`-dot` for the
+   arrow tile, `-tag`/`-tag-fg` for a small highlight chip, and `-deep`
+   for text on the bare colour (a count badge).
+   WHY A NEW `--job-*` FAMILY rather than the `--gel-*`/`--hue-*` above:
+   those are v4's palette, several share a name with a job and draw a
+   different hue (`--gel-violet` is 305, `--hue-rose` is 18), and screens
+   use them. 29-1P2 moves each screen onto its job; until then nothing
+   drawn before this step has moved. Orange is his Dashboard Start's own
+   gel, so it points at those tokens instead of a second recipe. */
+[data-v3] {
+  /* Orange */
+  --job-orange: oklch(0.7 0.21 45);
+  --job-orange-gel: var(--gel-orange);
+  --job-orange-rim: var(--gel-orange-rim);
+  --job-orange-glow: var(--glow-orange-md);
+  --job-orange-glow-sm: 0 6px 18px -8px oklch(0.7 0.21 45 / 0.55);
+  --job-orange-ink: oklch(0.99 0.01 45);
+  --job-orange-deep: oklch(0.25 0.08 45);
+  --job-orange-tile: oklch(0.99 0.005 45);
+  --job-orange-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 45 / 0.55);
+  --job-orange-dot: oklch(0.66 0.2 45);
+  --job-orange-tag: oklch(0.8 0.21 45 / 0.16);
+  --job-orange-tag-fg: oklch(0.86 0.189 45);
+  /* Emerald */
+  --job-emerald: oklch(0.7 0.16 162);
+  --job-emerald-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.8 0.136 162), oklch(0.7 0.16 162) 55%, oklch(0.56 0.144 162));
+  --job-emerald-rim: inset 0 1px 1px oklch(1 0.03 162 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 162 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 162 / 0.22);
+  --job-emerald-glow: 0 10px 34px -8px oklch(0.7 0.16 162 / 0.6), 0 0 70px -14px oklch(0.7 0.16 162 / 0.42);
+  --job-emerald-glow-sm: 0 6px 18px -8px oklch(0.7 0.16 162 / 0.55);
+  --job-emerald-ink: oklch(0.99 0.01 162);
+  --job-emerald-deep: oklch(0.25 0.08 162);
+  --job-emerald-tile: oklch(0.99 0.005 162);
+  --job-emerald-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 162 / 0.55);
+  --job-emerald-dot: oklch(0.66 0.2 162);
+  --job-emerald-tag: oklch(0.8 0.16 162 / 0.16);
+  --job-emerald-tag-fg: oklch(0.86 0.144 162);
+  /* Lime */
+  --job-lime: oklch(0.84 0.17 130);
+  --job-lime-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.94 0.145 130), oklch(0.84 0.17 130) 55%, oklch(0.7 0.153 130));
+  --job-lime-rim: inset 0 1px 1px oklch(1 0.03 130 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 130 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 130 / 0.22);
+  --job-lime-glow: 0 10px 34px -8px oklch(0.84 0.17 130 / 0.6), 0 0 70px -14px oklch(0.84 0.17 130 / 0.42);
+  --job-lime-glow-sm: 0 6px 18px -8px oklch(0.84 0.17 130 / 0.55);
+  --job-lime-ink: oklch(0.22 0.06 130);
+  --job-lime-deep: oklch(0.25 0.08 130);
+  --job-lime-tile: oklch(0.99 0.005 130);
+  --job-lime-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 130 / 0.55);
+  --job-lime-dot: oklch(0.66 0.2 130);
+  --job-lime-tag: oklch(0.8 0.17 130 / 0.16);
+  --job-lime-tag-fg: oklch(0.86 0.153 130);
+  /* Lime's quiet set (29-1P2c1): what a ticked box, a chosen row, a done
+     bar and a focused text box wear — the `--accent-*` / `--glow-accent-*`
+     pieces those used to borrow from emerald, now that emerald means only
+     "running now". `-line` a 1px edge, `-wash` a faint fill, `-shine` the
+     still glow under a lit tick (`--glow-accent-sm`'s shape), `-text` lime
+     that stays legible as a glyph or label on `--glass-tint-lime`. */
+  --job-lime-line: oklch(0.84 0.17 130 / 0.42);
+  --job-lime-wash: oklch(0.84 0.17 130 / 0.14);
+  --job-lime-shine: 0 0 22px -5px oklch(0.84 0.17 130 / 0.5);
+  --job-lime-shine-md: 0 0 36px -6px oklch(0.84 0.17 130 / 0.5), 0 0 80px -12px oklch(0.84 0.17 130 / 0.26);
+  --job-lime-text: oklch(0.93 0.11 130);
+  --job-lime-focus: 0 0 0 1px var(--job-lime-line), 0 0 20px -6px oklch(0.84 0.17 130 / 0.45);
+  /* Gold */
+  --job-gold: oklch(0.8 0.16 82);
+  --job-gold-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.9 0.136 82), oklch(0.8 0.16 82) 55%, oklch(0.66 0.144 82));
+  --job-gold-rim: inset 0 1px 1px oklch(1 0.03 82 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 82 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 82 / 0.22);
+  --job-gold-glow: 0 10px 34px -8px oklch(0.8 0.16 82 / 0.6), 0 0 70px -14px oklch(0.8 0.16 82 / 0.42);
+  --job-gold-glow-sm: 0 6px 18px -8px oklch(0.8 0.16 82 / 0.55);
+  --job-gold-ink: oklch(0.22 0.06 82);
+  --job-gold-deep: oklch(0.25 0.08 82);
+  --job-gold-tile: oklch(0.99 0.005 82);
+  --job-gold-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 82 / 0.55);
+  --job-gold-dot: oklch(0.66 0.2 82);
+  --job-gold-tag: oklch(0.8 0.16 82 / 0.16);
+  --job-gold-tag-fg: oklch(0.86 0.144 82);
+  /* 29-1P10b: a Focus stage in flow (idea 102) glows gold, where an overrun glowed coral. */
+  --job-gold-shine-md: 0 0 30px -2px oklch(0.8 0.16 82 / 0.5), 0 0 80px -12px oklch(0.8 0.16 82 / 0.3);
+  /* 29-1P10c: the StandBy clock at night. Dim red is the one exception to one colour, one job,
+     his call: a bedside light, not a signal. Not a job colour, so not coral. */
+  --standby-night: oklch(0.44 0.16 27);
+  --standby-night-dim: oklch(0.3 0.11 27);
+  /* Coral */
+  --job-coral: oklch(0.7 0.19 28);
+  --job-coral-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.8 0.162 28), oklch(0.7 0.19 28) 55%, oklch(0.56 0.171 28));
+  --job-coral-rim: inset 0 1px 1px oklch(1 0.03 28 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 28 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 28 / 0.22);
+  --job-coral-glow: 0 10px 34px -8px oklch(0.7 0.19 28 / 0.6), 0 0 70px -14px oklch(0.7 0.19 28 / 0.42);
+  --job-coral-glow-sm: 0 6px 18px -8px oklch(0.7 0.19 28 / 0.55);
+  --job-coral-ink: oklch(0.99 0.01 28);
+  --job-coral-deep: oklch(0.25 0.08 28);
+  --job-coral-tile: oklch(0.99 0.005 28);
+  --job-coral-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 28 / 0.55);
+  --job-coral-dot: oklch(0.66 0.2 28);
+  --job-coral-tag: oklch(0.8 0.19 28 / 0.16);
+  --job-coral-tag-fg: oklch(0.86 0.171 28);
+  /* Coral's quiet set (29-1P2c2), lime's shapes: what an error line, a
+     delete row, a box with a mistake in it and an over-time card wear in
+     place of the old rose (hue 18-20) pieces. `-text` is coral that stays
+     legible as a label on `--glass-tint-coral`. */
+  --job-coral-line: oklch(0.7 0.19 28 / 0.6);
+  --job-coral-wash: oklch(0.7 0.19 28 / 0.14);
+  --job-coral-shine: 0 0 22px -5px oklch(0.7 0.19 28 / 0.55);
+  --job-coral-shine-md: 0 0 30px -2px oklch(0.7 0.19 28 / 0.55), 0 0 80px -12px oklch(0.7 0.19 28 / 0.36);
+  --job-coral-text: oklch(0.9 0.08 28);
+  --glass-tint-coral: linear-gradient(155deg, oklch(0.7 0.19 28 / 0.34) 0%, oklch(0.7 0.19 28 / 0.10) 55%, oklch(0.7 0.19 28 / 0.20) 100%), var(--glass-floor-layer);
+  /* A warning's quiet glass (29-1P2c2): no colour at all, so the icon beside
+     it is the signal. */
+  --glass-tint-warn: var(--glass-fill-2);
+  /* Rose */
+  --job-rose: oklch(0.7 0.17 355);
+  --job-rose-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.8 0.145 355), oklch(0.7 0.17 355) 55%, oklch(0.56 0.153 355));
+  --job-rose-rim: inset 0 1px 1px oklch(1 0.03 355 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 355 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 355 / 0.22);
+  --job-rose-glow: 0 10px 34px -8px oklch(0.7 0.17 355 / 0.6), 0 0 70px -14px oklch(0.7 0.17 355 / 0.42);
+  --job-rose-glow-sm: 0 6px 18px -8px oklch(0.7 0.17 355 / 0.55);
+  --job-rose-ink: oklch(0.99 0.01 355);
+  --job-rose-deep: oklch(0.25 0.08 355);
+  --job-rose-tile: oklch(0.99 0.005 355);
+  --job-rose-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 355 / 0.55);
+  --job-rose-dot: oklch(0.66 0.2 355);
+  --job-rose-tag: oklch(0.8 0.17 355 / 0.16);
+  --job-rose-tag-fg: oklch(0.86 0.153 355);
+  /* Violet */
+  --job-violet: oklch(0.7 0.19 300);
+  --job-violet-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.8 0.162 300), oklch(0.7 0.19 300) 55%, oklch(0.56 0.171 300));
+  --job-violet-rim: inset 0 1px 1px oklch(1 0.03 300 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 300 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 300 / 0.22);
+  --job-violet-glow: 0 10px 34px -8px oklch(0.7 0.19 300 / 0.6), 0 0 70px -14px oklch(0.7 0.19 300 / 0.42);
+  --job-violet-glow-sm: 0 6px 18px -8px oklch(0.7 0.19 300 / 0.55);
+  --job-violet-ink: oklch(0.99 0.01 300);
+  --job-violet-deep: oklch(0.25 0.08 300);
+  --job-violet-tile: oklch(0.99 0.005 300);
+  --job-violet-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 300 / 0.55);
+  --job-violet-dot: oklch(0.66 0.2 300);
+  --job-violet-tag: oklch(0.8 0.19 300 / 0.16);
+  --job-violet-tag-fg: oklch(0.86 0.171 300);
+  /* OPT-9: the glow on every "Ask AI" button (a task, a list, a project) —
+     his "blue glow", which he settled as Atlas's violet. A still halo, never a
+     loop (CLAUDE.md, Performance rule 1); brighter while the panel is about it. */
+  --job-violet-halo: 0 0 14px -3px oklch(0.7 0.19 300 / 0.6);
+  --job-violet-halo-on: 0 0 18px -1px oklch(0.7 0.19 300 / 0.85);
+  /* Violet's quiet set (29-1P2c3), lime's shapes: Atlas's marks, its
+     approvals, its questions, its working pill. `-text` is the ink that
+     stays legible on `--glass-tint-violet` (the mark ink that was emerald,
+     `MARK_INK`); `-floor` is the dark under an approval's tint. */
+  --job-violet-line: oklch(0.7 0.19 300 / 0.5);
+  --job-violet-wash: oklch(0.7 0.19 300 / 0.14);
+  --job-violet-shine: 0 0 22px -5px oklch(0.7 0.19 300 / 0.55);
+  --job-violet-shine-md: 0 0 30px -2px oklch(0.7 0.19 300 / 0.55), 0 0 80px -12px oklch(0.7 0.19 300 / 0.36);
+  --job-violet-text: oklch(0.9 0.09 300);
+  --job-violet-floor: oklch(0.16 0.02 300 / 0.55);
+  /* Sky */
+  --job-sky: oklch(0.7 0.15 240);
+  --job-sky-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.8 0.128 240), oklch(0.7 0.15 240) 55%, oklch(0.56 0.135 240));
+  --job-sky-rim: inset 0 1px 1px oklch(1 0.03 240 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 240 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 240 / 0.22);
+  --job-sky-glow: 0 10px 34px -8px oklch(0.7 0.15 240 / 0.6), 0 0 70px -14px oklch(0.7 0.15 240 / 0.42);
+  --job-sky-glow-sm: 0 6px 18px -8px oklch(0.7 0.15 240 / 0.55);
+  --job-sky-ink: oklch(0.99 0.01 240);
+  --job-sky-deep: oklch(0.25 0.08 240);
+  --job-sky-tile: oklch(0.99 0.005 240);
+  --job-sky-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 240 / 0.55);
+  --job-sky-dot: oklch(0.66 0.2 240);
+  --job-sky-tag: oklch(0.8 0.15 240 / 0.16);
+  --job-sky-tag-fg: oklch(0.86 0.135 240);
+  /* Sky's quiet set (29-1P2c2): a date's icon, the "Session ends" card,
+     the plan's first block. Same shapes as lime's and coral's. */
+  --job-sky-line: oklch(0.7 0.15 240 / 0.5);
+  --job-sky-wash: oklch(0.7 0.15 240 / 0.14);
+  --job-sky-shine: 0 0 22px -5px oklch(0.7 0.15 240 / 0.55);
+  --job-sky-text: oklch(0.88 0.08 240);
+  --text-glow-sky: 0 0 24px oklch(0.7 0.15 240 / 0.45);
+  /* Teal */
+  --job-teal: oklch(0.7 0.13 200);
+  --job-teal-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.8 0.111 200), oklch(0.7 0.13 200) 55%, oklch(0.56 0.117 200));
+  --job-teal-rim: inset 0 1px 1px oklch(1 0.03 200 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 200 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 200 / 0.22);
+  --job-teal-glow: 0 10px 34px -8px oklch(0.7 0.13 200 / 0.6), 0 0 70px -14px oklch(0.7 0.13 200 / 0.42);
+  --job-teal-glow-sm: 0 6px 18px -8px oklch(0.7 0.13 200 / 0.55);
+  --job-teal-ink: oklch(0.99 0.01 200);
+  --job-teal-deep: oklch(0.25 0.08 200);
+  --job-teal-tile: oklch(0.99 0.005 200);
+  --job-teal-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 200 / 0.55);
+  --job-teal-dot: oklch(0.66 0.2 200);
+  --job-teal-tag: oklch(0.8 0.13 200 / 0.16);
+  --job-teal-tag-fg: oklch(0.86 0.117 200);
+  /* Teal's quiet set (29-1P2c3): Focus's stage while it runs, brown noise's
+     readings and sliders. Same shapes as lime's, coral's and sky's. */
+  --job-teal-line: oklch(0.7 0.13 200 / 0.5);
+  --job-teal-wash: oklch(0.7 0.13 200 / 0.14);
+  --job-teal-shine: 0 0 22px -5px oklch(0.7 0.13 200 / 0.55);
+  --job-teal-shine-md: 0 0 30px -2px oklch(0.7 0.13 200 / 0.5), 0 0 80px -12px oklch(0.7 0.13 200 / 0.3);
+  --job-teal-text: oklch(0.9 0.07 200);
+  --glass-tint-teal: linear-gradient(155deg, oklch(0.7 0.13 200 / 0.34) 0%, oklch(0.7 0.13 200 / 0.10) 55%, oklch(0.7 0.13 200 / 0.20) 100%), var(--glass-floor-layer);
+  /* Indigo */
+  --job-indigo: oklch(0.7 0.17 277);
+  --job-indigo-gel: radial-gradient(130% 110% at 30% 20%, oklch(0.8 0.145 277), oklch(0.7 0.17 277) 55%, oklch(0.56 0.153 277));
+  --job-indigo-rim: inset 0 1px 1px oklch(1 0.03 277 / 0.55), inset 0 -8px 18px -6px oklch(0.30 0.12 277 / 0.55), inset 0 0 0 1px oklch(0.92 0.08 277 / 0.22);
+  --job-indigo-glow: 0 10px 34px -8px oklch(0.7 0.17 277 / 0.6), 0 0 70px -14px oklch(0.7 0.17 277 / 0.42);
+  --job-indigo-glow-sm: 0 6px 18px -8px oklch(0.7 0.17 277 / 0.55);
+  --job-indigo-ink: oklch(0.99 0.01 277);
+  --job-indigo-deep: oklch(0.25 0.08 277);
+  --job-indigo-tile: oklch(0.99 0.005 277);
+  --job-indigo-tile-cast: 0 2px 8px -2px oklch(0.3 0.1 277 / 0.55);
+  --job-indigo-dot: oklch(0.66 0.2 277);
+  --job-indigo-tag: oklch(0.8 0.17 277 / 0.16);
+  --job-indigo-tag-fg: oklch(0.86 0.153 277);
+  /* 29-1c2: the timeline's evening, from 6pm (idea 38) — rest's colour. */
+  --job-indigo-line: oklch(0.7 0.17 277 / 0.4);
+  --job-indigo-wash: oklch(0.7 0.17 277 / 0.08);
+  --job-indigo-text: oklch(0.86 0.09 277);
+
+  /* 65 — numbers in their colour: big figures carry a two-colour ramp
+     that says what they are. Cool (teal, Focus's job) for time focused,
+     warm (gold into orange) for streaks, green (lime into emerald) for
+     done. `ui/data/GradientNumber.tsx` is the one reader. */
+  --num-focus: linear-gradient(120deg, oklch(0.86 0.1 190), oklch(0.7 0.14 225));
+  --num-streak: linear-gradient(120deg, oklch(0.88 0.14 90), oklch(0.7 0.2 45));
+  --num-done: linear-gradient(120deg, oklch(0.92 0.15 125), oklch(0.74 0.165 162));
+}
+
+/* --- Dark that isn't grey (idea 63, 29-1P1) -----------------------
+   Settings → App → Appearance tints every dark grey a trace of one
+   colour, neutral by default. `lib/darkTint.ts` sets the attribute on
+   <html> (before the first render, from this device's copy) and
+   `lib/darkTintSync.ts` keeps it the same on both his devices. Only the
+   greys move — the voids (and so the glass floor, which is mixed from
+   `--void-1` on the same element), the page's own colour and the soft
+   material. No colour's job changes, and a tint is not an accent: the
+   Start stays orange whatever he picks. Chroma is the idea page's,
+   "very faint, and it's still dark". */
+:root[data-dark-tint='emerald'] [data-v3] {
+  --void-0: oklch(0.085 0.012 162);
+  --void-1: oklch(0.130 0.016 162);
+  --void-2: oklch(0.185 0.020 162);
+  --void-3: oklch(0.245 0.022 162);
+  --void-4: oklch(0.305 0.024 162);
+  --page-floor: oklch(0.10 0.02 162);
+  --soft-fill: linear-gradient(145deg, oklch(0.22 0.022 162), oklch(0.16 0.018 162));
+  --soft-fill-lift: linear-gradient(145deg, oklch(0.30 0.024 162), oklch(0.20 0.02 162));
+  --soft-raised: 8px 8px 20px oklch(0 0 0 / 0.6), -6px -6px 16px oklch(0.34 0.024 162 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.07);
+  --soft-pressed: inset 5px 5px 12px oklch(0 0 0 / 0.6), inset -4px -4px 10px oklch(0.34 0.024 162 / 0.25);
+}
+:root[data-dark-tint='orange'] [data-v3] {
+  --void-0: oklch(0.085 0.012 45);
+  --void-1: oklch(0.130 0.016 45);
+  --void-2: oklch(0.185 0.020 45);
+  --void-3: oklch(0.245 0.022 45);
+  --void-4: oklch(0.305 0.024 45);
+  --page-floor: oklch(0.10 0.02 45);
+  --soft-fill: linear-gradient(145deg, oklch(0.22 0.022 45), oklch(0.16 0.018 45));
+  --soft-fill-lift: linear-gradient(145deg, oklch(0.30 0.024 45), oklch(0.20 0.02 45));
+  --soft-raised: 8px 8px 20px oklch(0 0 0 / 0.6), -6px -6px 16px oklch(0.34 0.024 45 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.07);
+  --soft-pressed: inset 5px 5px 12px oklch(0 0 0 / 0.6), inset -4px -4px 10px oklch(0.34 0.024 45 / 0.25);
+}
+:root[data-dark-tint='violet'] [data-v3] {
+  --void-0: oklch(0.085 0.012 300);
+  --void-1: oklch(0.130 0.016 300);
+  --void-2: oklch(0.185 0.020 300);
+  --void-3: oklch(0.245 0.022 300);
+  --void-4: oklch(0.305 0.024 300);
+  --page-floor: oklch(0.10 0.02 300);
+  --soft-fill: linear-gradient(145deg, oklch(0.22 0.022 300), oklch(0.16 0.018 300));
+  --soft-fill-lift: linear-gradient(145deg, oklch(0.30 0.024 300), oklch(0.20 0.02 300));
+  --soft-raised: 8px 8px 20px oklch(0 0 0 / 0.6), -6px -6px 16px oklch(0.34 0.024 300 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.07);
+  --soft-pressed: inset 5px 5px 12px oklch(0 0 0 / 0.6), inset -4px -4px 10px oklch(0.34 0.024 300 / 0.25);
+}
+:root[data-dark-tint='sky'] [data-v3] {
+  --void-0: oklch(0.085 0.012 240);
+  --void-1: oklch(0.130 0.016 240);
+  --void-2: oklch(0.185 0.020 240);
+  --void-3: oklch(0.245 0.022 240);
+  --void-4: oklch(0.305 0.024 240);
+  --page-floor: oklch(0.10 0.02 240);
+  --soft-fill: linear-gradient(145deg, oklch(0.22 0.022 240), oklch(0.16 0.018 240));
+  --soft-fill-lift: linear-gradient(145deg, oklch(0.30 0.024 240), oklch(0.20 0.02 240));
+  --soft-raised: 8px 8px 20px oklch(0 0 0 / 0.6), -6px -6px 16px oklch(0.34 0.024 240 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.07);
+  --soft-pressed: inset 5px 5px 12px oklch(0 0 0 / 0.6), inset -4px -4px 10px oklch(0.34 0.024 240 / 0.25);
+}
 
 /* --- V3 keyframes -------------------------------------------------
    The seven renamed ones are reached through `--kf-*` (above); the

@@ -82,6 +82,15 @@ export interface AtlasHealth {
   };
   gemini: { configured: boolean };
   /**
+   * The cloud providers this Atlas runs on a key the request carries (BIG-1).
+   *
+   * **Absent on an Atlas built before BIG-1**, which only ever knew Gemini on
+   * its own `.env` key. The app routes a cloud pick to the laptop only when
+   * its provider is listed here, so a laptop that has not been restarted onto
+   * the new build keeps getting exactly what it understands.
+   */
+  hosted?: { providers: string[]; keysFromRequest: boolean };
+  /**
    * Which MCP servers came up, and why any did not (item 9B needs the *why*).
    *
    * `stage.tools` is the one-bit summary and this is the detail behind it.
@@ -113,6 +122,19 @@ export interface AtlasHealth {
     /** Where the folder is on the laptop, so a screen can say what to open in Notepad. */
     dir: string;
     error?: string;
+    /**
+     * The cloud copy the tablet reads with the lid shut (BIG-4). Absent from
+     * an Atlas older than it. `on` is the one thing the screens ask: with it,
+     * the note files are a backup and the app is where a note is edited.
+     */
+    cloud?: {
+      on: boolean;
+      reason: string | null;
+      ready: boolean;
+      pending: number;
+      lastOkAt: string | null;
+      lastError: string | null;
+    };
   };
   /**
    * The skills Atlas has, and how many are on (item 12).
@@ -150,29 +172,6 @@ export interface AtlasHealth {
    * send it.
    */
   power?: { onBattery: boolean | null; at: string | null };
-  /**
-   * The month's spending and the two ceilings (item 13A, §3.4).
-   *
-   * `ok: false` means Atlas could not open its data directory, and the screen
-   * must draw the money as "—" rather than as zero: nothing being counted is
-   * not the same claim as nothing having been spent. Optional for `power`'s
-   * reason.
-   */
-  spend?: {
-    ok: boolean;
-    month: string;
-    rupees: number;
-    turns: number;
-    unpriced: number;
-    ceilings: { monthlyRupees: number; perTurnRupees: number };
-    /**
-     * Downshift (BUILD-12): on, Atlas runs no turn on a hosted model. Read
-     * by `routesToAtlas`, which sends a Gemini pick to the laptop while it
-     * is on. Optional because an Atlas built before it does not send it,
-     * and absent is off — that Atlas would refuse a Gemini turn outright.
-     */
-    downshift?: boolean;
-  };
 }
 
 export type MemoryReport = NonNullable<AtlasHealth['memory']>;
@@ -266,6 +265,33 @@ export async function fetchAtlasModels(baseUrl: string, signal: AbortSignal): Pr
   return res.json();
 }
 
+/**
+ * Claude's or ChatGPT's models, as the laptop lists them with his key (BIG-1).
+ *
+ * A POST because the key travels in the body — never in a URL, which is what
+ * proxies and histories keep. An Atlas built before BIG-1 answers 404, which
+ * is reported as "this laptop's Atlas is too old" rather than as a key problem.
+ */
+export async function fetchAtlasHostedModels(
+  baseUrl: string,
+  provider: 'anthropic' | 'openai',
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<unknown> {
+  const res = await fetch(`${baseUrl}/models/hosted`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, apiKey }),
+    signal,
+  });
+  if (res.status === 404) throw new Error('The laptop is running an older Atlas. Restart it to use Claude and ChatGPT.');
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Atlas answered ${res.status}.`);
+  }
+  return res.json();
+}
+
 // ─── One turn ───────────────────────────────────────────────────────────────
 
 // ─── Modes, thinking and cost (item 12) ─────────────────────────────────────
@@ -301,24 +327,8 @@ export interface AtlasHeldCall {
   description: string;
 }
 
-/**
- * What a turn cost (§3.4).
- *
- * `rupees: null` means **not known** and must be drawn as an em dash;
- * `rupees: 0` means **known to be free**, which every local turn is. The
- * distinction is the whole point — `/atlas-host` and the context slider both
- * already refuse to print a number nobody measured, and a rupee figure is the
- * one where an invented value would look most like a fact.
- */
-export interface AtlasTurnCost {
-  rupees: number | null;
-  free: boolean;
-  unpriced: string | null;
-  basis: { model: string; inrPerUsd: number; asOf: string } | null;
-}
-
 /** What Atlas streams back. Mirrors `atlas/src/routes/chat.ts`'s `ChatEvent`. */
-type AtlasEvent =
+export type AtlasEvent =
   | {
       type: 'start';
       model: string;
@@ -387,30 +397,8 @@ type AtlasEvent =
       stoppedAtIterationLimit: boolean;
       conversationId?: string | null;
       conversationTitle?: string | null;
-      /** Item 12. Absent from an older Atlas, which is why `AtlasTurn` defaults it. */
-      cost?: AtlasTurnCost;
-      pricesAsOf?: string;
-      /** Item 13A: the turn stopped at its per-turn ceiling and can be carried on. */
-      stoppedAtCeiling?: boolean;
-      /** The ceiling in force, so the card names the number he set. */
-      ceilingRupees?: number | null;
-      /** The log turn to resume. `null` when Atlas kept no log, and then there is no button. */
+      /** The log turn. `null` when Atlas kept no log. */
       logTurnId?: string | null;
-    }
-  /**
-   * A hosted turn stopped at the monthly ceiling *before it ran* (item 13A, §3.4).
-   *
-   * Nothing happened: no model was called and no money was spent. Deliberately
-   * not the front door's tray — that is for acts that cannot be undone and it
-   * never expires, whereas this is a question about one turn, asked now.
-   */
-  | {
-      type: 'ceiling';
-      scope: 'month';
-      spent: number;
-      limit: number;
-      turns: number;
-      model: string;
     }
   | { type: 'error'; message: string; detail?: string };
 
@@ -488,22 +476,16 @@ export interface AtlasTurnOptions {
   /**
    * Carry on a turn that stopped, rather than starting a new one (item 13A, §5.5).
    *
-   * The action log's id for it. Two buttons send it and they are the same act:
-   * the card shown when a conversation is opened and Atlas was interrupted,
-   * and **Continue** on a turn that stopped at its spending ceiling. Atlas
-   * reads the original ask out of the log, so `userMessage` is ignored.
+   * The action log's id for it, sent by the card shown when a conversation is
+   * opened and Atlas was interrupted. Atlas reads the original ask out of the
+   * log, so `userMessage` is ignored.
    */
   resumeTurnId?: string;
-  /** The tap that lets one hosted turn run past the monthly ceiling (§3.4). */
-  overMonthlyCeiling?: boolean;
   /**
-   * The monthly ceiling was reached and this turn did not run (§3.4).
-   *
-   * Fired instead of everything else — no text, no tools, no `done`. The page
-   * draws a card offering to run it anyway, which re-sends the same request
-   * with `overMonthlyCeiling`.
+   * The key for the cloud provider `model` names (BIG-1), from the key sheet.
+   * Atlas uses it for this turn and keeps it nowhere. Absent on a local turn.
    */
-  onMonthlyCeiling?: (report: { spent: number; limit: number; turns: number; model: string }) => void;
+  apiKey?: string | null;
 }
 
 export interface AtlasTurn {
@@ -517,143 +499,72 @@ export interface AtlasTurn {
   /** Where it was written down, and what that chat is now called (item 10). */
   conversationId: string | null;
   conversationTitle: string | null;
-  /**
-   * What it cost (item 12).
-   *
-   * An Atlas built to item 11 sends nothing, and that is `unpriced` rather than
-   * free — an older host is not a claim that the turn was free, and drawing
-   * ₹0.00 for it would be exactly the invented number this field exists to
-   * avoid.
-   */
-  cost: AtlasTurnCost;
-  pricesAsOf: string | null;
-  /** Item 13A: it stopped at the per-turn ceiling and offers to carry on (§3.4). */
-  stoppedAtCeiling: boolean;
-  /** The ceiling that stopped it, so the card names his own number. */
-  ceilingRupees: number | null;
-  /** What **Continue** resumes. `null` on an Atlas keeping no log, and then there is no button. */
+  /** The log turn. `null` on an Atlas keeping no log. */
   logTurnId: string | null;
 }
 
 /**
- * The monthly ceiling stopped a turn before it ran (item 13A, §3.4).
- *
- * Its own error type rather than an `AgentTransportError`, because every
- * `catch` in the app treats one of those as *the laptop broke* and offers the
- * fallback assistant. This is not that: Atlas is fine, it asked a question,
- * and the answer is a tap. The page catches this specifically and draws the
- * card instead of an error.
+ * The request `/chat` takes, from a turn's options. Shared by both machines
+ * since BIG-12: the laptop is sent it as JSON, and Atlas in this page with the
+ * lid shut (`engine/runTabletAtlasTurn.ts`) is handed it as it is.
  */
-export class AtlasMonthlyCeilingReached extends Error {
-  readonly spent: number;
-  readonly limit: number;
-  readonly turns: number;
-  readonly model: string;
-
-  constructor(report: { spent: number; limit: number; turns: number; model: string }) {
-    super(`This month has reached its ₹${report.limit} ceiling.`);
-    this.name = 'AtlasMonthlyCeilingReached';
-    this.spent = report.spent;
-    this.limit = report.limit;
-    this.turns = report.turns;
-    this.model = report.model;
-  }
+export function chatBodyOf(options: Omit<AtlasTurnOptions, 'baseUrl'>): Record<string, unknown> {
+  const { userMessage, history, model, timezone } = options;
+  return {
+    message: userMessage,
+    /*
+     * Still sent alongside `conversationId`, and not redundantly. Atlas
+     * ignores it when it is holding the conversation itself, and uses it
+     * when it is not — an Atlas built to item 9, or one whose data
+     * directory would not open. The app cannot tell which it is talking
+     * to from here, and sending both means it does not have to.
+     */
+    history,
+    model,
+    timezone,
+    ...(options.conversationId ? { conversationId: options.conversationId } : {}),
+    ...(options.numCtx ? { numCtx: options.numCtx } : {}),
+    /* Item 12. Always sent, even at their defaults: an Atlas built before
+       this item ignores two fields it has never heard of, which is the
+       same behaviour as not sending them, and always sending means the
+       request body does not change shape with the dial. */
+    mode: options.mode ?? 'auto',
+    effort: options.effort ?? 'some',
+    /* Sent only when it changes, unlike the two above — see `skill` on the
+       options. `null` is a real value here ("turn it off") and must
+       survive the check, so this tests for `undefined` rather than
+       falsiness. An Atlas built before `/` ignores the field, which is the
+       same behaviour as never being sent it. */
+    ...(options.skill !== undefined ? { skill: options.skill } : {}),
+    /* Item 13A. Sent only when they apply, unlike the two above: an older
+       Atlas ignoring `mode` behaves the same as never being sent it, but
+       an older Atlas ignoring `resumeTurnId` would silently re-run the
+       original ask from the top — which is the double-write the resume
+       path exists to prevent. `resumedOnAnOlderAtlas` below is how the
+       page notices that and says so instead. */
+    ...(options.resumeTurnId ? { resumeTurnId: options.resumeTurnId } : {}),
+    /* BIG-1. Only on a cloud turn, and only when there is one to send. */
+    ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+  };
 }
 
+/** Events, one at a time, from whichever machine is running the turn. Resolves when the turn is over. */
+export type AtlasEventFeed = (onEvent: (event: AtlasEvent) => void) => Promise<void>;
+
 /**
- * One turn, run on the laptop, streamed here.
- *
- * Shaped deliberately like `agent/core.ts`'s `runAgentTurn`, so `ChatPage`'s
- * two branches read as the same shape rather than as two different screens:
- * same `onTextDelta`, same `AbortSignal`, same returned history to feed back
- * in next time.
- *
- * **The conversation is Atlas's now (item 10).** A `conversationId` names a
- * file on the laptop, and Atlas's copy of the history is the one that counts —
- * this browser's is sent as well, and Atlas ignores it when it has its own.
- * That is not belt-and-braces: an Atlas built to item 9, or one whose data
- * directory would not open, still needs the history from here, and the app
- * cannot tell which it is talking to before the request goes out.
- *
- * **`turnId` is deliberately absent, and item 9 made that matter rather than
- * settling it.** The app's own turns return the snapshot they wrote into, and
- * Revert undoes them. Atlas has hands now and its turns really do write — 9D
- * is what makes those writes visible here — but the ring is a Zustand store in
- * *this browser* and an Atlas turn never touches it. What makes an Atlas write
- * undoable is Atlas's own action log (DESIGN.md §5.3), which is item 13; until
- * then an Atlas deletion is undone from `/trash`. Returning a `null` id here
- * would suggest the ring is watching Atlas. It is not, and `ChangeList` says
- * so in words rather than offering a button that cannot work.
+ * What a stream of Atlas's events adds up to — the callbacks fired as they
+ * arrive, and the finished turn at the end. The one reader for both machines
+ * (BIG-12): the laptop's events arrive over SSE, the tablet's straight from
+ * Atlas's own code in this page, and the page cannot tell which it got.
  */
-export async function runAtlasTurn(options: AtlasTurnOptions): Promise<AtlasTurn> {
-  const { baseUrl, userMessage, history, model, timezone, signal, onTextDelta, onToolCall, onNotice } = options;
+export async function readAtlasEvents(options: Omit<AtlasTurnOptions, 'baseUrl'>, feed: AtlasEventFeed): Promise<AtlasTurn> {
+  const { onTextDelta, onToolCall, onNotice } = options;
   const { onThinking, onPlan, onAsk, onHeld, onApproval } = options;
-
-  let res: Response;
-  try {
-    res = await fetch(`${baseUrl}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: userMessage,
-        /*
-         * Still sent alongside `conversationId`, and not redundantly. Atlas
-         * ignores it when it is holding the conversation itself, and uses it
-         * when it is not — an Atlas built to item 9, or one whose data
-         * directory would not open. The app cannot tell which it is talking
-         * to from here, and sending both means it does not have to.
-         */
-        history,
-        model,
-        timezone,
-        ...(options.conversationId ? { conversationId: options.conversationId } : {}),
-        ...(options.numCtx ? { numCtx: options.numCtx } : {}),
-        /* Item 12. Always sent, even at their defaults: an Atlas built before
-           this item ignores two fields it has never heard of, which is the
-           same behaviour as not sending them, and always sending means the
-           request body does not change shape with the dial. */
-        mode: options.mode ?? 'auto',
-        effort: options.effort ?? 'some',
-        /* Sent only when it changes, unlike the two above — see `skill` on the
-           options. `null` is a real value here ("turn it off") and must
-           survive the check, so this tests for `undefined` rather than
-           falsiness. An Atlas built before `/` ignores the field, which is the
-           same behaviour as never being sent it. */
-        ...(options.skill !== undefined ? { skill: options.skill } : {}),
-        /* Item 13A. Sent only when they apply, unlike the two above: an older
-           Atlas ignoring `mode` behaves the same as never being sent it, but
-           an older Atlas ignoring `resumeTurnId` would silently re-run the
-           original ask from the top — which is the double-write the resume
-           path exists to prevent. `resumedOnAnOlderAtlas` below is how the
-           page notices that and says so instead. */
-        ...(options.resumeTurnId ? { resumeTurnId: options.resumeTurnId } : {}),
-        ...(options.overMonthlyCeiling ? { overMonthlyCeiling: true } : {}),
-      }),
-      signal,
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') throw err;
-    // The laptop went to sleep, left the tailnet, or the certificate is not
-    // trusted. All the same to the user, and all the same fix: the fallback.
-    throw new AgentTransportError(
-      'Lost the laptop mid-answer. Start a new conversation and the basic assistant will pick it up.',
-      { detail: err instanceof Error ? err.message : String(err) },
-    );
-  }
-
-  if (!res.ok || !res.body) {
-    throw new AgentTransportError(`Atlas answered ${res.status}.`, { status: res.status });
-  }
 
   let done: Extract<AtlasEvent, { type: 'done' }> | null = null;
   let failure: AgentTransportError | null = null;
-  /* Item 13A. A turn stopped by the monthly ceiling sends no `done`, because
-     nothing was done — so the "stopped mid-answer" throw below has to know the
-     difference between that and a laptop that died. */
-  let ceilinged: { spent: number; limit: number; turns: number; model: string } | null = null;
 
-  await readSseStream(res.body, (payload) => {
-    const event = JSON.parse(payload) as AtlasEvent;
+  await feed((event) => {
     switch (event.type) {
       case 'text':
         onTextDelta?.(event.delta);
@@ -688,11 +599,6 @@ export async function runAtlasTurn(options: AtlasTurnOptions): Promise<AtlasTurn
       case 'notice':
         onNotice?.(event.message);
         break;
-      case 'ceiling':
-        // Item 13A. Nothing ran; the turn ends here unless he taps.
-        ceilinged = { spent: event.spent, limit: event.limit, turns: event.turns, model: event.model };
-        options.onMonthlyCeiling?.(ceilinged);
-        break;
       case 'done':
         done = event;
         break;
@@ -711,18 +617,6 @@ export async function runAtlasTurn(options: AtlasTurnOptions): Promise<AtlasTurn
   });
 
   if (failure !== null) throw failure;
-  if (done === null && ceilinged !== null) {
-    /*
-     * ITEM 13A: THE MONTHLY CEILING IS NOT A FAILURE (§3.4).
-     *
-     * The stream ended without a `done` because nothing ran — which is the
-     * same shape on the wire as a laptop dying mid-turn, and emphatically not
-     * the same event. `onMonthlyCeiling` has already fired and the page is
-     * drawing a card with a button; throwing here as well would put an error
-     * beside it saying Atlas broke, when Atlas did exactly what he asked it to.
-     */
-    throw new AtlasMonthlyCeilingReached(ceilinged);
-  }
   if (done === null) {
     throw new AgentTransportError('Atlas stopped mid-answer without finishing the turn.');
   }
@@ -737,23 +631,66 @@ export async function runAtlasTurn(options: AtlasTurnOptions): Promise<AtlasTurn
     stoppedAtIterationLimit: finished.stoppedAtIterationLimit,
     conversationId: finished.conversationId ?? null,
     conversationTitle: finished.conversationTitle ?? null,
-    /* An older Atlas sends neither. `unpriced` rather than free, because
-       "this host is too old to count" is not "this turn was free". */
-    cost:
-      finished.cost ??
-      {
-        rupees: null,
-        free: false,
-        unpriced: 'This Atlas is older than the cost it would have counted.',
-        basis: null,
-      },
-    pricesAsOf: finished.pricesAsOf ?? null,
-    /* Item 13A. An older Atlas sends neither, and `false`/`null` is right for
-       it: a host that has no ceilings never stopped at one. */
-    stoppedAtCeiling: finished.stoppedAtCeiling === true,
-    ceilingRupees: finished.ceilingRupees ?? null,
     logTurnId: finished.logTurnId ?? null,
   };
+}
+
+/**
+ * One turn, run on the laptop, streamed here.
+ *
+ * Shaped deliberately like `agent/core.ts`'s `runAgentTurn`, so `ChatPage`'s
+ * two branches read as the same shape rather than as two different screens:
+ * same `onTextDelta`, same `AbortSignal`, same returned history to feed back
+ * in next time.
+ *
+ * **The conversation is Atlas's now (item 10).** A `conversationId` names a
+ * file on the laptop, and Atlas's copy of the history is the one that counts —
+ * this browser's is sent as well, and Atlas ignores it when it has its own.
+ * That is not belt-and-braces: an Atlas built to item 9, or one whose data
+ * directory would not open, still needs the history from here, and the app
+ * cannot tell which it is talking to before the request goes out.
+ *
+ * **`turnId` is deliberately absent, and item 9 made that matter rather than
+ * settling it.** The app's own turns return the snapshot they wrote into, and
+ * Revert undoes them. Atlas has hands now and its turns really do write — 9D
+ * is what makes those writes visible here — but the ring is a Zustand store in
+ * *this browser* and an Atlas turn never touches it. What makes an Atlas write
+ * undoable is Atlas's own action log (DESIGN.md §5.3), which is item 13; until
+ * then an Atlas deletion is undone from `/trash`. Returning a `null` id here
+ * would suggest the ring is watching Atlas. It is not, and `ChangeList` says
+ * so in words rather than offering a button that cannot work.
+ */
+export async function runAtlasTurn(options: AtlasTurnOptions): Promise<AtlasTurn> {
+  const { baseUrl, signal } = options;
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chatBodyOf(options)),
+      signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    // The laptop went to sleep, left the tailnet, or the certificate is not
+    // trusted. All the same to the user, and all the same fix: send it again,
+    // and this device takes it — Atlas itself since BIG-12, when there is a
+    // key of his own for the model, the basic assistant when there is not.
+    throw new AgentTransportError(
+      'Lost the laptop mid-answer. Send it again and this device will pick it up.',
+      { detail: err instanceof Error ? err.message : String(err) },
+    );
+  }
+
+  if (!res.ok || !res.body) {
+    throw new AgentTransportError(`Atlas answered ${res.status}.`, { status: res.status });
+  }
+
+  const body = res.body;
+  return readAtlasEvents(options, (onEvent) =>
+    readSseStream(body, (payload) => onEvent(JSON.parse(payload) as AtlasEvent)),
+  );
 }
 
 // ─── The conversation list, and the catalog (item 10) ───────────────────────
@@ -1162,9 +1099,15 @@ export interface AtlasLogTurn {
   conversationTitle: string | null;
   model: string | null;
   provider: 'ollama' | 'gemini' | null;
-  costRupees: number | null;
   entries: AtlasLogEntry[];
   revertedAt: string | null;
+  /**
+   * BIG-12: read from the cloud copy, and it carries its undo — a turn Atlas
+   * ran on this tablet with the lid shut — so Revert can run here. Absent on
+   * the laptop's own route and on a laptop turn's cloud record, which keep
+   * their undo on the laptop.
+   */
+  revertibleHere?: boolean;
 }
 
 export interface AtlasLogDay {
@@ -1178,7 +1121,7 @@ export interface AtlasLogIndex {
   days: AtlasLogDay[];
   /** Today in Shreekant's zone, from Atlas — so the first section is named, not guessed. */
   today: string;
-  counts: { entries: number; undoable: number; spent: number; frontDoor: number };
+  counts: { entries: number; undoable: number; frontDoor: number };
   undoRetentionDays: number;
 }
 
@@ -1211,7 +1154,7 @@ export async function revertLogTurn(baseUrl: string, turnId: string): Promise<At
   })) as AtlasRevertResult;
 }
 
-// ─── Resumption and the ceilings (item 13A) ─────────────────────────────────
+// ─── Resumption (item 13A) ──────────────────────────────────────────────────
 
 /**
  * A turn Atlas was in the middle of when it stopped (DESIGN.md §5.5).
@@ -1261,33 +1204,3 @@ export async function fetchResumable(
   return body.turn ?? null;
 }
 
-export interface AtlasCeilings {
-  ceilings: { monthlyRupees: number; perTurnRupees: number };
-  month: { month: string; rupees: number; turns: number; unpriced: number };
-  /** Downshift (BUILD-12). Absent from an Atlas built before it. */
-  downshift?: boolean;
-  bounds: { monthly: { min: number; max: number }; perTurn: { min: number; max: number } };
-}
-
-export async function fetchCeilings(baseUrl: string, signal?: AbortSignal): Promise<AtlasCeilings> {
-  return (await memoryFetch(baseUrl, '/ceilings', { signal })) as AtlasCeilings;
-}
-
-/**
- * Moves one or both sliders.
- *
- * **The per-turn number is one setting drawn on two screens**, not two
- * settings — `atlas-host.html` puts both in the Money panel and `atlas.html`
- * repeats the per-turn one in the tuning popover, where a turn is about to
- * run. A value per screen would be two ceilings that disagree, with whichever
- * he happened to be looking at winning by accident.
- */
-export async function saveCeilings(
-  baseUrl: string,
-  next: { monthlyRupees?: number; perTurnRupees?: number; downshift?: boolean },
-): Promise<AtlasCeilings> {
-  return (await memoryFetch(baseUrl, '/ceilings', {
-    method: 'PATCH',
-    body: JSON.stringify(next),
-  })) as AtlasCeilings;
-}

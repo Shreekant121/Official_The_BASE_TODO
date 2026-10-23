@@ -100,6 +100,7 @@ export default function CustomDropdown<T extends string | number>({
       <PortalDropdown
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
+        onOpen={() => setIsOpen(true)}
         triggerRef={triggerRef}
         width={width}
         upward={upward}

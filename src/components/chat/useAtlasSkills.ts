@@ -1,9 +1,16 @@
 /* The `/` skills. Moved out of `pages/ChatPage.tsx` when it was
    split (BUILD-7). */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchSkills, type AtlasSkillHeader } from '../../lib/atlas/client';
+import type { AtlasSkillHeader } from '../../lib/atlas/client';
+import { loadSkills, type MemorySource } from '../../lib/atlas/memorySource';
 
-export function useAtlasSkills(onAtlas: boolean, atlasBase: string | null) {
+/**
+ * BIG-12 widened who asks: Atlas answers from the laptop or, with the lid
+ * shut, from this page — so `atlasAnswering` rather than "the laptop is
+ * answering", and the list comes from wherever the memory is being read
+ * (`memorySource.ts`: the laptop's route, or the cloud copy).
+ */
+export function useAtlasSkills(atlasAnswering: boolean, source: MemorySource | null) {
   /*
    * THE `/` SKILLS, AND WHY THIS ONE IS NOT REMEMBERED PER DEVICE.
    *
@@ -36,18 +43,18 @@ export function useAtlasSkills(onAtlas: boolean, atlasBase: string | null) {
      back, so a skill written on the Skills screen turns up in `/` without a
      reload — and emptied during render while it is away, so that until the
      re-read lands `/` offers nothing rather than a skill deleted meanwhile. */
-  if ((!onAtlas || atlasBase === null) && skillList.length > 0) setSkillList([]);
+  if ((!atlasAnswering || source === null) && skillList.length > 0) setSkillList([]);
 
   useEffect(() => {
-    if (!onAtlas || atlasBase === null) return;
+    if (!atlasAnswering || source === null) return;
     const controller = new AbortController();
-    void fetchSkills(atlasBase, controller.signal)
+    void loadSkills(source, controller.signal)
       .then((index) => setSkillList(index.skills))
       /* A laptop too old to have `/skills` leaves the list empty, which
          disables `/` rather than breaking the composer. */
       .catch(() => setSkillList([]));
     return () => controller.abort();
-  }, [atlasBase, onAtlas]);
+  }, [source, atlasAnswering]);
 
   return { skillList, activeSkill, setActiveSkill, pendingSkillRef, chooseSkill };
 }

@@ -42,10 +42,9 @@
  * its own rail. `components/chat/Composer.tsx` holds it, and the paragraph
  * above `EFFORT` there carries the measurement that removed the third
  * position — a redraw is not a new measurement, and Off still cannot be built
- * as drawn. Nothing else on this panel moved: the context slider and the
- * per-turn ceiling stay, which was **Shreekant's call on 2026-09-08** when the
- * new design deleted both.
- *
+ * as drawn. The context slider stayed, **Shreekant's call on 2026-09-08**
+ * when the new design deleted it. The per-turn spending ceiling beside it was
+ * removed with the rest of the AI spending (OPT-4, 2026-10-06).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Icon, MetaKicker, Slider } from '../../ui';
@@ -62,27 +61,12 @@ export interface TuningPopoverProps {
   /** Thousands of tokens. */
   contextK: number;
   onContextK: (k: number) => void;
-  /**
-   * The per-turn spending ceiling, in rupees (item 13A, §3.4).
-   *
-   * `null` when Atlas is too old to have one, or could not open the data
-   * directory it keeps it in — and then the whole block is left out rather
-   * than drawn at an invented number, which is the rule the readouts above
-   * already run on.
-   */
-  ceilingRupees: number | null;
-  onCeilingRupees: (rupees: number) => void;
-  /** The slider's own bounds, read from Atlas rather than repeated here. */
-  ceilingBounds: { min: number; max: number };
 }
 
 export function TuningPopover({
   model,
   contextK,
   onContextK,
-  ceilingRupees,
-  onCeilingRupees,
-  ceilingBounds,
 }: TuningPopoverProps) {
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
@@ -112,7 +96,7 @@ export function TuningPopover({
     <div ref={wrapper} style={{ position: 'relative', display: 'inline-flex', flex: '0 0 auto' }}>
       {/* A `DialPill`, not an `IconButton`: it is on the composer's dial row
           now and has to read as one of that row's items rather than as a
-          control someone left there. Same component Mode and Thinking use. */}
+          control someone left there. Same component Mode uses. */}
       <DialPill
         label="Customize"
         open={open}
@@ -123,7 +107,6 @@ export function TuningPopover({
       </DialPill>
 
       <div
-        className="ag-scroll"
         style={{
           /* ITEM 13G — IT OPENS UPWARD, because it moved (Shreekant's call,
              2026-09-08). This panel used to hang off an instrument bar at the
@@ -133,8 +116,7 @@ export function TuningPopover({
              is the same rule `Dial.tsx`'s popovers already follow and for the
              same reason. */
           position: 'absolute', bottom: 'calc(100% + var(--sp-4))', right: 0, width: 340, zIndex: 80,
-          padding: 'var(--sp-7)', display: 'grid', gap: 'var(--sp-7)',
-          maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', overscrollBehavior: 'contain',
+          display: 'grid',
           borderRadius: open ? 'var(--r-lg)' : 'var(--r-pill)',
           backgroundColor: 'oklch(0.145 0.004 260 / 0.97)', backgroundImage: 'var(--glass-fill-1)',
           border: '1px solid oklch(1 0 0 / 0.10)',
@@ -160,136 +142,93 @@ export function TuningPopover({
             `visibility 0s linear ${open ? '0s' : 'var(--dur-fast)'}`,
         }}
       >
-        <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
-            <MetaKicker>Context</MetaKicker>
-            <span style={{ flex: 1 }} />
-            <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)' }}>
-              {model === null ? 'managed' : `${chosen}K`}
-            </span>
-          </div>
+        {/* The glass above, the scrolling in here (OPT-10): no scrollbar, and
+            the end with more past it fades rather than being cut. A mask on
+            the glass itself would fade the panel's own edges away. */}
+        <div
+          className="ag-scroll ag-fade"
+          style={{
+            padding: 'var(--sp-7)', display: 'grid', gap: 'var(--sp-7)',
+            maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', overscrollBehavior: 'contain',
+          }}
+        >
+          <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
+              <MetaKicker>Context</MetaKicker>
+              <span style={{ flex: 1 }} />
+              <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)' }}>
+                {model === null ? 'managed' : `${chosen}K`}
+              </span>
+            </div>
 
-          {model === null ? (
-            /* Gemini manages its own window and there is no number to set. The
-               mockup says the same, and adds the line that matters more than
-               the setting does. */
-            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-              Gemini manages its own window. This slider is for the models on your laptop.
-            </span>
-          ) : (
-            <>
-              <Slider
-                min={0}
-                max={Math.max(0, steps.length - 1)}
-                step={1}
-                value={at}
-                onValueChange={(n) => onContextK(steps[n] ?? chosen)}
-                showValue={false}
-                label="Context length"
-                valueText={`${chosen} thousand tokens`}
-              />
-              <div
-                style={{
-                  display: 'flex', justifyContent: 'space-between',
-                  font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)',
-                }}
-              >
-                <span>{steps[0] ?? 8}K</span>
-                <span>{steps[steps.length - 1] ?? 64}K max</span>
-              </div>
-
-              {cost !== null && (
+            {model === null ? (
+              /* Gemini manages its own window and there is no number to set. The
+                 mockup says the same, and adds the line that matters more than
+                 the setting does. */
+              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                Gemini manages its own window. This slider is for the models on your laptop.
+              </span>
+            ) : (
+              <>
+                <Slider
+                  tone="violet"
+                  min={0}
+                  max={Math.max(0, steps.length - 1)}
+                  step={1}
+                  value={at}
+                  onValueChange={(n) => onContextK(steps[n] ?? chosen)}
+                  showValue={false}
+                  label="Context length"
+                  valueText={`${chosen} thousand tokens`}
+                />
                 <div
                   style={{
-                    display: 'grid', gap: 'var(--sp-2)', padding: 'var(--sp-5)',
-                    borderRadius: 'var(--r-sm)',
-                    backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+                    display: 'flex', justifyContent: 'space-between',
+                    font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)',
                   }}
                 >
-                  <span
+                  <span>{steps[0] ?? 8}K</span>
+                  <span>{steps[steps.length - 1] ?? 64}K max</span>
+                </div>
+
+                {cost !== null && (
+                  <div
                     style={{
-                      font: 'var(--type-numeric)', fontSize: 'var(--text-sm)',
-                      color: !cost.measured
-                        ? 'var(--fg-3)'
-                        : cost.onGpu === 100
-                          ? 'var(--accent)'
-                          : 'var(--status-review)',
+                      display: 'grid', gap: 'var(--sp-2)', padding: 'var(--sp-5)',
+                      borderRadius: 'var(--r-sm)',
+                      backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
                     }}
                   >
-                    {cost.headline}
-                  </span>
-                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-                    {cost.detail}
-                  </span>
-                  {cost.measured && (
-                    <MetaKicker>measured {CONTEXT_READINGS_TAKEN_ON}</MetaKicker>
-                  )}
-                </div>
-              )}
+                    <span
+                      style={{
+                        font: 'var(--type-numeric)', fontSize: 'var(--text-sm)',
+                        color: !cost.measured
+                          ? 'var(--fg-3)'
+                          : cost.onGpu === 100
+                            ? 'var(--job-lime)'
+                            : 'var(--status-warn)',
+                      }}
+                    >
+                      {cost.headline}
+                    </span>
+                    <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+                      {cost.detail}
+                    </span>
+                    {cost.measured && (
+                      <MetaKicker>measured {CONTEXT_READINGS_TAKEN_ON}</MetaKicker>
+                    )}
+                  </div>
+                )}
 
-              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-                The maximum is what this model declares. Atlas holds you to it — asking Ollama for more
-                is silently ignored and reported as success.
-              </span>
-            </>
-          )}
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
+                  The maximum is what this model declares. Atlas holds you to it — asking Ollama for more
+                  is silently ignored and reported as success.
+                </span>
+              </>
+            )}
         </div>
 
-        {/* ── The per-turn spending ceiling (item 13A, DESIGN.md §3.4) ──────
-            `atlas.html` puts it here, third in this panel, under the kicker
-            "Stop a turn at" — the same control the Money panel on
-            `/atlas-host` draws, because it is **one setting on two screens**
-            rather than two settings. A value per screen would be two ceilings
-            that disagree, with whichever he happened to be looking at winning
-            by accident.
-
-            Left out entirely rather than drawn inert when Atlas has no
-            ceilings to set. A slider parked on a number nothing reads is the
-            thing 9B's "not built" treatment existed to avoid, and it is worse
-            here than there: this one *looks* live because everything beside it
-            now is. */}
-        {ceilingRupees !== null && (
-          <>
-            <div style={{ height: 1, background: 'var(--line-faint)' }} />
-
-            <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)' }}>
-                <MetaKicker>Stop a turn at</MetaKicker>
-                <span style={{ flex: 1 }} />
-                <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)' }}>
-                  ₹{ceilingRupees}
-                </span>
-              </div>
-
-              <Slider
-                min={ceilingBounds.min}
-                max={ceilingBounds.max}
-                step={1}
-                value={ceilingRupees}
-                onValueChange={onCeilingRupees}
-                showValue={false}
-                label="Per-turn ceiling in rupees"
-                valueText={`${ceilingRupees} rupees`}
-              />
-
-              <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-                At the ceiling Atlas stops, says what it was doing, and offers to continue. Each tap
-                buys another ₹{ceilingRupees}.
-              </span>
-
-              {model !== null && (
-                /* The honest footnote this panel always writes. §3.4: "Local
-                   turns are ₹0.00, so it only ever bites Gemini." A ceiling
-                   that can never fire on the model in front of him should say
-                   so, rather than looking like a setting that is not working. */
-                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', textWrap: 'pretty' }}>
-                  This model runs on your laptop and costs nothing, so the ceiling never applies to it.
-                  It is here for the turns that go to Gemini.
-                </span>
-              )}
-            </div>
-          </>
-        )}
+        </div>
       </div>
     </div>
   );

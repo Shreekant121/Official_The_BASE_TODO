@@ -7,10 +7,14 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { useStore } from '../store/useStore';
+import { withoutStory } from '../store/storyActor';
 import { scheduleReconcile } from './notificationSync';
 import { scheduleShareReconcile } from './publicShare';
 import { useUIStore } from '../store/useUIStore';
 import { buildSyncPayload, hydrateFromPayload, type SyncPayload } from './syncPayload';
+import { markCloudLoaded } from './covers/useCoverSync';
+import { noteLocalSave } from './connectionWatch';
+import { forgetUnsent, mainUnsent } from './unsentEdits';
 
 /**
  * Exactly what gets written to `users/{uid}/data/main` — the whole app, in one
@@ -147,6 +151,7 @@ export function useFirestoreSync(uid: string | null, getGoogleToken: () => strin
             );
             hasLoadedOnceRef.current = true;
             writeStoreOwnerUid(uid);
+            markCloudLoaded(uid, 'main');
             return;
           }
 
@@ -164,17 +169,34 @@ export function useFirestoreSync(uid: string | null, getGoogleToken: () => strin
           // offline, or written in the moments before this snapshot arrived)
           // are kept alongside the cloud's — but only when the local store is
           // this same user's, never across an account switch.
-          const localFocusLog =
-            readStoreOwnerUid() === uid ? useStore.getState().focusLog : undefined;
+          const ownStore = readStoreOwnerUid() === uid;
+          const localFocusLog = ownStore ? useStore.getState().focusLog : undefined;
+
+          // FIX-15: changes this device made that the cloud never confirmed
+          // (offline, then the tab died) are laid over the cloud's copy on
+          // the first read, and saved, instead of being thrown away by it.
+          // Another account's stores: its unsent lists are no use to this one.
+          if (!hasLoadedOnceRef.current && !ownStore) forgetUnsent();
+          const unsent = !hasLoadedOnceRef.current && ownStore ? mainUnsent.read(uid) : null;
 
           // One reader of this document is `mcp/` on the laptop, and both
           // write the whole payload back — so the defaults and the two
           // migrations live in `syncPayload.ts` rather than here, where they
           // could drift apart and overwrite each other. See its own note.
-          useStore.setState(hydrateFromPayload(data, localFocusLog));
+          // 29-1P9c: the device that made these changes recorded them in
+          // their tasks' stories; adopting them here is not an edit.
+          const cloud = hydrateFromPayload(data, localFocusLog);
+          const next = unsent ? mainUnsent.merge(cloud, useStore.getState(), unsent) : cloud;
+          withoutStory(() => useStore.setState(next));
+          if (unsent) {
+            const seq = mainUnsent.seq(uid);
+            pushToFirestore(uid, buildSyncPayload(useStore.getState()), () => getGoogleTokenRef.current())
+              .then((ok) => ok && mainUnsent.confirmed(uid, seq));
+          }
 
           hasLoadedOnceRef.current = true;
           writeStoreOwnerUid(uid);
+          markCloudLoaded(uid, 'main');
 
           setTimeout(() => {
             isSyncingFromFirestore.current = false;
@@ -247,13 +269,19 @@ export function useFirestoreSync(uid: string | null, getGoogleToken: () => strin
         clearTimeout(timer);
         timer = null;
       }
-      pushToFirestore(uid, data, () => getGoogleTokenRef.current());
+      // 29-1P14d1: the offline pill counts these as his changes waiting.
+      noteLocalSave();
+      const seq = mainUnsent.seq(uid);
+      pushToFirestore(uid, data, () => getGoogleTokenRef.current()).then((ok) => ok && mainUnsent.confirmed(uid, seq));
     };
 
-    const unsub = useStore.subscribe((state) => {
+    const unsub = useStore.subscribe((state, prev) => {
       if (isSyncingFromFirestore.current) return;
       if (!hasLoadedOnceRef.current) return;
 
+      // FIX-15: noted in localStorage at once, before the debounce, so a tab
+      // killed inside the 1.5 s window still knows what it changed.
+      mainUnsent.track(uid, prev, state);
       pending = buildSyncPayload(state);
 
       if (timer) clearTimeout(timer);
@@ -279,7 +307,8 @@ export function useFirestoreSync(uid: string | null, getGoogleToken: () => strin
   }, [uid]);
 }
 
-async function pushToFirestore(uid: string, data: SyncPayload, getGoogleToken: () => string | null) {
+/** True once the server has confirmed the save (never, for a tab that dies offline). */
+async function pushToFirestore(uid: string, data: SyncPayload, getGoogleToken: () => string | null): Promise<boolean> {
   try {
     await setDoc(doc(db, 'users', uid, 'data', 'main'), data, { merge: true });
     useUIStore.getState().setCloudSyncOk(true);
@@ -293,8 +322,10 @@ async function pushToFirestore(uid: string, data: SyncPayload, getGoogleToken: (
       backlogTasks: data.backlogTasks,
       focusLog: data.focusLog,
     });
+    return true;
   } catch (err) {
     console.error('Failed to sync data to Firestore:', err);
     useUIStore.getState().setCloudSyncOk(false);
+    return false;
   }
 }

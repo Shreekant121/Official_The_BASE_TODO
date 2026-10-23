@@ -9,8 +9,9 @@
  * `Mono` is not here: the app already has `.ag-tnum` and `--type-numeric`,
  * and a component whose whole body is two style properties earns nothing.
  */
-import type { CSSProperties, ReactNode } from 'react';
-import { Icon, type IconName } from '../../ui';
+import { useRef, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { Icon, TickBox, type IconName } from '../../ui';
+import { pressTick } from './pressTick';
 
 /**
  * A measured fact: a 13px glyph and a mono value beside it.
@@ -24,10 +25,12 @@ import { Icon, type IconName } from '../../ui';
  * never had the problem: `--type-numeric` is mono without being uppercase, so
  * a rule and a duration can sit in one face and neither shouts.
  */
-export function Fact({ icon, children, tone = 'var(--fg-3)', title }: {
+export function Fact({ icon, children, tone = 'var(--fg-3)', iconTone, title }: {
   icon: IconName;
   children: ReactNode;
   tone?: string;
+  /** The glyph's own ink, over `tone`: a date's calendar is sky (29-1P2c2). */
+  iconTone?: string;
   title?: string;
 }) {
   return (
@@ -35,7 +38,7 @@ export function Fact({ icon, children, tone = 'var(--fg-3)', title }: {
       title={title}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: tone, minWidth: 0 }}
     >
-      <Icon name={icon} size={13} style={{ flex: '0 0 auto', color: 'inherit' }} />
+      <Icon name={icon} size={13} style={{ flex: '0 0 auto', color: iconTone ?? 'inherit' }} />
       <span
         style={{
           font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: tone,
@@ -49,32 +52,11 @@ export function Fact({ icon, children, tone = 'var(--fg-3)', title }: {
   );
 }
 
-/** A tag, on a carved well. Never a `StatusPill`: a tag is not a state.
- *  Never wider than the row it sits in: a tag is one unbroken word, and a long
- *  one ran past the card's edge and was cut off there. It ellipsizes instead,
- *  and keeps its own width otherwise (`flexShrink: 0`), so the list view's
- *  single tag line still clips extra tags rather than squeezing all of them. */
-export function Tag({ children }: { children: ReactNode }) {
-  return (
-    <span
-      style={{
-        font: 'var(--type-kicker)', color: 'var(--fg-3)', letterSpacing: '0.02em',
-        padding: '3px var(--sp-3)', borderRadius: 'var(--r-pill)',
-        backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
-        whiteSpace: 'nowrap',
-        flexShrink: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
 /**
  * A hairline trough. Two jobs on this screen, both the mockup's: subtask
  * progress on a card, and list completion in a column header.
  */
-export function Meter({ pct, tone = 'var(--accent)', height = 3, style }: {
+export function Meter({ pct, tone = 'var(--job-lime)', height = 3, style }: {
   pct: number;
   tone?: string;
   height?: number;
@@ -152,10 +134,15 @@ export function Tick({ done, label, onToggle, locked = false }: {
   /** Waiting on unfinished work — `isTaskLocked` from the store. */
   locked?: boolean;
 }) {
+  const box = useRef<HTMLSpanElement>(null);
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); if (!locked) onToggle(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (locked) return;
+        pressTick(box.current, done, onToggle);
+      }}
       disabled={locked}
       aria-label={label}
       aria-pressed={done}
@@ -166,35 +153,8 @@ export function Tick({ done, label, onToggle, locked = false }: {
         cursor: locked ? 'not-allowed' : 'pointer',
       }}
     >
-      <span
-        style={{
-          display: 'grid', placeItems: 'center', width: 24, height: 24,
-          borderRadius: 'var(--r-xs)',
-          backgroundImage: 'var(--glass-well)',
-          boxShadow: locked ? 'var(--glass-well-shadow)'
-            : done ? 'var(--glass-well-shadow), inset 0 0 0 1px var(--accent-hairline)'
-              : 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
-          color: 'var(--fg-4)',
-          transition: 'box-shadow var(--dur-base) var(--ease-glass)',
-        }}
-      >
-        {locked ? (
-          <Icon name="lock" size={14} style={{ color: 'inherit' }} />
-        ) : (
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-            <path
-              d="M3.5 8.5 L6.5 11.5 L12.5 4.5"
-              fill="none" stroke="var(--accent)" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round"
-              style={{
-                strokeDasharray: 16,
-                strokeDashoffset: done ? 0 : 16,
-                transition: 'stroke-dashoffset var(--dur-base) var(--ease-glass)',
-              }}
-            />
-          </svg>
-        )}
-      </span>
+      {/* The drawing is shared since 29-1P4b — every done box is this one. */}
+      <TickBox ref={box} done={done} locked={locked} />
     </button>
   );
 }
@@ -226,6 +186,24 @@ export function RepeatCount({ count }: { count: number }) {
 }
 
 /**
+ * A milestone's mark (29-1P9b, idea 155): a small flag before the title, so a
+ * big step reads as one on its card and in the list view. Plain ink — the
+ * milestone line behind "40% done" is where its state is coloured.
+ */
+export function MilestoneMark() {
+  return (
+    <span
+      title="Milestone"
+      aria-label="Milestone"
+      role="img"
+      style={{ display: 'inline-flex', verticalAlign: '-1px', marginRight: 6, color: 'var(--fg-2)' }}
+    >
+      <Icon name="flag-triangle-right" size={13} style={{ color: 'inherit' }} />
+    </span>
+  );
+}
+
+/**
  * What this task is waiting on, named.
  *
  * The mockup's note is the whole argument: *"Blocked is stated, not shouted:
@@ -239,20 +217,69 @@ export function RepeatCount({ count }: { count: number }) {
  * cannot act on. The chip is a `--glass-well` and the blocker's *name* is the
  * information.
  */
-export function BlockedLine({ on, extra, title }: {
+/**
+ * A part of a card that folds away (idea 159, the densities): the row it
+ * sits in closes from `1fr` to `0fr`, a CSS transition, so a density switch
+ * shrinks every card at once without a frame of script per row. Its spacing
+ * is `gap` INSIDE and `paddingTop` above, never the parent's `gap` — a
+ * parent's gap would stay behind a closed fold and keep the card tall. A
+ * closed fold is `inert`, so the keyboard never lands on what it hides.
+ * Render one only when it has something in it.
+ */
+export function Fold({ open, gap = 'var(--sp-3)', children }: {
+  open: boolean;
+  gap?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      inert={!open}
+      style={{
+        display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0,
+        transition: 'grid-template-rows var(--dur-base) var(--ease-glide), opacity var(--dur-fast) var(--ease-glass)',
+      }}
+    >
+      {/* `clip` with a margin while open, not `hidden`: a step track's tall
+          tap area and a focus ring reach a few px past the fold, and `hidden`
+          cut both off (and their hit area with them). Closed, the margin goes
+          to zero so nothing peeks out of a shut fold. */}
+      <div style={{ minHeight: 0, minWidth: 0, overflow: 'clip', overflowClipMargin: open ? 12 : 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap, paddingTop: gap }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function BlockedLine({ on, extra, title, onPress }: {
   on: string;
   /** How many further prerequisites there are, if more than one. */
   extra?: number;
   title?: string;
+  /**
+   * 29-1P7c (idea 164): a press draws the wire to what it waits on — the
+   * tablet's way in, where nothing hovers. A button then, so the press is
+   * the line's own and never opens the card's sheet (`cardPress.ts`).
+   */
+  onPress?: () => void;
 }) {
+  const Tag = onPress ? 'button' : 'span';
   return (
-    <span
+    <Tag
+      {...(onPress ? {
+        type: 'button' as const,
+        'data-wire-pin': '',
+        onClick: (e: MouseEvent) => { e.stopPropagation(); onPress(); },
+      } : {})}
       title={title}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0,
         padding: '4px var(--sp-4) 4px var(--sp-3)', borderRadius: 'var(--r-pill)',
         backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
         color: 'var(--fg-3)',
+        border: 0, backgroundColor: 'transparent', font: 'inherit', textAlign: 'left',
+        cursor: onPress ? 'pointer' : undefined,
       }}
     >
       <Icon name="lock" size={13} style={{ flex: '0 0 auto', color: 'inherit' }} />
@@ -263,6 +290,6 @@ export function BlockedLine({ on, extra, title }: {
         Waiting on <span style={{ color: 'var(--fg-2)' }}>{on}</span>
         {extra ? <span style={{ color: 'var(--fg-4)' }}> +{extra} more</span> : null}
       </span>
-    </span>
+    </Tag>
   );
 }

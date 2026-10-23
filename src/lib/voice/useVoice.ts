@@ -7,7 +7,8 @@
  * than no voice is two implementations of it that drift.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { readDeviceValue, writeDeviceValue, VOICE_URI_KEY } from '../atlas/devicePrefs';
+import { create } from 'zustand';
+import { readDeviceValue, writeDeviceValue, SPEAK_REPLIES_KEY, VOICE_URI_KEY } from '../atlas/devicePrefs';
 import {
   dictationSupported,
   startDictation,
@@ -16,6 +17,12 @@ import {
 } from './recognition';
 import { onVoicesReady, stopSpeaking, synthesisSupported, voices, type VoiceChoice } from './synthesis';
 
+/**
+ * How long the microphone may stay open in one go: two minutes, his call
+ * (2026-10-15, 29-1P15d). Dictation here and dock mode's sentence both obey it.
+ */
+export const MIC_CAP_MS = 2 * 60 * 1000;
+
 export interface Dictation {
   /** Whether to draw the button at all. */
   supported: boolean;
@@ -23,6 +30,10 @@ export interface Dictation {
   /** The words so far, including the part he is still saying. */
   heard: string;
   error: DictationError | null;
+  /** When the microphone opened (`Date.now()`), for the mic's timer (29-1P15d). */
+  startedAt: number | null;
+  /** When a heard sentence last landed in the field, for the mic's lime "got it". */
+  landedAt: number | null;
   start: () => void;
   stop: () => void;
   /** Clears a message without starting again. */
@@ -43,7 +54,20 @@ export function useDictation(onFinal: (text: string) => void): Dictation {
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState('');
   const [error, setError] = useState<DictationError | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [landedAt, setLandedAt] = useState<number | null>(null);
   const session = useRef<DictationSession | null>(null);
+  /* Two minutes and the microphone closes on its own (29-1P15d, his call):
+     a mic left open by mistake would otherwise listen to the room until the
+     engine gave up, which on some engines is never. Stopping is the same as
+     his second tap, so what was heard still lands in the field. */
+  const cap = useRef<number | null>(null);
+  const clearCap = () => {
+    if (cap.current !== null) {
+      window.clearTimeout(cap.current);
+      cap.current = null;
+    }
+  };
   /* The callback is read through a ref so that `start` does not change
      identity every time the composer's draft changes — without it, every
      keystroke would tear down a live microphone. Written in an effect rather
@@ -56,6 +80,7 @@ export function useDictation(onFinal: (text: string) => void): Dictation {
   const latest = useRef('');
 
   const stop = useCallback(() => {
+    clearCap();
     session.current?.stop();
     session.current = null;
     setListening(false);
@@ -77,41 +102,85 @@ export function useDictation(onFinal: (text: string) => void): Dictation {
     session.current = startDictation(
       { continuous: false },
       {
-        onStart: () => setListening(true),
+        onStart: () => {
+          setStartedAt(Date.now());
+          setListening(true);
+        },
         onTranscript: (text) => {
           latest.current = text;
           setHeard(text);
         },
         onError: (err) => setError(err),
         onEnd: () => {
+          clearCap();
           session.current = null;
           setListening(false);
           const finished = latest.current.trim();
           latest.current = '';
           setHeard('');
-          if (finished !== '') sink.current(finished);
+          if (finished !== '') {
+            setLandedAt(Date.now());
+            sink.current(finished);
+          }
         },
       },
     );
     /* `startDictation` returning null already reported why. Clearing the flag
        here stops the button sticking in a listening state that never ends. */
     if (session.current === null) setListening(false);
+    else cap.current = window.setTimeout(stop, MIC_CAP_MS);
   }, [stop]);
 
   /* A live microphone must not outlive the screen. Without this, leaving the
      chat page keeps the tablet listening with no way to see that it is. */
-  useEffect(() => () => session.current?.abort(), []);
+  useEffect(
+    () => () => {
+      clearCap();
+      session.current?.abort();
+    },
+    [],
+  );
 
   return {
     supported: dictationSupported(),
     listening,
     heard,
     error,
+    startedAt,
+    landedAt,
     start,
     stop,
     dismiss: () => setError(null),
   };
 }
+
+/**
+ * The two voice settings, in one store rather than in each screen's state
+ * (OPT-8). They are set in Settings → Atlas now and read by the chat, and the
+ * chat is a kept screen (`App.tsx`'s `KEPT_SCREENS`): state copied out of
+ * localStorage when it first mounted would go on speaking in last week's voice.
+ */
+export const useVoicePrefs = create<{
+  /** The stored `voiceURI`, or `null` for the device default. */
+  chosen: string | null;
+  /** Whether ordinary replies are read aloud. Off unless set; dock mode ignores it. */
+  speakReplies: boolean;
+  choose: (uri: string | null) => void;
+  chooseSpeakReplies: (on: boolean) => void;
+}>()((set) => ({
+  chosen: readDeviceValue(VOICE_URI_KEY),
+  speakReplies: readDeviceValue(SPEAK_REPLIES_KEY) === '1',
+  choose: (uri) => {
+    writeDeviceValue(VOICE_URI_KEY, uri);
+    stopSpeaking();
+    set({ chosen: uri });
+  },
+  chooseSpeakReplies: (on) => {
+    writeDeviceValue(SPEAK_REPLIES_KEY, on ? '1' : null);
+    if (!on) stopSpeaking();
+    set({ speakReplies: on });
+  },
+}));
 
 export interface VoiceChoiceState {
   supported: boolean;
@@ -133,7 +202,8 @@ export interface VoiceChoiceState {
  */
 export function useVoiceChoice(): VoiceChoiceState {
   const [all, setAll] = useState<VoiceChoice[]>(() => voices());
-  const [chosen, setChosen] = useState<string | null>(() => readDeviceValue(VOICE_URI_KEY));
+  const chosen = useVoicePrefs((s) => s.chosen);
+  const choose = useVoicePrefs((s) => s.choose);
 
   useEffect(() => {
     /*
@@ -146,12 +216,6 @@ export function useVoiceChoice(): VoiceChoiceState {
      * render for a value the subscription is about to deliver anyway.
      */
     return onVoicesReady(() => setAll(voices()));
-  }, []);
-
-  const choose = useCallback((uri: string | null) => {
-    setChosen(uri);
-    writeDeviceValue(VOICE_URI_KEY, uri);
-    stopSpeaking();
   }, []);
 
   const match = chosen === null ? undefined : all.find((voice) => voice.uri === chosen);

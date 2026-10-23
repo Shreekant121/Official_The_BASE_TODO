@@ -20,6 +20,12 @@
  * One-way sync only: Mutineer -> Google. Edits made directly in Google
  * Calendar/Tasks are never read back.
  *
+ * **Events ride the same pass since 29-2c1** (`lib/events/eventCalendar.ts`
+ * says what one looks like on Google): the same read, the same batch, their
+ * own `e1` prefix for the sweep, written whole with PUT. They are written and
+ * swept only once the events document has been read this session
+ * (`eventsReadFor`), for the reason an empty backlog does not sweep.
+ *
  * WHY THE PASS IS A DIFF NOW, AND NOT A LOOP (item 3)
  * ---------------------------------------------------
  * The event used to be one minute long, written only for a task whose
@@ -93,7 +99,7 @@ import {
 } from './notifications';
 import { useUIStore } from '../store/useUIStore';
 import { resolveUserTimeZone } from './agent/dates';
-import { formatRRule, parseRRule } from './recurrence';
+import { rruleLines, sameInstant, sameReminders, sameZone } from './calendarDiff';
 import { logDiag } from './googleDiagnostics';
 import { DEADLINE_EVENT_PREFIX, deadlineEventId, deadlineBlockFor, type DeadlineBlock } from './deadlineReminder';
 import {
@@ -107,6 +113,16 @@ import {
   type SyncFailureState,
 } from './calendarRetry';
 import type { Task } from '../store/useStore';
+import { eventsReadFor } from '../store/useEventStore';
+import type { BaseEvent } from './events/events';
+import {
+  EVENT_CALENDAR_PREFIX,
+  eventCalendarBody,
+  eventCalendarId,
+  eventCalendarMatches,
+  eventWriteBody,
+  type EventCalendarBody,
+} from './events/eventCalendar';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -226,6 +242,31 @@ interface DesiredBlock {
   body: EventBody;
 }
 
+/** 29-2c1: one of his events, as Google should hold it. */
+interface DesiredEvent {
+  event: BaseEvent;
+  /** The batch key, `event:<id>`, so a result can never be mistaken for a task's. */
+  key: string;
+  calendarEventId: string;
+  body: EventCalendarBody;
+}
+
+function eventWrite(desired: DesiredEvent, eventsPath: string, exists: boolean): CalendarWrite {
+  return exists
+    ? {
+        key: desired.key,
+        method: 'PUT',
+        path: `${eventsPath}/${desired.calendarEventId}`,
+        body: { ...eventWriteBody(desired.body), status: 'confirmed' },
+      }
+    : {
+        key: desired.key,
+        method: 'POST',
+        path: eventsPath,
+        body: { id: desired.calendarEventId, ...eventWriteBody(desired.body) },
+      };
+}
+
 function eventBodyFor(block: DeadlineBlock, timeZone: string): EventBody {
   const repeats = block.recurrence !== null;
   return {
@@ -268,66 +309,6 @@ function writeBodyFor(body: EventBody, method: 'POST' | 'PATCH'): Record<string,
   const { recurrence, ...rest } = body;
   if (recurrence.length > 0) return { ...rest, recurrence };
   return method === 'POST' ? rest : { ...rest, recurrence: null };
-}
-
-/** Two timestamps for the same instant, however each side chose to spell it (`…Z` vs `+05:30`). */
-function sameInstant(a: string | undefined, b: string): boolean {
-  if (!a) return false;
-  const left = Date.parse(a);
-  return !Number.isNaN(left) && left === Date.parse(b);
-}
-
-function sameReminders(existing: GoogleCalendarEvent['reminders'], desired: EventReminders): boolean {
-  if (existing?.useDefault !== false) return false;
-  const have = existing.overrides ?? [];
-  if (have.length !== desired.overrides.length) return false;
-  return desired.overrides.every(
-    (want, i) => have[i]?.method === want.method && have[i]?.minutes === want.minutes,
-  );
-}
-
-/**
- * The `RRULE` lines of a recurrence list, each said one way.
- *
- * Compared through the parser rather than as raw strings because Google is
- * entitled to give a rule back in its own spelling — parts reordered, a
- * redundant `INTERVAL=1` dropped — and a string comparison would read every
- * one of those as a difference and rewrite the event on every single pass, for
- * ever. `parseRRule`/`formatRRule` is the app's own canonical form and both
- * sides go through it.
- *
- * `EXDATE`/`RDATE` lines are **ignored, not matched**. Google adds one when
- * somebody deletes a single occurrence in its UI, and the app has no opinion
- * about individual occurrences — only about the pattern. Counting them as a
- * difference would un-delete that occurrence on the next pass, which is a
- * fight with the user over something the app never claimed to own.
- */
-function rruleLines(lines: string[] | undefined): string {
-  return (lines ?? [])
-    .filter((line) => /^RRULE[:;]/i.test(line.trim()))
-    .map((line) => {
-      const rule = parseRRule(line);
-      return rule ? formatRRule(rule) : line.trim().toUpperCase();
-    })
-    .join('|');
-}
-
-/**
- * The zone a repeat expands in. Only asked about when the block being written
- * actually has one: a block with no `timeZone` of its own has no opinion, and
- * demanding Google hold none either would rewrite for ever an event that kept
- * a stale zone from back when it repeated — harmless on a single event, whose
- * `dateTime` carries its own offset.
- *
- * Compared as written, not canonicalised. Two IANA names for one zone
- * (`Asia/Calcutta`, `Asia/Kolkata`) would read as a difference, and browsers
- * disagree about which of them `Intl` hands back, so there is no canonical
- * form to compare *to*. Google echoes what it was sent, which makes this
- * stable in practice — if `reconcile_ok` ever starts logging a write on every
- * single pass with nothing changing, this is the line to suspect first.
- */
-function sameZone(existing: string | undefined, desired: string | undefined): boolean {
-  return desired === undefined || existing === desired;
 }
 
 /**
@@ -591,6 +572,8 @@ async function runReconcilePass(
   backlogTasks: Task[],
   token: string | null,
   settings: NotificationSettings,
+  /** His events, or `null` while their document has not been read this session: then they are left alone. */
+  events: BaseEvent[] | null,
 ): Promise<PassOutcome> {
   // One answer for the whole pass, and the same one `recurrence.ts` uses when
   // it works out the successor's dates — a repeat that expanded in a different
@@ -636,6 +619,17 @@ async function runReconcilePass(
     });
   }
 
+  // 29-2c1: each event claims its id by having an entry to draw, which is
+  // false for all of them while notifications are switched off — so the off
+  // switch sweeps events as it sweeps task blocks.
+  const desiredEvents: DesiredEvent[] = [];
+  for (const event of events ?? []) {
+    const body = eventCalendarBody(event, settings, timeZone);
+    if (body) desiredEvents.push({ event, key: `event:${event.id}`, calendarEventId: eventCalendarId(event.id), body });
+  }
+  const claimedEvents = new Set(desiredEvents.map((d) => d.calendarEventId));
+  const ringingEvents = desiredEvents.filter((d) => d.body.reminders.overrides.length > 0).length;
+
   if (!token) {
     // Disconnected → go quiet. No banner, and crucially NO per-task "failed"
     // history row (that used to write one row for every eligible task on
@@ -643,7 +637,7 @@ async function runReconcilePass(
     // actually something waiting to be delivered, and log a single deduped
     // diagnostic. The whole eligible set is re-attempted on the next
     // reconcile once a token exists, so this flag is the pending-sync queue.
-    const waiting = desiredBlocks.filter((d) => d.block.reminds).length;
+    const waiting = desiredBlocks.filter((d) => d.block.reminds).length + ringingEvents;
     reportNeedsReconnect(waiting > 0);
     if (waiting > 0) {
       logDiag({
@@ -665,7 +659,7 @@ async function runReconcilePass(
     // because the laptop is offline and one that could not be opened because
     // the scope is gone are not the same event and used to be the same
     // silence.
-    reportNeedsReconnect(desiredBlocks.some((d) => d.block.reminds));
+    reportNeedsReconnect(desiredBlocks.some((d) => d.block.reminds) || ringingEvents > 0);
     return {
       kind: 'failed',
       reason: calendar.message,
@@ -735,6 +729,12 @@ async function runReconcilePass(
     );
   }
 
+  for (const desired of desiredEvents) {
+    const existing = existingEvents.get(desired.calendarEventId);
+    if (existing && eventCalendarMatches(existing, desired.body)) continue;
+    writes.push(eventWrite(desired, eventsPath, existing !== undefined));
+  }
+
   // Orphans: an event under our own prefix that no live task claims — a task
   // deleted while Google was unreachable, or one that lost its deadline.
   // Scoped to `d1` on purpose: `d4` is `reminders.ts`, which owns its whole
@@ -760,6 +760,15 @@ async function runReconcilePass(
       writes.push({ key: `orphan:${event.id}`, method: 'DELETE', path: `${eventsPath}/${event.id}` });
     }
   }
+  // 29-2c1: an event deleted in BASE, under its own prefix and by the same
+  // two rules — never an instance broken out of a series, never a ghost.
+  if (events !== null) {
+    for (const event of existingEvents.values()) {
+      if (!event.id.startsWith(EVENT_CALENDAR_PREFIX) || event.recurringEventId) continue;
+      if (claimedEvents.has(event.id) || event.status === 'cancelled') continue;
+      writes.push({ key: `orphan:${event.id}`, method: 'DELETE', path: `${eventsPath}/${event.id}` });
+    }
+  }
 
   const results = await runCalendarWrites(token, writes);
 
@@ -777,6 +786,10 @@ async function runReconcilePass(
         path: `${eventsPath}/${d.eventId}`,
         body: { ...writeBodyFor(d.body, 'PATCH'), status: 'confirmed' },
       }));
+    for (const r of conflicted) {
+      const desired = desiredEvents.find((d) => d.key === r.key);
+      if (desired) retries.push(eventWrite(desired, eventsPath, true));
+    }
     const retried = await runCalendarWrites(token, retries);
     for (const result of retried) {
       const index = results.findIndex((r) => r.key === result.key);
@@ -957,7 +970,7 @@ async function runReconcile(
   let outcome: PassOutcome;
   try {
     settings = await fetchNotificationSettings(uid);
-    outcome = await runReconcilePass(uid, backlogTasks, getToken(), settings);
+    outcome = await runReconcilePass(uid, backlogTasks, getToken(), settings, eventsReadFor(uid));
   } catch (err) {
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     logDiag({

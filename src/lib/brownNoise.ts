@@ -63,6 +63,8 @@ export interface NoisePrefs {
   mode: NoiseMode;
   focusMinutes: number;
   breakMinutes: number;
+  /** Every fourth break's length (29-1P11a, idea 104). */
+  longBreakMinutes: number;
 }
 
 export const DEFAULT_NOISE_PREFS: NoisePrefs = {
@@ -74,6 +76,7 @@ export const DEFAULT_NOISE_PREFS: NoisePrefs = {
   mode: 'task',
   focusMinutes: 30,
   breakMinutes: 5,
+  longBreakMinutes: 15,
 };
 
 const PREFS_KEY = 'mutineer_noise_prefs';

@@ -27,7 +27,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStore, type Task } from './useStore';
 import {
-  useFocusRun, subjectOf, taskSecondsLeft, sessionSecondsLeft,
+  useFocusRun, subjectOf, taskSecondsLeft, sessionSecondsLeft, finishHead,
 } from './useFocusRun';
 
 const START = new Date('2026-09-15T09:00:00Z').getTime();
@@ -52,6 +52,9 @@ beforeEach(() => {
     task: null, running: false, allocated: 0, sessionAllocated: 0,
     taskZeroAt: 0, taskLeft: 0, sessionZeroAt: 0, sessionLeft: 0,
     segmentStartedAt: null, runningSince: null, muted: false,
+    begun: false, settleUntil: null, taskBegun: false, taskSince: 0, intent: '',
+    away: null, halfwaySeenFor: null,
+    pauses: 0, closed: [], stepsTicked: 0, ideasCaptured: 0,
   });
 });
 
@@ -122,12 +125,13 @@ describe('the focus log', () => {
     expect(log()[0]).toMatchObject({ taskId: 't1', taskTitle: 'Write the proposal', seconds: 742 });
   });
 
-  it('carries the snapshot fields a log entry needs', () => {
-    run().attach(subjectOf(task({ tags: ['deep'], skillId: 'sk1' })), 600, 14400);
+  it('carries the snapshot fields a log entry needs, and no skill (FIX-12)', () => {
+    run().attach(subjectOf(task({ skillId: 'sk1' })), 600, 14400);
     run().resume();
     advance(60);
     run().pause();
-    expect(log()[0]).toMatchObject({ listId: 'l1', tags: ['deep'], skillId: 'sk1' });
+    expect(log()[0]).toMatchObject({ listId: 'l1' });
+    expect(log()[0]).not.toHaveProperty('skillId');
   });
 
   it('does not bank the same stretch twice', () => {
@@ -240,5 +244,303 @@ describe('mute', () => {
     run().setMuted(true);
     run().attach(subjectOf(task({ id: 't2' })), 600, 14400);
     expect(run().muted).toBe(true);
+  });
+});
+
+// ─── 5. 29-1P10a: the breath, and what done looks like ───────────────────────
+
+describe('the breath before a session (idea 95)', () => {
+  it('holds the clock for five seconds on the first Start, then runs it', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().start();
+    expect(run().running).toBe(false);
+    expect(run().settleUntil).toBe(START + 5000);
+
+    /* FocusRunHost's timer is what starts it; the store only says when. */
+    advance(5);
+    run().resume();
+    expect(run().running).toBe(true);
+    expect(run().settleUntil).toBeNull();
+    /* The breath is not focus: the clock starts full. */
+    expect(taskSecondsLeft(run())).toBe(1500);
+  });
+
+  it('a second press during the breath skips it', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().start();
+    run().start();
+    expect(run().running).toBe(true);
+    expect(run().settleUntil).toBeNull();
+  });
+
+  it('breathes once a session — not after a pause, not on the next task', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().start();
+    run().resume();
+    run().pause();
+    run().start();
+    expect(run().running).toBe(true);
+
+    run().attach(subjectOf(task({ id: 't2' })), 600, 14400);
+    run().pause();
+    run().start();
+    expect(run().running).toBe(true);
+    expect(run().settleUntil).toBeNull();
+  });
+
+  it('breathes again once the session is cleared and a new one starts', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().start();
+    run().resume();
+    run().clear();
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().start();
+    expect(run().running).toBe(false);
+    expect(run().settleUntil).not.toBeNull();
+  });
+});
+
+describe('what done looks like (idea 96)', () => {
+  it('keeps the line and the answer on the last stretch only', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().setIntent('  uploaded the   signed forms ');
+    run().resume();
+    advance(300);
+    run().pause();
+    run().resume();
+    advance(200);
+    run().finish('partly');
+
+    expect(log()).toHaveLength(2);
+    expect(log()[0].intent).toBeUndefined();
+    expect(log()[1]).toMatchObject({ seconds: 200, intent: 'uploaded the signed forms', outcome: 'partly' });
+    expect(run().intent).toBe('');
+  });
+
+  it('finds the last stretch when the clock was already paused', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().setIntent('sent the draft');
+    run().resume();
+    advance(120);
+    run().pause();
+    run().finish('yes');
+    expect(log()[0]).toMatchObject({ intent: 'sent the draft', outcome: 'yes' });
+  });
+
+  it('keeps the line when the task leaves the clock unfinished, and starts the next one blank', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().setIntent('sent the draft');
+    run().resume();
+    advance(60);
+    run().attach(subjectOf(task({ id: 't2' })), 600, 14400);
+
+    expect(log()[0]).toMatchObject({ taskId: 't1', intent: 'sent the draft' });
+    expect(log()[0].outcome).toBeUndefined();
+    expect(run().intent).toBe('');
+    /* The next task's clock is running, so it has begun; nothing is asked. */
+    expect(run().taskBegun).toBe(true);
+  });
+
+  it('never reaches back into an earlier run of the same task', () => {
+    useStore.setState({
+      focusLog: [{ id: 'old', taskId: 't1', taskTitle: 'x', seconds: 60, startedAt: START - 99_000, endedAt: START - 39_000 }],
+    });
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().setIntent('sent the draft');
+    run().finish('yes');
+    expect(log()[0].intent).toBeUndefined();
+  });
+});
+
+// ─── 29-1P10b: the minutes he was away ───────────────────────────────────────
+
+describe('away (idea 101)', () => {
+  /** Go away for `seconds`, the way the tab does: a checkpoint as it hides, the card's note as it comes back. */
+  function goAway(seconds: number) {
+    run().checkpoint();
+    const from = Date.now();
+    advance(seconds);
+    run().noteAway(from, Date.now());
+  }
+
+  it('writes nothing for the minutes until he answers', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().resume();
+    advance(300);
+    goAway(240);
+    expect(log().map((e) => e.seconds)).toEqual([300]);
+    expect(run().away).toMatchObject({ task: { id: 't1' } });
+  });
+
+  it('counted, they are one stretch of their own, and the clock is untouched', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().resume();
+    advance(300);
+    goAway(240);
+    advance(60);
+    run().answerAway(true);
+    run().pause();
+    expect(log().map((e) => e.seconds).sort((a, b) => a - b)).toEqual([60, 240, 300]);
+    expect(taskSecondsLeft(run())).toBe(1500 - 600);
+    expect(run().away).toBeNull();
+  });
+
+  it('not counted, they are never written and go back on both clocks', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().resume();
+    advance(300);
+    goAway(240);
+    advance(60);
+    run().answerAway(false);
+    advance(30);
+    run().pause();
+    expect(log().map((e) => e.seconds)).toEqual([300, 60, 30]);
+    expect(taskSecondsLeft(run())).toBe(1500 - 300 - 90);
+    expect(sessionSecondsLeft(run())).toBe(14400 - 300 - 90);
+  });
+
+  it('a pause before the answer banks around them, and the answer still decides', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().resume();
+    advance(100);
+    goAway(200);
+    advance(50);
+    run().pause();
+    expect(log().map((e) => e.seconds)).toEqual([100, 50]);
+    run().answerAway(false);
+    expect(log()).toHaveLength(2);
+    expect(taskSecondsLeft(run())).toBe(1500 - 150);
+  });
+
+  it('gives the task clock back only while it is still that task', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().resume();
+    goAway(180);
+    run().attach(subjectOf(task({ id: 't2' })), 600, 14400);
+    run().answerAway(false);
+    expect(taskSecondsLeft(run())).toBe(600);
+    expect(sessionSecondsLeft(run())).toBe(14400);
+  });
+
+  it('counts them when the session ends unanswered', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().resume();
+    goAway(180);
+    run().clear();
+    expect(log().map((e) => e.seconds)).toEqual([180]);
+  });
+
+  it('a second time away counts the first and holds the second', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().resume();
+    goAway(150);
+    advance(20);
+    goAway(400);
+    expect(log().map((e) => e.seconds).sort((a, b) => a - b)).toEqual([20, 150]);
+    run().answerAway(false);
+    expect(log()).toHaveLength(2);
+    expect(taskSecondsLeft(run())).toBe(1500 - 170);
+  });
+
+  it('is not held when the clock was not running', () => {
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().noteAway(Date.now() - 300_000, Date.now());
+    expect(run().away).toBeNull();
+  });
+});
+
+// ─── Mark done from anywhere (29-1P11b) ──────────────────────────────────────
+describe('finishHead, Mark done for Focus and the pill', () => {
+  const second = () => task({ id: 't2', title: 'Send the invoice', order: 1 });
+
+  function queueOf(...tasks: Task[]) {
+    useStore.setState({ backlogTasks: tasks, tasks });
+    run().attach(subjectOf(tasks[0]), 1500, 14400);
+  }
+
+  it('closes the head, moves the queue on and reports the minutes it took', () => {
+    queueOf(task({ allocatedTime: 1500 }), second());
+    run().resume();
+    advance(600);
+    const closed = finishHead();
+    expect(closed).toEqual({ id: 't1', title: 'Write the proposal', allocated: 1500, used: 600, last: false });
+    expect(useStore.getState().backlogTasks.find((t) => t.id === 't1')?.status).toBe('completed');
+    expect(useStore.getState().tasks.map((t) => t.id)).toEqual(['t2']);
+    expect(log()).toHaveLength(1);
+    expect(log()[0].seconds).toBe(600);
+    /* Mark done is not one of his pauses. */
+    expect(run().pauses).toBe(0);
+  });
+
+  it('says when it closed the last task', () => {
+    queueOf(task({ allocatedTime: 1500 }));
+    expect(finishHead()?.last).toBe(true);
+    expect(useStore.getState().tasks).toEqual([]);
+  });
+
+  it('closes nothing while the task waits on another', () => {
+    queueOf(task({ dependsOn: ['t2'] }), second());
+    expect(finishHead()).toBeNull();
+    expect(useStore.getState().backlogTasks.find((t) => t.id === 't1')?.status).toBe('needsAction');
+    expect(useStore.getState().tasks).toHaveLength(2);
+  });
+});
+
+// ─── "Session done" reads the run (FIX-14) ───────────────────────────────────
+describe("the session's tally for Session done", () => {
+  const second = () => task({ id: 't2', title: 'Send the invoice', order: 1 });
+
+  it('records every close in order, wherever it was pressed, and keeps it through clear', () => {
+    const first = task({ allocatedTime: 1500 });
+    const next = task({ id: 't2', title: 'Send the invoice', order: 1, allocatedTime: 1800 });
+    useStore.setState({ backlogTasks: [first, next], tasks: [first, next] });
+    run().attach(subjectOf(first), 1500, 14400);
+    run().resume();
+    advance(600);
+    finishHead();
+    /* What FocusRunHost does when the queue moves under a run he is not looking at. */
+    run().attach(subjectOf(next), 1800, 14400);
+    run().resume();
+    advance(300);
+    expect(finishHead()?.last).toBe(true);
+    expect(run().closed).toEqual([
+      { id: 't1', title: 'Write the proposal', allocated: 1500, used: 600 },
+      { id: 't2', title: 'Send the invoice', allocated: 1800, used: 300 },
+    ]);
+    /* The queue emptied, so the host ends the session; the card is drawn after. */
+    run().clear();
+    expect(run().task).toBeNull();
+    expect(run().closed.map((c) => c.id)).toEqual(['t1', 't2']);
+  });
+
+  it('keeps the counts through clear and zeroes all four when a new session starts', () => {
+    useStore.setState({ backlogTasks: [task()], tasks: [task()] });
+    run().attach(subjectOf(task()), 1500, 14400);
+    run().resume();
+    run().tickStep(true);
+    run().tickStep(true);
+    run().captureIdea();
+    run().pause(true);
+    finishHead();
+    run().clear();
+    expect(run()).toMatchObject({ pauses: 1, stepsTicked: 2, ideasCaptured: 1 });
+    expect(run().closed).toHaveLength(1);
+
+    run().attach(subjectOf(second()), 1500, 14400);
+    expect(run()).toMatchObject({ pauses: 0, stepsTicked: 0, ideasCaptured: 0, closed: [] });
+  });
+
+  it('takes an untick back off the count, never below zero', () => {
+    run().tickStep(true);
+    run().tickStep(false);
+    run().tickStep(false);
+    expect(run().stepsTicked).toBe(0);
+  });
+
+  it('records nothing when Mark done closes nothing', () => {
+    useStore.setState({ backlogTasks: [task({ dependsOn: ['t2'] }), second()], tasks: [task({ dependsOn: ['t2'] })] });
+    run().attach(subjectOf(task()), 1500, 14400);
+    expect(finishHead()).toBeNull();
+    expect(run().closed).toEqual([]);
   });
 });

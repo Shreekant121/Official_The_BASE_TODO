@@ -10,8 +10,8 @@
  *     lit on top of a modal's backdrop.
  *   - Smart Start is its own band at the top of the page rather than a
  *     small pill in the header. It is the product's primary action and
- *     the only `variant="solid"` button on the screen; the design system
- *     allows exactly one per view.
+ *     the only lit button on the screen; the design system allows exactly
+ *     one per view.
  *   - Home draws its own `<MiniNav>` (vertical rail on a wide window, a
  *     floating bar below) and opts out of the global `FloatingNav`, the
  *     same pattern Settings uses.
@@ -20,8 +20,7 @@
  * body class, reasoning that a wall of project cards is a dense data
  * screen). V3's Home sits on the full field instead — `Devices.dc.html`
  * draws its teal masses at full strength behind the laptop screen — and
- * V3's glass is clear enough that there has to be something behind it to
- * bend, or the lens has nothing to show.
+ * there has to be something behind the glass.
  *
  * Unchanged underneath: the store wiring, project reorder by drag through
  * `SortableList`/`SortableRow`, the create/edit modal, and Smart Start's
@@ -38,66 +37,57 @@
  *     project cards at all. None of it is built here: V3 changes no
  *     features, and the dashboard is BIG-6, which he is designing himself.
  *     Home keeps exactly what it had: Smart Start and the project grid.
- *   - **The greeting and date replace the BASE wordmark**, as the design's
- *     header has it; the mark moves to the head of the rail, which is where
- *     the design puts it. No "4 of 7 done" beside the date — that number
- *     belongs to the dashboard, not to this screen.
+ *   - **No greeting and no date** (his BASE list, 2026-10-06: "it is just
+ *     taking space"). They replaced the BASE wordmark at V3-2; the mark is
+ *     at the head of the rail, and below 900px at the head of the header.
  * What else V3 changed here: the header's two icon controls are the
  * design's round glass buttons rather than ghosts, Smart Start is a gel
  * button (V3's one primary), the rail's live cell is a lit white plate,
  * and status pills read in sentence case. The tablet and phone layouts are
  * the ones they were, in the new material.
+ *
+ * 29-1P2 (BIG-15) put BASE's own buttons on: Smart Start is a plain orange
+ * gel (go, without the Start tile — that is the Dashboard's), New project a
+ * soft raised second action, the header's icons round soft buttons, and on
+ * the tablet a floating + opens quick capture (his call).
+ *
+ * OPT-11 (2026-10-06) folded the header and the Smart Start band into one
+ * island at the top — see the comment on it below.
  */
-import { useState, useMemo } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
 import {
-  Button, GlassFilters, Icon, IconButton, MiniNav, MorphMenu, V3Scope, useMedia,
+  GelButton, GlassFilters, Icon, LitLine, MiniNav, MorphMenu, SoftButton, SoftIconButton, V3Scope, useMedia,
 } from '../ui';
 import { useStore } from '../store/useStore';
 import { useUIStore } from '../store/useUIStore';
 import { useAuth } from '../contexts/AuthContext';
-import { builtInShortcut, useShortcuts, useOpenShortcutsHelp } from '../contexts/ShortcutsContext';
+import { builtInShortcut, useShortcuts } from '../contexts/ShortcutsContext';
 import { useNavModel } from './navModel';
+import QuickCaptureFab from './QuickCaptureFab';
 import { BrandMark, RailMark } from './BrandMark';
-import ProjectCard from './ProjectCard';
+import ProjectGrid from './ProjectGrid';
+import JumpBackRow from './JumpBackRow';
 import CreateProjectModal from './CreateProjectModal';
 import SmartStartModal from './SmartStartModal';
-import { SortableList, SortableRow } from './SortableList';
+import { buildProjectTree } from '../lib/projectTree';
 import { Z } from '../lib/zLayers';
+import { usePullToSearch } from './PullToSearch';
 import type { Task } from '../store/useStore';
 
 /* The mockup switches the rail to a bottom bar at 900px, not at the 960px
    Settings uses — Home's card grid needs the width sooner. */
 const HOME_WIDE = '(min-width: 900px)';
 
-/** "Good evening" — by the hour on this device's clock. */
-function greetingFor(now: Date): string {
-  const h = now.getHours();
-  if (h < 5) return 'Good evening';
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-/** "Wednesday, 23 September", the design's header line. Built in two parts
-    because en-GB's own long form leaves the comma out. */
-function headerDate(now: Date): string {
-  const weekday = now.toLocaleDateString('en-GB', { weekday: 'long' });
-  const day = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
-  return `${weekday}, ${day}`;
-}
-
 export default function Home() {
   const {
-    projects, addProject, updateProject, deleteProject, reorderProjects,
-    backlogTasks, taskLists, tasks, setTasks,
+    projects, addProject, updateProject,
+    backlogTasks, tasks, setTasks,
   } = useStore();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const wide = useMedia(HOME_WIDE);
   const nav = useNavModel();
-  const openHelp = useOpenShortcutsHelp();
 
   const [createProjectOpen, setShowCreateProject] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
@@ -112,6 +102,10 @@ export default function Home() {
    * frame where Home is up and the sheet is not.
    */
   const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
+  /* 29-1P13, idea 148: pull the page down from the top to search, on the tablet. */
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const pull = usePullToSearch(scrollerRef, contentRef);
   const handoff = useUIStore((s) => s.paletteHandoff);
   const setHandoff = useUIStore((s) => s.setPaletteHandoff);
   const showCreateProject = createProjectOpen || handoff?.kind === 'new-project';
@@ -122,12 +116,8 @@ export default function Home() {
 
   const editProject = projects.find((p) => p.id === editingProject);
 
-  const sortedProjects = useMemo(
-    () => projects.slice().sort((a, b) => a.order - b.order),
-    [projects],
-  );
-
-  const projectIds = useMemo(() => sortedProjects.map((p) => p.id), [sortedProjects]);
+  // What the header counts is what the grid shows: the top level.
+  const topLevelCount = useMemo(() => buildProjectTree(projects).childrenOf(null).length, [projects]);
 
   // How many tasks are actually open across every project — the one number
   // worth putting next to "Your projects".
@@ -153,21 +143,17 @@ export default function Home() {
 
   const displayName = user?.displayName ?? user?.email ?? 'You';
   const initial = displayName.trim().charAt(0).toUpperCase() || 'Y';
-  /* First name only, and only from a real name: an email address is not a
-     thing to greet. With no name set it is just "Good evening". */
-  const firstName = user?.displayName?.trim().split(/\s+/)[0];
-  const now = new Date();
-  const greeting = firstName ? `${greetingFor(now)}, ${firstName}` : greetingFor(now);
 
   return (
     <V3Scope>
-    <div className="ag-page h-screen overflow-y-auto">
+    <div ref={scrollerRef} className="ag-page h-screen overflow-y-auto">
+      {pull.layer}
       {/* Mounted once per document — every card's `--glass-bd-md-refract`
           resolves to a filter defined in here. Without it the cards fall
           back to a plain blur, silently. */}
       <GlassFilters />
 
-      <div style={{ display: 'flex', minHeight: '100%', alignItems: 'flex-start' }}>
+      <div ref={contentRef} style={{ display: 'flex', minHeight: '100%', alignItems: 'flex-start' }}>
 
         {/*
           * Desktop rail — floats, never frames.
@@ -194,7 +180,7 @@ export default function Home() {
               orientation="vertical"
               items={nav.items}
               value={nav.current}
-              onChange={nav.go}
+              onChange={nav.go} screenLit
               lead={<RailMark />}
             />
           </div>
@@ -204,143 +190,118 @@ export default function Home() {
           style={{
             flex: 1, minWidth: 0, boxSizing: 'border-box',
             padding: wide
-              ? 'var(--sp-11) var(--gutter-page) var(--sp-13)'
+              /* `--sp-9` on top (OPT-11): the island is "fully up", level
+                 with the rail's top edge rather than 16px below it. */
+              ? 'var(--sp-9) var(--gutter-page) var(--sp-13)'
               : 'var(--sp-9) var(--gutter-page-sm) 140px',
           }}
         >
-          {/* ── Header ─────────────────────────────────────────────── */}
+          {/* ── The island ───────────────────────────────────────────
+              OPT-11 (his BASE list, 2026-10-06): "Remove all the text from
+              the smart start Island, move it fully up to the header". One
+              glass bar is the header now, his pick of three (A): Smart Start
+              on the left, Search and the account on the right. The keyboard
+              button went to Settings → App; the account is the picture alone,
+              both his calls. A rounded rectangle, not a pill
+              (`--r-md`, his rule for top bars). */}
           <header
             style={{
+              /* Its backdrop-filter makes the island a stacking context, so
+                 the account menu inside it would open UNDER New project and
+                 the cards; lifted above its later siblings (a local rung,
+                 not one of `Z`'s). */
+              position: 'relative', zIndex: 2,
               display: 'flex', alignItems: 'center', gap: 'var(--sp-5)',
-              flexWrap: 'wrap', marginBottom: 'var(--sp-11)',
+              marginBottom: 'var(--gap-section)',
+              padding: 'var(--sp-3)', borderRadius: 'var(--r-md)',
+              backgroundImage: 'var(--glass-fill-2)',
+              backdropFilter: 'var(--glass-bd-lg-refract)',
+              WebkitBackdropFilter: 'var(--glass-bd-lg)',
+              boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2), var(--glow-accent-sm)',
             }}
           >
+            {/* The screen's name, for a screen reader: the greeting that
+                was the visible heading is gone (his call, 2026-10-06). */}
+            <h1 className="sr-only">Home</h1>
             {/* Below the 900px break there is no rail to carry the mark. */}
             {!wide && <BrandMark />}
-            {/* A 200px basis, not its full width: on a phone the greeting
-                then wraps beside the mark instead of pushing it onto a line
-                of its own, and the buttons take the next line. */}
-            <div style={{ display: 'grid', gap: 2, minWidth: 0, flex: '1 1 200px' }}>
-              <h1
-                style={{
-                  font: 'var(--weight-bold) var(--text-2xl) / var(--leading-tight) var(--font-display)',
-                  letterSpacing: 'var(--tracking-display)', color: 'var(--fg-1)',
-                }}
-              >
-                {greeting}
-              </h1>
-              <span style={{ font: 'var(--type-label)', fontSize: 'var(--text-md)', color: 'var(--fg-3)' }}>
-                {headerDate(now)}
-              </span>
-            </div>
-            {/* One group, so on a narrow window the three wrap together
-                rather than one of them staying beside the greeting. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', marginLeft: 'auto' }}>
-              {/* The design's round glass buttons. The glass opens the command
-                  palette (BUILD-9) — Ctrl+K on the laptop, and this is the way
-                  in on the tablet, which has no key to press. */}
-              <IconButton label="Search" onClick={() => setPaletteOpen(true)}>
-                <Icon name="search" size={18} />
-              </IconButton>
+            <GelButton
+              colour="orange"
+              tile={false}
+              icon={<Icon name="zap" size={18} />}
+              onClick={() => setShowSmartStart(true)}
+            >
+              Smart Start
+            </GelButton>
+            <span style={{ flex: 1 }} />
+            {/* The glass opens the command palette (BUILD-9) — Ctrl+K on the
+                laptop, and this is the way in on the tablet, which has no key
+                to press. */}
+            <SoftIconButton label="Search" onClick={() => setPaletteOpen(true)}>
+              <Icon name="search" size={18} />
+            </SoftIconButton>
 
-              {/* `?` opens this too, but there is no key to press on the tablet. */}
-              <IconButton label="Keyboard shortcuts" onClick={openHelp}>
-                <Icon name="keyboard" size={18} />
-              </IconButton>
-
-              <MorphMenu
-                align="end"
-                width={220}
-                trigger={
-                  <button
-                    type="button"
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)', height: 44,
-                      padding: '0 var(--sp-5) 0 var(--sp-3)', border: 0, cursor: 'pointer',
-                      borderRadius: 'var(--r-pill)',
-                      backgroundImage: 'var(--glass-fill-2)',
-                      backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
-                      boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
-                      color: 'var(--fg-1)', font: 'var(--type-label)',
-                    }}
-                  >
-                    {user?.photoURL ? (
-                      <img
-                        src={user.photoURL}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          display: 'grid', placeItems: 'center', width: 30, height: 30, borderRadius: '50%',
-                          backgroundImage: 'var(--glass-tint-accent)', boxShadow: 'var(--glass-rim-2)',
-                          font: 'var(--type-numeric)', fontSize: 'var(--text-xs)',
-                        }}
-                      >
-                        {initial}
-                      </span>
-                    )}
-                    <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {displayName}
+            <MorphMenu
+              align="end"
+              width={220}
+              trigger={
+                <button
+                  type="button"
+                  aria-label={`Account: ${displayName}`}
+                  title={displayName}
+                  style={{
+                    display: 'grid', placeItems: 'center', width: 44, height: 44, padding: 0,
+                    border: 0, cursor: 'pointer', borderRadius: '50%',
+                    backgroundImage: 'var(--glass-fill-2)',
+                    backdropFilter: 'var(--glass-bd-md)', WebkitBackdropFilter: 'var(--glass-bd-md)',
+                    boxShadow: 'var(--glass-rim-2), var(--glass-cast-1)',
+                    color: 'var(--fg-1)',
+                  }}
+                >
+                  {user?.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        display: 'grid', placeItems: 'center', width: 34, height: 34, borderRadius: '50%',
+                        backgroundImage: 'var(--glass-tint-accent)', boxShadow: 'var(--glass-rim-2)',
+                        font: 'var(--type-numeric)', fontSize: 'var(--text-sm)',
+                      }}
+                    >
+                      {initial}
                     </span>
-                    <Icon name="chevron-down" size={15} />
-                  </button>
-                }
-                items={[
-                  {
-                    value: 'settings',
-                    label: 'Settings',
-                    icon: <Icon name="settings" size={16} />,
-                    onSelect: () => navigate('/settings'),
-                  },
-                  { divider: true },
-                  {
-                    value: 'signout',
-                    label: 'Sign out',
-                    icon: <Icon name="log-out" size={16} />,
-                    tone: 'danger',
-                    onSelect: () => { void logout(); },
-                  },
-                ]}
-              />
-            </div>
+                  )}
+                </button>
+              }
+              items={[
+                {
+                  value: 'settings',
+                  label: 'Settings',
+                  icon: <Icon name="settings" size={16} />,
+                  onSelect: () => navigate('/settings'),
+                },
+                { divider: true },
+                {
+                  value: 'signout',
+                  label: 'Sign out',
+                  icon: <Icon name="log-out" size={16} />,
+                  tone: 'danger',
+                  onSelect: () => { void logout(); },
+                },
+              ]}
+            />
           </header>
 
           <div style={{ display: 'grid', gap: 'var(--gap-section)' }}>
 
-            {/* ── Smart Start ──────────────────────────────────────── */}
-            <section
-              style={{
-                display: 'grid', gap: 'var(--sp-7)', justifyItems: 'start',
-                padding: 'var(--pad-card-lg)', borderRadius: 'var(--r-card-lg)',
-                backgroundImage: 'var(--glass-fill-2)',
-                backdropFilter: 'var(--glass-bd-lg-refract)',
-                WebkitBackdropFilter: 'var(--glass-bd-lg)',
-                boxShadow: 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2), var(--glow-accent-sm)',
-              }}
-            >
-              <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
-                <span className="ag-kicker" style={{ color: 'var(--accent)' }}>Start here</span>
-                <h2
-                  style={{
-                    font: 'var(--type-metric)', fontSize: 'var(--text-2xl)',
-                    letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)',
-                  }}
-                >
-                  Strict focus. One task at a time.
-                </h2>
-              </div>
-              <Button
-                variant="gel"
-                size="lg"
-                iconLeft={<Icon name="zap" size={18} />}
-                onClick={() => setShowSmartStart(true)}
-              >
-                Smart Start
-              </Button>
-            </section>
+            {/* ── Jump back in (29-1P8c, idea 154) — nothing until a project
+                has been opened on this device ─────────────────────── */}
+            <JumpBackRow />
 
             {/* ── Projects ─────────────────────────────────────────── */}
             <section style={{ display: 'grid', gap: 'var(--sp-7)' }}>
@@ -351,75 +312,24 @@ export default function Home() {
                   </h2>
                   <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
                     {projects.length === 0
-                      ? 'Create your first project to get started.'
-                      : `${projects.length} project${projects.length === 1 ? '' : 's'} · ${openTaskCount} task${openTaskCount === 1 ? '' : 's'} open`}
+                      ? <LitLine text="**One project** is all it takes. Press **New project** to start." />
+                      : `${topLevelCount} project${topLevelCount === 1 ? '' : 's'} · ${openTaskCount} task${openTaskCount === 1 ? '' : 's'} open`}
                   </span>
                 </div>
                 <span style={{ flex: 1 }} />
-                <Button iconLeft={<Icon name="plus" size={16} />} onClick={() => setShowCreateProject(true)}>
+                <SoftButton icon={<Icon name="plus" size={16} />} onClick={() => setShowCreateProject(true)}>
                   New project
-                </Button>
+                </SoftButton>
               </div>
 
-              <SortableList
-                ids={projectIds}
-                onReorder={reorderProjects}
-                axis="xy"
-                className="grid grid-cols-[repeat(auto-fill,minmax(316px,1fr))] gap-5"
-              >
-                <AnimatePresence>
-                  {sortedProjects.map((project) => (
-                    <SortableRow key={project.id} id={project.id}>
-                      {({ isDragging, isAnyDragging }) => (
-                        <ProjectCard
-                          project={project}
-                          tasks={backlogTasks}
-                          lists={taskLists}
-                          onEdit={() => setEditingProject(project.id)}
-                          onDelete={() => deleteProject(project.id)}
-                          isBeingDragged={isDragging}
-                          isAnyDragging={isAnyDragging}
-                        />
-                      )}
-                    </SortableRow>
-                  ))}
-                </AnimatePresence>
-
-                {/* New project tile — a dashed outline, never a glass pane:
-                    it is a slot waiting to be filled, not an object. */}
-                <button
-                  type="button"
-                  onClick={() => setShowCreateProject(true)}
-                  style={{
-                    display: 'grid', placeItems: 'center', alignContent: 'center', gap: 'var(--sp-4)',
-                    minHeight: 250, padding: 'var(--pad-card)', cursor: 'pointer',
-                    borderRadius: 'var(--r-card-lg)',
-                    border: '1px dashed var(--line-strong)',
-                    background: 'transparent', color: 'var(--fg-3)',
-                    transition: 'var(--t-hover)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--glass-fill-1)';
-                    e.currentTarget.style.color = 'var(--fg-1)';
-                    e.currentTarget.style.borderColor = 'var(--accent-hairline)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = 'var(--fg-3)';
-                    e.currentTarget.style.borderColor = 'var(--line-strong)';
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'grid', placeItems: 'center', width: 46, height: 46, borderRadius: '50%',
-                      backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
-                    }}
-                  >
-                    <Icon name="plus" size={20} />
-                  </span>
-                  <span style={{ font: 'var(--type-label)', whiteSpace: 'nowrap' }}>New project</span>
-                </button>
-              </SortableList>
+              {/* Only the top level (BIG-2, his call): a mega project's
+                  card says how many projects it holds, and they are inside
+                  it. Drop a card on another's middle to put it there. */}
+              <ProjectGrid
+                parentId={null}
+                onEdit={setEditingProject}
+                onNewProject={() => setShowCreateProject(true)}
+              />
             </section>
           </div>
         </div>
@@ -435,10 +345,11 @@ export default function Home() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}
+      {!wide && <QuickCaptureFab />}
 
       <CreateProjectModal
         isOpen={showCreateProject}

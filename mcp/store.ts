@@ -1,11 +1,15 @@
 import { cert, getApps, initializeApp, type ServiceAccount } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { useStore } from '../src/store/useStore';
+import { useStore, type Task } from '../src/store/useStore';
 import { useTrashStore } from '../src/store/useTrashStore';
+import { sanitizeEvents, useEventStore } from '../src/store/useEventStore';
 import { buildSyncPayload, hydrateFromPayload, type SyncPayload } from '../src/lib/syncPayload';
 import { liveAgentStore } from '../src/lib/agent/liveContext';
 import type { AgentStore } from '../src/lib/agent/types';
 import { buildShareDoc } from '../src/lib/publicShareSnapshot';
+import { withResolvedShareCover } from '../src/lib/covers/coverRef';
+import { appendToStory, readStoredStory, storyDiff } from '../src/lib/taskStory';
+import { atlasIsWriting } from '../src/store/storyActor';
 import { log } from './protocol.ts';
 
 
@@ -105,6 +109,9 @@ export class AtlasStore {
   /** True once a document has been read into the Zustand store at least once. */
   private hydrated = false;
 
+  /** The events document as last read or written, to write it back only when a call changed it (29-2a). */
+  private eventsRead = '[]';
+
   constructor(config: AtlasStoreConfig) {
     this.db = initFirestore(config.serviceAccountJson);
     this.uid = config.uid;
@@ -116,6 +123,11 @@ export class AtlasStore {
 
   private get trashRef() {
     return this.db.doc(`users/${this.uid}/data/trash`);
+  }
+
+  /** 29-2a: events and their countdowns, in their own document as in the browser (`lib/eventSync.ts`). */
+  private get eventsRef() {
+    return this.db.doc(`users/${this.uid}/data/events`);
   }
 
   /**
@@ -131,7 +143,7 @@ export class AtlasStore {
    * the laptop instead of the browser.
    */
   async hydrate(): Promise<void> {
-    const [main, trash] = await Promise.all([this.mainRef.get(), this.trashRef.get()]);
+    const [main, trash, events] = await Promise.all([this.mainRef.get(), this.trashRef.get(), this.eventsRef.get()]);
 
     const data = (main.exists ? main.data() : undefined) as Partial<SyncPayload> | undefined;
     if (!data || !Array.isArray(data.backlogTasks) || !Array.isArray(data.taskLists)) {
@@ -155,6 +167,9 @@ export class AtlasStore {
 
     const trashData = trash.exists ? (trash.data() as { entries?: unknown } | undefined) : undefined;
     useTrashStore.setState({ entries: Array.isArray(trashData?.entries) ? trashData.entries : [] });
+
+    useEventStore.setState({ events: sanitizeEvents(events.exists ? events.get('events') : []) });
+    this.eventsRead = JSON.stringify(useEventStore.getState().events);
 
     this.hydrated = true;
   }
@@ -193,6 +208,15 @@ export class AtlasStore {
 
     await this.trashRef.set({ entries: useTrashStore.getState().entries });
     await this.mainRef.set(payload, { merge: true });
+
+    /* Only when a call changed them: an untouched events document is not
+       rewritten after every task edit, so his tablet's events never flicker. */
+    const events = useEventStore.getState().events;
+    const now = JSON.stringify(events);
+    if (now !== this.eventsRead) {
+      await this.eventsRef.set({ events });
+      this.eventsRead = now;
+    }
   }
 
   /**
@@ -212,7 +236,7 @@ export class AtlasStore {
   /** A one-line description of what was loaded, for the stderr log on startup. */
   describe(): string {
     const state = useStore.getState();
-    return `${state.backlogTasks.length} tasks, ${state.taskLists.length} lists, ${state.projects.length} projects, ${useTrashStore.getState().entries.length} in the Trash`;
+    return `${state.backlogTasks.length} tasks, ${state.taskLists.length} lists, ${state.projects.length} projects, ${useTrashStore.getState().entries.length} in the Trash, ${useEventStore.getState().events.length} events`;
   }
 
   /**
@@ -228,13 +252,43 @@ export class AtlasStore {
   async withFreshState<T>(mutates: boolean, run: () => Promise<T>): Promise<T> {
     await this.hydrate();
     const shareIdsBefore = this.shareIds();
+    const backlogBefore = useStore.getState().backlogTasks;
     const result = await run();
     if (mutates) {
       await this.flush();
       await this.reconcileShares(shareIdsBefore);
+      await this.recordStory(backlogBefore);
       log('[mcp] wrote', this.describe());
     }
     return result;
+  }
+
+  /**
+   * The task's story (29-1P9c): what this call changed, appended to each
+   * task's own `users/{uid}/story/{taskId}` — the laptop's half of what
+   * `src/lib/taskStorySync.ts` does in the browser. Atlas on the laptop never
+   * writes through a page, so without this its edits would reach the tablet
+   * only as an adopted snapshot, which the browser deliberately does not
+   * record. After the flush: a story line for a write that failed would be a
+   * lie. A Revert from /log comes through here too and is his, not Atlas's.
+   */
+  private async recordStory(before: readonly Task[]): Promise<void> {
+    const state = useStore.getState();
+    const by = atlasIsWriting() ? 'atlas' as const : undefined;
+    const events = storyDiff(before, state.backlogTasks, { now: Date.now(), lists: state.taskLists, ...(by ? { by } : {}) });
+    for (const [taskId, add] of events) {
+      const ref = this.db.doc(`users/${this.uid}/story/${taskId}`);
+      try {
+        await this.db.runTransaction(async (tx) => {
+          const snap = await tx.get(ref);
+          tx.set(ref, { events: appendToStory(readStoredStory(snap.data()), add) });
+        });
+      } catch (err) {
+        // Reported, not thrown: the edit itself landed, and a missing story
+        // line is not worth failing the tool call Atlas is waiting on.
+        log('[mcp] could not record the story of', taskId, err instanceof Error ? err.message : String(err));
+      }
+    }
   }
 
   /**
@@ -327,12 +381,19 @@ export class AtlasStore {
                         project,
                         allLists: state.taskLists,
                         allTasks: state.backlogTasks,
+                        allProjects: state.projects,
                       }, extras)
                     : null;
                 })();
 
         if (doc === null) continue;
-        await this.db.doc(`publicShares/${shareId}`).set(doc);
+        // The picture, never the `cover:` pointer: strangers read this document.
+        const published = await withResolvedShareCover(doc, async (id) => {
+          const cover = await this.db.doc(`users/${this.uid}/covers/${id}`).get();
+          const dataUrl = cover.get('dataUrl');
+          return typeof dataUrl === 'string' ? dataUrl : undefined;
+        });
+        await this.db.doc(`publicShares/${shareId}`).set(published);
         log('[mcp] published share', shareId, `(${target.type})`);
       } catch (err) {
         log('[mcp] could not publish share', shareId, err instanceof Error ? err.message : String(err));

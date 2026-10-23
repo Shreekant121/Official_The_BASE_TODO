@@ -15,7 +15,7 @@
  * his call ("B now, C later"), and the three that are true everywhere.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Button, Icon, IconButton } from '../../ui';
+import { Button, Icon, IconButton, WarnLine } from '../../ui';
 import { useAccountAccess } from '../../lib/accountAccess';
 import {
   BUILT_IN_IDS,
@@ -118,7 +118,7 @@ function KeyField({
         borderRadius: 'var(--r-sm)',
         backgroundImage: 'var(--glass-well)',
         boxShadow: listening
-          ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline)'
+          ? 'var(--glass-well-shadow), 0 0 0 1px var(--job-lime-line)'
           : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
         font: 'var(--type-numeric)',
         fontSize: 'var(--text-xs)',
@@ -131,9 +131,12 @@ function KeyField({
   );
 }
 
-/** Why the last key was not taken, under the row it was pressed on. */
+/**
+ * Why the last key was not taken, under the row it was pressed on. A warning,
+ * so grey with its icon (29-1P2c2); nothing broke, the key was just not taken.
+ */
 function Refused({ text }: { text: string }) {
-  return <span role="alert" style={{ color: 'var(--hue-amber)' }}>{text}</span>;
+  return <WarnLine as="span" role="alert" style={{ font: 'inherit' }}>{text}</WarnLine>;
 }
 
 export function ShortcutsEditor({ fixed }: { fixed: FixedRow[] }) {

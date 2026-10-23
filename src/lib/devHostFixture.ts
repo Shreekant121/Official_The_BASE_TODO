@@ -75,6 +75,9 @@ export function devHostFixture(search: string): AtlasSnapshot | null {
         loaded: ['gemma4:e4b'],
       },
       gemini: { configured: true },
+      /* BIG-1: this laptop's Atlas takes cloud turns, so the default Gemini pick
+         runs there — the chat baselines stay Atlas chats. */
+      hosted: { providers: ['gemini', 'anthropic', 'openai'], keysFromRequest: true },
       mcp: tools
         ? { connected: ['mutineer-os'], failed: [] }
         : {

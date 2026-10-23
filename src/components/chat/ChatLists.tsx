@@ -1,6 +1,5 @@
 /* The chat list, docked beside the conversation or in a drawer over it.
    Moved out of `pages/ChatPage.tsx`, unchanged, when it was split (BUILD-7). */
-import ModelPicker from '../ModelPicker';
 import type { AtlasConversationSummary } from '../../lib/atlas/client';
 import { ChatDrawer } from './ChatDrawer';
 import { ChatList } from './ChatList';
@@ -18,10 +17,12 @@ export function ChatLists({
   chatQuery,
   setChatQuery,
   listProblem,
+  listWaiting,
   openConversation,
   newConversation,
   renameConversation,
   removeConversation,
+  askFromSearch,
 }: {
   /** Whether the window is wide enough to dock the list. */
   listed: boolean;
@@ -35,10 +36,14 @@ export function ChatLists({
   chatQuery: string;
   setChatQuery: (query: string) => void;
   listProblem: string | null;
+  /** The first read is on its way (29-1P14d2). */
+  listWaiting: boolean;
   openConversation: (id: string) => void;
   newConversation: () => void;
   renameConversation: (id: string, title: string) => Promise<void>;
   removeConversation: (id: string) => Promise<void>;
+  /** OPT-9: a search that found no chat, sent to Atlas in a new one. */
+  askFromSearch: (text: string) => void;
 }) {
   return (
     <>
@@ -90,19 +95,12 @@ export function ChatLists({
             query={chatQuery}
             setQuery={setChatQuery}
             unavailable={listProblem}
+          waiting={listWaiting}
             onPick={openConversation}
             onNew={newConversation}
             onRename={(id, title) => void renameConversation(id, title)}
             onDelete={(id) => void removeConversation(id)}
-            /* ITEM 13G, second pass - exactly ONE model picker exists at a
-               time, and this is why it is gated rather than just passed.
-               Both lists are mounted at all widths now: the docked column
-               collapses to zero width so it can slide, and the drawer is kept
-               off-screen so it can slide too. Two mounted `ChatList`s each
-               rendering a footer is two controls with the same accessible
-               name driving the same store - which the screenshot harness
-               caught first, as a strict-mode violation on `getByTitle`. */
-            footer={listed ? <ModelPicker row /> : undefined}
+            onAsk={askFromSearch}
           />
         </div>
       </div>
@@ -122,13 +120,12 @@ export function ChatLists({
           query={chatQuery}
           setQuery={setChatQuery}
           unavailable={listProblem}
+          waiting={listWaiting}
           onPick={openConversation}
           onNew={newConversation}
           onRename={(id, title) => void renameConversation(id, title)}
           onDelete={(id) => void removeConversation(id)}
-          /* The other half of the pair above: the drawer owns the picker
-             only on a window too narrow to dock the list. */
-          footer={!listed ? <ModelPicker row /> : undefined}
+          onAsk={askFromSearch}
         />
       </ChatDrawer>
     </>

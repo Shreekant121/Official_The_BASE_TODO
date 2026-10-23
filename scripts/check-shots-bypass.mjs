@@ -60,6 +60,8 @@ const MARKERS = [
   '__dev-service-worker__',
   /* `devStillPresence` holds the WebGL orb on one frame for the harness. */
   '__dev-still-presence__',
+  /* BIG-12: Claude and ChatGPT answered by Ollama, for testing Atlas on the tablet path. */
+  '__dev-cloud-via-ollama__',
 ]
 
 const jsFiles = readdirSync(distAssets).filter((f) => f.endsWith('.js'))

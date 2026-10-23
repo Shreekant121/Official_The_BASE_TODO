@@ -20,9 +20,9 @@
  * than as a style object handed around.
  *
  * The tones are semantic and there are only three, which is the point:
- * `neutral` is the resting chip and carries no hue at all, `review` is amber
- * — "needs a decision", the call UI-9 made for its "Needs …" pills and UI-8
- * for a failed tool chip — and `done` is the design system's own `--status-done`.
+ * `neutral` is the resting chip and carries no hue at all, `review` is a
+ * warning — grey since 29-1P2c2 (it was amber), the glyph a caller passes is
+ * the signal — and `done` is the design system's own `--status-done`.
  * A chip never gets a hue to tell it apart from the chip beside it.
  */
 import { motion } from 'framer-motion';
@@ -31,8 +31,9 @@ import { Icon, useMotion } from '../../ui';
 
 const TONE = {
   neutral: { fill: 'var(--glass-fill-2)', color: 'var(--fg-2)' },
-  review:  { fill: 'var(--glass-tint-amber)', color: 'var(--status-review)' },
-  done:    { fill: 'var(--glass-tint-accent)', color: 'var(--status-done)' },
+  /* "Needs …": a warning, grey (29-1P2c2) — its glyph is the signal. */
+  review:  { fill: 'var(--glass-tint-warn)', color: 'var(--status-warn)' },
+  done:    { fill: 'var(--glass-tint-lime)', color: 'var(--status-done)' },
 } as const;
 
 export type FieldChipTone = keyof typeof TONE;

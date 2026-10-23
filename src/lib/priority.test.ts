@@ -461,6 +461,18 @@ describe('backburner and reference materials', () => {
     const working = score([task('t', { listId: 'action', deadline: at(-30 * DAY) })], 't');
     expect(working.redAlert).toBe(true);
   });
+
+  it("includes a project's own Backburner, by its name (29-1P6c)", () => {
+    const lists: TaskList[] = [
+      { id: 'l-bb', title: '🧊 Backburner', projectId: 'p1' },
+      { id: 'l-work', title: 'Build', projectId: 'p1' },
+    ];
+    const parked = score([task('t', { listId: 'l-bb', deadline: at(-30 * DAY) })], 't', lists);
+    expect(parked.redAlert).toBe(false);
+    expect(parked.W).toBe(0);
+    const working = score([task('t', { listId: 'l-work', deadline: at(-30 * DAY) })], 't', lists);
+    expect(working.redAlert).toBe(true);
+  });
 });
 
 // ─── The task being edited ───────────────────────────────────────────────────

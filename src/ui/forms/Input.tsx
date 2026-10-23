@@ -31,7 +31,7 @@ export type InputSize = 'sm' | 'md' | 'lg';
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   /** Control height: 38 / 46 / 54px. Not the native `size` attribute. */
   size?: InputSize;
-  /** Leading icon node — 16–18px, tints to the accent on focus. */
+  /** Leading icon node — 16–18px, tints lime (the current one) on focus. */
   iconLeft?: ReactNode;
   /** Trailing unit or hint, set in mono (`min`, `h`, `/ 240`). */
   suffix?: ReactNode;
@@ -56,9 +56,9 @@ export function Input({
   const h = size === 'sm' ? 38 : size === 'lg' ? 54 : 46;
 
   const wellShadow = invalid
-    ? 'var(--glass-well-shadow), 0 0 0 1px oklch(0.70 0.15 20 / 0.7)'
+    ? 'var(--glass-well-shadow), 0 0 0 1px var(--job-coral-line)'
     : focus
-      ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+      ? 'var(--glass-well-shadow), var(--job-lime-focus)'
       : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)';
 
   const shell: CSSProperties = {
@@ -91,7 +91,7 @@ export function Input({
         <span
           style={{
             display: 'flex',
-            color: focus ? 'var(--accent)' : 'var(--fg-4)',
+            color: focus ? 'var(--job-lime)' : 'var(--fg-4)',
             transition: 'color var(--dur-base) var(--ease-glass)',
           }}
         >

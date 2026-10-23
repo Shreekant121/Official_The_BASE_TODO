@@ -32,7 +32,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import BulkAddInput from '../BulkAddInput';
 import { PortalDropdown } from '../PortalDropdown';
 import { parseBulkLines } from '../../lib/bulkAdd';
-import { Button, Icon, Well } from '../../ui';
+import { Button, Icon, Well, WhiteButton } from '../../ui';
 import type { TaskList } from '../../store/useStore';
 import { PickerButton, PickerEmpty, PickerList, PickerOption } from '../pickers';
 
@@ -119,6 +119,7 @@ export default function AddTaskForm({
               <PortalDropdown
                 isOpen={pickerOpen}
                 onClose={() => setPickerOpen(false)}
+                onOpen={() => setPickerOpen(true)}
                 triggerRef={pickerRef}
                 width={280}
               >
@@ -133,7 +134,7 @@ export default function AddTaskForm({
                     </PickerOption>
                   ))}
                   {taskLists.length === 0 && (
-                    <PickerEmpty>No lists yet — create one with “New list”.</PickerEmpty>
+                    <PickerEmpty>No lists yet. Make one with **New list**.</PickerEmpty>
                   )}
                 </PickerList>
               </PortalDropdown>
@@ -141,16 +142,15 @@ export default function AddTaskForm({
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-3)' }}>
               <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
-              <Button
+              {/* The form's confirm: solid white since 29-1P2. */}
+              <WhiteButton
                 size="sm"
-                variant="tint"
-                tone="accent"
                 disabled={!title.trim() || !listId}
                 onClick={() => onSubmitLines(parseBulkLines(title))}
-                iconLeft={<Icon name="plus" size={14} />}
+                icon={<Icon name="plus" size={14} />}
               >
                 Add task
-              </Button>
+              </WhiteButton>
             </div>
           </Well>
         </motion.div>

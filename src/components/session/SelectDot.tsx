@@ -22,6 +22,7 @@
  * leaned on to make `Slider`'s fill emerald; and the elevation section adds
  * that glow is for objects that are live **or selected**. The source agrees
  * with the rule — `--glass-tint-accent` under `--glass-rim-2, --glow-accent-sm`
+ * (lime's `--glass-tint-lime` / `--job-lime-shine` since 29-1P2c1: chosen is lime)
  * — so this is the documented rule and the prototype pointing the same way.
  * `--status-queued` keeps its own job: it is a task's stored *status*, which
  * this is not.
@@ -40,6 +41,8 @@
  * today writes nothing anywhere and must always be possible.
  */
 import { useState } from 'react';
+import { cue } from '../../lib/sound';
+import { popTick } from '../../ui';
 
 export interface SelectDotProps {
   /** Committed to today. Drives both the material and `aria-pressed`. */
@@ -57,7 +60,15 @@ export function SelectDot({ on, onClick, label, locked = false }: SelectDotProps
   return (
     <button
       type="button"
-      onClick={() => { if (!locked) onClick(); }}
+      onClick={(e) => {
+        if (locked) return;
+        /* 29-1P3: picking today's tasks one after another climbs the scale. */
+        cue(on ? 'untick' : 'tick');
+        /* 29-1P4b: and the dot pops. Only that — picking is choosing, not
+           finishing, so no +1 and no run of ticks (his call). */
+        if (!on) popTick(e.currentTarget);
+        onClick();
+      }}
       disabled={locked}
       aria-pressed={on}
       aria-label={label}
@@ -75,13 +86,13 @@ export function SelectDot({ on, onClick, label, locked = false }: SelectDotProps
         cursor: locked ? 'not-allowed' : 'pointer',
         opacity: locked ? 0.4 : 1,
         borderRadius: '50%',
-        backgroundImage: on ? 'var(--glass-tint-accent)' : 'var(--glass-well)',
+        backgroundImage: on ? 'var(--glass-tint-lime)' : 'var(--glass-well)',
         boxShadow: on
-          ? 'var(--glass-rim-2), var(--glow-accent-sm)'
+          ? 'var(--glass-rim-2), var(--job-lime-shine)'
           : hover && !locked
-            ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline)'
+            ? 'var(--glass-well-shadow), 0 0 0 1px var(--job-lime-line)'
             : 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
-        color: on ? 'var(--accent)' : 'var(--fg-3)',
+        color: on ? 'var(--job-lime-text)' : 'var(--fg-3)',
         transition: 'var(--t-hover)',
       }}
     >

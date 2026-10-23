@@ -22,10 +22,11 @@
  * every transcript to filter five rows.
  */
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { Icon, IconButton, Input, MetaKicker } from '../../ui';
+import { Icon, IconButton, Input, LitLine, litSafe, MetaKicker, SkeletonRows, SoftButton, useArrival } from '../../ui';
 import type { AtlasConversationSummary } from '../../lib/atlas/client';
 import { relativeWhen } from '../../lib/atlas/relativeWhen';
+import { askAtlasText } from './askFromSearch';
+
 
 export interface ChatListProps {
   conversations: AtlasConversationSummary[];
@@ -34,20 +35,14 @@ export interface ChatListProps {
   setQuery: (value: string) => void;
   /** Null while the laptop has not answered — drawn as a line, never as an error. */
   unavailable: string | null;
+  /** The first read is on its way: rows of placeholder, not "not answering" (29-1P14d2). */
+  waiting?: boolean;
   onPick: (id: string) => void;
   onNew: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
-  /**
-   * What sits under the list (item 13G, second pass).
-   *
-   * The model picker, as a row — Shreekant's call, 2026-09-08: *"put the model
-   * picker below the chats with a small icon and text just like others"*. It is
-   * a slot rather than the picker itself so this component keeps knowing
-   * nothing about models; it lists conversations, and the page decides what
-   * belongs under them.
-   */
-  footer?: ReactNode;
+  /** OPT-9: send what a search found nothing for to Atlas, in a new chat. */
+  onAsk?: (text: string) => void;
 }
 
 export function ChatList({
@@ -56,19 +51,24 @@ export function ChatList({
   query,
   setQuery,
   unavailable,
+  waiting = false,
   onPick,
   onNew,
   onRename,
   onDelete,
-  footer,
+  onAsk,
 }: ChatListProps) {
+  const typed = query.trim();
+  const arrived = useRef<HTMLDivElement>(null);
+  useArrival(arrived, !waiting);
+
   return (
     <div
       style={{
         display: 'grid',
-        /* A fourth row only when there is something to put in it, so a list
-           with no footer is laid out exactly as it was. */
-        gridTemplateRows: footer ? 'auto auto minmax(0,1fr) auto' : 'auto auto minmax(0,1fr)',
+        /* The model picker sat in a third row under the list until OPT-8 moved
+           it to Settings → Atlas. */
+        gridTemplateRows: 'auto minmax(0,1fr)',
         /* The column, not just the list's row, has to be allowed to shrink.
            An `<input>` has a natural width of its own (about twenty
            characters), and with no column declared the grid made its one
@@ -81,21 +81,22 @@ export function ChatList({
         height: '100%', minHeight: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
-        <MetaKicker tone="var(--fg-3)">Chats</MetaKicker>
-        <span style={{ flex: 1 }} />
+      {/* The search where the "Chats" label was, New chat beside it (his
+          BASE list, 2026-10-06). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search chats"
+            aria-label="Search chats"
+            iconLeft={<Icon name="search" size={16} />}
+          />
+        </div>
         <IconButton label="New chat" title="New chat" variant="ghost" onClick={onNew}>
           <Icon name="message-square-plus" size={18} />
         </IconButton>
       </div>
-
-      <Input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search chats"
-        aria-label="Search chats"
-        iconLeft={<Icon name="search" size={16} />}
-      />
 
       {/* `minmax(0, 1fr)` is not tidiness, it is the fix for a row that was
           30px wider than the column holding it.
@@ -112,16 +113,22 @@ export function ChatList({
           measured 262, leaving 2px of the timestamp on screen.
 
           This is the same `min-width: auto` trap item 1 hit inside the task
-          sheet, answered the same way — at the container, once. */}
+          sheet, answered the same way — at the container, once.
+
+          `ag-fade` is OPT-10: the last rows used to be sliced flat level
+          with the model picker; now they fade. */}
       <div
-        className="ag-scroll"
+        ref={arrived}
+        className="ag-scroll ag-fade"
         style={{
           overflowY: 'auto', overscrollBehavior: 'contain',
           display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)',
           gap: 'var(--sp-2)', alignContent: 'start',
         }}
       >
-        {unavailable !== null ? (
+        {waiting ? (
+          <SkeletonRows rows={5} lead="none" label="Reading your chats" />
+        ) : unavailable !== null ? (
           <span
             style={{
               font: 'var(--type-caption)', color: 'var(--fg-4)',
@@ -131,9 +138,28 @@ export function ChatList({
             {unavailable}
           </span>
         ) : conversations.length === 0 ? (
-          <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-5)' }}>
-            {query.trim() === '' ? 'No conversations yet.' : 'No chat matches that.'}
-          </span>
+          <>
+            <LitLine
+              text={typed === '' ? '**No chats yet.** Ask Atlas anything to start one.' : `No chat matches **“${litSafe(typed)}”**.`}
+              style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', padding: 'var(--sp-5)' }}
+            />
+            {/* OPT-9. Violet, with the glow every Ask AI button has: this is
+                Atlas's (`--job-violet`, 29-1P1). Only for a search — an empty
+                list with nothing typed has nothing to ask about. Just "Ask
+                Atlas": the search is in the box right above it, and quoting
+                it back cut off at the column's 232px. */}
+            {typed !== '' && onAsk && (
+              <SoftButton
+                size="sm"
+                className="ds-ask"
+                icon={<Icon name="sparkles" size={15} />}
+                onClick={() => onAsk(askAtlasText(typed))}
+                style={{ justifySelf: 'start', margin: '0 var(--sp-3)' }}
+              >
+                Ask Atlas
+              </SoftButton>
+            )}
+          </>
         ) : (
           conversations.map((conversation) => (
             <ChatRow
@@ -147,18 +173,6 @@ export function ChatList({
           ))
         )}
       </div>
-
-      {footer && (
-        <div
-          style={{
-            display: 'grid', minWidth: 0,
-            paddingTop: 'var(--sp-4)',
-            borderTop: '1px solid var(--line-faint)',
-          }}
-        >
-          {footer}
-        </div>
-      )}
     </div>
   );
 }
@@ -283,7 +297,7 @@ function ChatRow({
           onClick={onDelete}
           style={{
             flex: '0 0 auto', border: 0, cursor: 'pointer', padding: '0 var(--sp-4)', height: 28,
-            borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-tint-rose)',
+            borderRadius: 'var(--r-pill)', backgroundImage: 'var(--glass-tint-coral)',
             boxShadow: 'var(--glass-rim-2)', color: 'var(--status-overrun)',
             font: 'var(--type-label)', fontSize: 'var(--text-xs)',
           }}

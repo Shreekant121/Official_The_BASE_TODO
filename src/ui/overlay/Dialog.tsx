@@ -69,11 +69,19 @@
  * 3. `zIndex` is a prop rather than a token because this app's stacking
  *    ladder lives in `src/lib/zLayers.ts`, and `src/ui/` deliberately
  *    imports nothing outside itself (see MorphMenu's port note 2).
+ * 4. ADDED (29-1P6a, ideas 58 and 54 — `sheetMotion.ts` has the how):
+ *    every dialog but the palette sinks the page behind it while it is
+ *    open, and one given `growFrom` (the task sheet) grows out of the row
+ *    it was opened from and shrinks back into it. A growing sheet draws no
+ *    CSS entrance or exit of its own — Web Animations do both, and the
+ *    exit hands `onExited` its end exactly as the opacity `transitionend`
+ *    does for every other dialog.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import { useV3, v3Attr } from '../core/v3Context';
+import { findOrigin, growFrames, prefersReducedMotion, sinkPage, unsunk } from './sheetMotion';
 
 /**
  * BACKSTOP ONLY — the dissolve is now waited on, not guessed (UI-22).
@@ -146,7 +154,22 @@ export interface DialogProps {
    * off a second copy of the duration. Never fires on open.
    */
   onExited?: () => void;
+  /**
+   * A selector for the row this sheet opens from (idea 54): it grows out of
+   * the matching element on screen — the one just pressed, if several — and
+   * shrinks back into it on close. Nothing matching, and it arrives as any
+   * dialog does. See port note 4.
+   */
+  growFrom?: string;
 }
+
+/** How long a sheet takes to grow out of its row, and back (the idea page's 460/380). */
+const GROW_IN_MS = 420;
+const GROW_OUT_MS = 340;
+const GROW_EASE = 'cubic-bezier(0.2, 0.9, 0.25, 1.04)';
+const SHRINK_EASE = 'cubic-bezier(0.3, 0.7, 0.2, 1)';
+/** V3's own fade for a dialog with no row to grow from: `--dur-base` on `--ease-glass`. */
+const FADE: KeyframeAnimationOptions = { duration: 200, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' };
 
 export function Dialog({
   open,
@@ -162,6 +185,7 @@ export function Dialog({
   className = '',
   style,
   onExited,
+  growFrom,
 }: DialogProps) {
   /* Two flags, not one. `mounted` keeps the sheet in the DOM long enough
      to dissolve; `shown` is what the styles read, flipped a frame after
@@ -188,6 +212,11 @@ export function Dialog({
   useEffect(() => {
     onExitedRef.current = onExited;
   }, [onExited]);
+  /* A growing sheet (port note 4). Fixed for the dialog's life: the motion
+     setting is read once, and a sheet that half-grew would be stranded. */
+  const [grow] = useState(() => !!growFrom && !prefersReducedMotion());
+  /* The row it grew from, to shrink back into while it is still there. */
+  const originRef = useRef<HTMLElement | null>(null);
 
   if (open !== prevOpen) {
     setPrevOpen(open);
@@ -207,6 +236,38 @@ export function Dialog({
       setMounted(false);
       onExitedRef.current?.();
     };
+    if (grow && panel && typeof panel.animate === 'function') {
+      /* Back into the row if it is still on screen (the same one, else
+         another copy of it), measured where it will sit once the page has
+         risen; otherwise the plain V3 fade. */
+      const kept = originRef.current;
+      const origin = kept && kept.isConnected && kept.getBoundingClientRect().width > 0
+        ? kept
+        : growFrom ? findOrigin(growFrom, panel) : null;
+      const outs: Animation[] = [];
+      if (origin) {
+        const [from, to] = growFrames(unsunk(origin), panel.getBoundingClientRect());
+        outs.push(panel.animate(
+          [{ ...to, opacity: 1 }, { ...from, opacity: 1, offset: 0.8 }, { ...from, opacity: 0 }],
+          { duration: GROW_OUT_MS, easing: SHRINK_EASE, fill: 'forwards' },
+        ));
+        for (const child of Array.from(panel.children)) {
+          outs.push(child.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: 'forwards' }));
+        }
+      } else {
+        outs.push(panel.animate(
+          [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(4px)' }],
+          { ...FADE, fill: 'forwards' },
+        ));
+      }
+      outs[0].onfinish = finish;
+      const t = setTimeout(finish, EXIT_BACKSTOP_MS);
+      /* Cancelled with the effect, for the reason the way in gives below. */
+      return () => {
+        clearTimeout(t);
+        for (const anim of outs) anim.cancel();
+      };
+    }
     /* Only the panel's own opacity run counts. `transitionend` bubbles, so
        an unrelated transition finishing on a child inside the sheet would
        otherwise drop the whole thing mid-dissolve. */
@@ -220,13 +281,55 @@ export function Dialog({
       clearTimeout(t);
       panel?.removeEventListener('transitionend', onTransitionEnd);
     };
-  }, [open, mounted]);
+  }, [open, mounted, grow, growFrom]);
 
   useEffect(() => {
     if (!mounted || !open) return;
     const raf = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(raf);
   }, [mounted, open]);
+
+  /* 54: the way in for a growing sheet. Before paint, so its first frame is
+     already the row's box; and before the sink below, so the row is read
+     where it sits now, not where the sinking page is taking it. */
+  useLayoutEffect(() => {
+    if (!grow || !mounted || !open) return;
+    const panel = panelRef.current;
+    if (!panel || typeof panel.animate !== 'function') return;
+    const origin = growFrom ? findOrigin(growFrom, panel) : null;
+    originRef.current = origin;
+    /* Undone if this effect is torn down before the sheet has grown — and by
+       React's development double-run, whose second pass would otherwise
+       measure a panel the first pass had already moved. */
+    const started: Animation[] = [];
+    const undo = () => { for (const anim of started) anim.cancel(); };
+    if (!origin) {
+      started.push(panel.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], FADE));
+      return undo;
+    }
+    const [from, to] = growFrames(origin.getBoundingClientRect(), panel.getBoundingClientRect());
+    started.push(panel.animate(
+      [{ ...from, opacity: 0 }, { ...from, opacity: 1, offset: 0.12 }, { ...to, opacity: 1 }],
+      { duration: GROW_IN_MS, easing: GROW_EASE },
+    ));
+    /* The sheet's own content comes in once the box has nearly grown — before
+       that the box is scaled, and its text would be squashed. */
+    for (const child of Array.from(panel.children)) {
+      started.push(child.animate(
+        [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }],
+        { duration: 200, delay: 230, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'backwards' },
+      ));
+    }
+    return undo;
+  }, [grow, growFrom, mounted, open]);
+
+  /* 58: the page sinks while any dialog is open — not behind the palette,
+     which is a quick look-up rather than a sheet. */
+  useLayoutEffect(() => {
+    if (!open || placement === 'top') return;
+    sinkPage(true);
+    return () => sinkPage(false);
+  }, [open, placement]);
 
   /* Focus moves into the sheet on open and back to whatever opened it on
      close — otherwise dismissing one returns a keyboard user to the top
@@ -316,6 +419,29 @@ export function Dialog({
     pointerEvents: shown ? 'auto' : 'none',
     transition: 'opacity var(--dur-base) var(--ease-glass)',
   };
+  /* A growing sheet is solid from its first frame — it IS the row — so the
+     dim behind it fades on a layer of its own instead of on the scrim, whose
+     opacity would carry the sheet with it. The layer lets presses through to
+     the scrim, which is still what a tap outside the sheet lands on. */
+  const dim: CSSProperties | null = grow
+    ? {
+      position: 'absolute',
+      inset: 0,
+      pointerEvents: 'none',
+      backgroundColor: scrim.backgroundColor,
+      WebkitBackdropFilter: scrim.backdropFilter,
+      backdropFilter: scrim.backdropFilter,
+      opacity: shown ? 1 : 0,
+      transition: scrim.transition,
+    }
+    : null;
+  if (dim) {
+    delete scrim.backgroundColor;
+    delete scrim.WebkitBackdropFilter;
+    delete scrim.backdropFilter;
+    scrim.opacity = 1;
+    scrim.transition = undefined;
+  }
 
   const panel: CSSProperties = {
     position: 'relative',
@@ -351,11 +477,16 @@ export function Dialog({
     outline: 'none',
     /* The condense law, with `ag-condense`'s own numbers — or, in V3, with
        `ag3-condense`'s: a fade and a 4px rise, no scale and no blur. */
-    opacity: shown ? 1 : 0,
-    transform: shown ? 'scale(1) translateY(0)' : v3 ? 'translateY(4px)' : 'scale(0.94) translateY(6px)',
-    filter: shown || v3 ? 'blur(0)' : 'blur(8px)',
-    transition:
-      'transform var(--dur-base) var(--ease-glass), opacity var(--dur-base) var(--ease-glass), filter var(--dur-base) var(--ease-glass)',
+    /* A growing sheet's way in and out are Web Animations (port note 4). */
+    ...(grow
+      ? {}
+      : {
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'scale(1) translateY(0)' : v3 ? 'translateY(4px)' : 'scale(0.94) translateY(6px)',
+        filter: shown || v3 ? 'blur(0)' : 'blur(8px)',
+        transition:
+          'transform var(--dur-base) var(--ease-glass), opacity var(--dur-base) var(--ease-glass), filter var(--dur-base) var(--ease-glass)',
+      }),
     ...style,
   };
 
@@ -374,6 +505,7 @@ export function Dialog({
         onClose();
       }}
     >
+      {dim && <div aria-hidden="true" style={dim} />}
       <div
         ref={panelRef}
         className={className}

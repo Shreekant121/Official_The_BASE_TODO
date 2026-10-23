@@ -1,8 +1,10 @@
 /* Moved out of `pages/ChatPage.tsx` when it was split (BUILD-7). BUILD-8 made
    a tap answer on the card it was made on. The state behind it is
    `useApprovalTray.ts`. */
+import { useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Icon, IconButton } from '../../ui';
+import { Button, Icon, IconButton, WhiteButton } from '../../ui';
+import { useFling } from '../../ui/core/useFling';
 import { Z } from '../../lib/zLayers';
 import { relativeWhen } from '../../lib/atlas/relativeWhen';
 import type { AtlasApproval } from '../../lib/atlas/client';
@@ -28,6 +30,7 @@ export function Tray({
   failureOf,
   onClose,
   onDecide,
+  onThrow,
 }: {
   open: boolean;
   /** Everything waiting, plus a receipt for each item answered since the tray opened (BUILD-8). */
@@ -37,6 +40,8 @@ export function Tray({
   failureOf: (id: string) => string | null;
   onClose: () => void;
   onDecide: (id: string, choice: 'approve' | 'discard') => Promise<void>;
+  /** 29-1P6b: a card flicked away — a waiting one is discarded, a receipt just goes. */
+  onThrow: (id: string) => void;
 }) {
   return (
     <aside
@@ -84,6 +89,7 @@ export function Tray({
       </header>
 
       <div
+        className="ag-scroll ag-fade"
         style={{
           overflowY: 'auto', overscrollBehavior: 'contain', padding: '0 var(--sp-7)',
           display: 'grid', gap: 'var(--sp-4)', alignContent: 'start',
@@ -116,14 +122,17 @@ export function Tray({
         ) : (
           items.map((item) =>
             item.state !== 'waiting' ? (
-              <TrayReceipt key={item.id} item={item} />
+              <TrayReceipt key={item.id} item={item} onThrow={() => onThrow(item.id)} />
             ) : (
               <TrayCard
-                key={item.id}
+                /* A discard that failed brings a thrown card back as a new
+                   one, out of its flight and carrying the reason. */
+                key={`${item.id}:${failureOf(item.id) ?? ''}`}
                 item={item}
                 busy={deciding === item.id}
                 failure={failureOf(item.id)}
                 onDecide={onDecide}
+                onThrow={() => onThrow(item.id)}
               />
             ),
           )
@@ -160,19 +169,25 @@ function TrayCard({
   busy,
   failure,
   onDecide,
+  onThrow,
 }: {
   item: AtlasApproval;
   busy: boolean;
   failure: string | null;
   onDecide: (id: string, choice: 'approve' | 'discard') => Promise<void>;
+  onThrow: () => void;
 }) {
   const copy = approvalCopy(item.kind, 1);
+  const ref = useRef<HTMLDivElement>(null);
+  /* Flicked away = Discard (his call); never mid-answer. */
+  useFling(ref, { onThrow, enabled: !busy });
   return (
     <div
+      ref={ref}
       style={{
         display: 'grid', gap: 'var(--sp-5)', padding: 'var(--sp-6)',
         borderRadius: 'var(--r-card)',
-        backgroundImage: 'var(--glass-tint-amber)',
+        backgroundImage: 'var(--glass-tint-violet)',
         boxShadow: 'var(--glass-rim-2), var(--glass-cast-2)',
       }}
     >
@@ -181,7 +196,7 @@ function TrayCard({
           style={{
             display: 'grid', placeItems: 'center', width: 32, height: 32, flex: '0 0 auto',
             borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)',
-            boxShadow: 'var(--glass-rim-2)', color: 'var(--status-review)',
+            boxShadow: 'var(--glass-rim-2)', color: 'var(--job-violet)',
           }}
         >
           <Icon name={copy.icon} size={16} />
@@ -213,15 +228,16 @@ function TrayCard({
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-        <Button size="sm" variant="frost" disabled={busy} onClick={() => void onDecide(item.id, 'approve')}>
+        {/* Each row's yes: solid white (29-1P2), as frost was. */}
+        <WhiteButton size="sm" disabled={busy} aria-busy={busy || undefined} onClick={() => void onDecide(item.id, 'approve')}>
           {busy ? 'Doing it…' : failure !== null ? 'Try again' : copy.action}
-        </Button>
+        </WhiteButton>
         <Button size="sm" variant="ghost" disabled={busy} onClick={() => void onDecide(item.id, 'discard')}>
           Discard
         </Button>
         {busy && (
           <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
-            On the laptop — a few seconds.
+            A few seconds.
           </span>
         )}
       </div>
@@ -236,11 +252,14 @@ function TrayCard({
  * what happened here is the thing worth keeping on screen. It stays until the
  * tray is closed; after that the log has it.
  */
-function TrayReceipt({ item }: { item: AtlasApproval }) {
+function TrayReceipt({ item, onThrow }: { item: AtlasApproval; onThrow: () => void }) {
   const done = item.state === 'approved';
-  const summary = item.outcome?.summary ?? (done ? 'Done.' : 'Discarded — nothing left the laptop.');
+  const summary = item.outcome?.summary ?? (done ? 'Done.' : 'Discarded — nothing was sent.');
+  const ref = useRef<HTMLDivElement>(null);
+  useFling(ref, { onThrow });
   return (
     <div
+      ref={ref}
       role="status"
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)', padding: 'var(--sp-5) var(--sp-6)',
@@ -249,7 +268,7 @@ function TrayReceipt({ item }: { item: AtlasApproval }) {
         animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
       }}
     >
-      <span style={{ display: 'flex', flex: '0 0 auto', paddingTop: 2, color: done ? 'var(--accent)' : 'var(--fg-4)' }}>
+      <span style={{ display: 'flex', flex: '0 0 auto', paddingTop: 2, color: done ? 'var(--job-lime)' : 'var(--fg-4)' }}>
         <Icon name={done ? 'check' : 'x'} size={16} />
       </span>
       <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>

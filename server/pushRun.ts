@@ -25,7 +25,8 @@
  * WHAT A KNOCK DOES
  * -----------------
  * For every account with at least one registered device: read the account's
- * notification switch, its document and its push log; ask `planPushes`; write
+ * notification switch, its document, its events (29-2c2) and its push log;
+ * ask `planPushes`; write
  * the log **in the same transaction that read it**, so two overlapping knocks
  * cannot both send an alert; then send. Nothing about a user's data ever goes
  * into the response — it is read by a third-party cron service's log.
@@ -40,6 +41,8 @@ import { hydrateFromPayload, type SyncPayload } from '../src/lib/syncPayload';
 import { firingToday, type FiringRow } from '../src/lib/firingToday';
 import { DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings } from '../src/lib/notificationSettings';
 import { isValidTimeZone } from '../src/lib/agent/dates';
+import { isBaseEvent, type BaseEvent } from '../src/lib/events/events';
+import { eventAlertsToday, type EventAlertRow } from '../src/lib/events/eventAlerts';
 import {
   EMPTY_LOG,
   LATE_LIMIT_MS,
@@ -140,6 +143,19 @@ function rowsFor(payload: SyncPayload, settings: NotificationSettings, timeZone:
   return [...ask(now - LATE_LIMIT_MS), ...ask(now)];
 }
 
+/**
+ * 29-2c2: the events' alerts that ring today — and, just after midnight,
+ * yesterday's last few minutes, as for tasks. Events are their own document
+ * (`users/{uid}/data/events`, never `data/main`); a record that does not read
+ * as an event is left out rather than failing the knock.
+ */
+function eventRowsFor(data: unknown, timeZone: string, now: number): EventAlertRow[] {
+  const raw = (data as { events?: unknown } | undefined)?.events;
+  const events: BaseEvent[] = Array.isArray(raw) ? raw.filter(isBaseEvent) : [];
+  if (events.length === 0) return [];
+  return [...eventAlertsToday(events, timeZone, now - LATE_LIMIT_MS), ...eventAlertsToday(events, timeZone, now)];
+}
+
 /** The newest device that reported a zone. Every device of one account gets the same alerts. */
 function zoneOf(subs: StoredSubscription[]): string | null {
   const zoned = subs
@@ -220,11 +236,13 @@ export async function runPushes(opts: RunOptions): Promise<RunReport> {
 
     const rows = rowsFor(payload, settings, timeZone, now);
     const backlog = hydrateFromPayload(payload).backlogTasks;
+    const eventsSnap = await store.collection('users').doc(uid).collection('data').doc('events').get();
+    const events = eventRowsFor(eventsSnap.data(), timeZone, now);
 
     const ref = logRef(store, uid);
     const plan = await store.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      const next = planPushes({ rows, backlog, log: readLog(snap.data()), now, timeZone });
+      const next = planPushes({ rows, backlog, log: readLog(snap.data()), now, timeZone, events });
       if (next.changed && !opts.dryRun) tx.set(ref, { entries: next.log.entries, updatedAt: now });
       return next;
     });

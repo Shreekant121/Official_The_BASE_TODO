@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "vercel dev",
-    "build": "node scripts/build-push.mjs --check && vite build && node scripts/build-sw.mjs && node scripts/check-shots-bypass.mjs",
+    "build": "node scripts/build-push.mjs --check && node scripts/build-atlas-engine.mjs --check && vite build && node scripts/build-sw.mjs && node scripts/check-shots-bypass.mjs",
     "build:push": "node scripts/build-push.mjs",
+    "build:atlas": "node scripts/build-atlas-engine.mjs",
     "build:icons": "node scripts/build-phosphor.mjs",
+    "build:project-icons": "node scripts/build-project-icons.mjs",
     "check:rules": "tsx scripts/check-rules.ts",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest run",

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_LISTS, useStore, type Project, type Task, type TaskList } from '../src/store/useStore';
 import { useTrashStore } from '../src/store/useTrashStore';
+import { DEFAULT_PROJECT_ICON } from '../src/lib/projectIcon';
 import { useSnapshotStore } from '../src/store/useSnapshotStore';
 import { liveAgentStore, liveSnapshotCapture } from '../src/lib/agent/liveContext';
 import {
@@ -13,7 +14,7 @@ import {
 } from '../src/lib/agent/tools/boardTools';
 import { DRAWERS, drawerOf, frontDoorKindOf, getTool } from '../src/lib/agent/tools/index';
 import type { ToolContext, ToolDef } from '../src/lib/agent/types';
-import { applyUndo, beginCapture, endCapture, type UndoPayload } from './undo.ts';
+import { applyUndo, beginCapture, endCapture, type UndoPayload } from '../src/lib/agent/toolServer/undo';
 
 /**
  * BUILD-3 — ATLAS CAN SHAPE THE BOARD, AND EVERY SHAPE CAN BE TAKEN BACK.
@@ -32,7 +33,7 @@ import { applyUndo, beginCapture, endCapture, type UndoPayload } from './undo.ts
 
 const NOW = new Date('2026-09-16T11:00:00+05:30');
 
-const PROJECTS: Project[] = [{ id: 'p-home', name: 'Home', color: '#10B981', createdAt: 0, order: 0 }];
+const PROJECTS: Project[] = [{ id: 'p-home', name: 'Home', createdAt: 0, order: 0 }];
 
 const LISTS: TaskList[] = [
   ...DEFAULT_LISTS,
@@ -85,12 +86,12 @@ const listsOf = (projectId: string) => state().taskLists.filter((list) => list.p
 describe('creating and renaming', () => {
   it('creates a project with its lists in one call, painted and ordered like the New Project sheet', async () => {
     const { result } = await run(createProject, {
-      projects: [{ name: 'Studio Launch', lists: ['Research', 'Design', 'Ship'], color: 'violet' }],
+      projects: [{ name: 'Studio Launch', lists: ['Research', 'Design', 'Ship'] }],
     });
 
     expect(result.ok).toBe(true);
     const project = projectNamed('Studio Launch');
-    expect(project).toMatchObject({ color: '#8C7BEC', icon: '🚀', order: 1, createdAt: NOW.getTime() });
+    expect(project).toMatchObject({ icon: DEFAULT_PROJECT_ICON, order: 1, createdAt: NOW.getTime() });
     expect(listsOf(project!.id).map((list) => [list.title, list.order])).toEqual([
       ['Research', 0],
       ['Design', 1],
@@ -127,13 +128,13 @@ describe('creating and renaming', () => {
   });
 
   it('renames a project and puts the old name back on revert', async () => {
-    const { result, token } = await run(updateProject, { projectIds: ['Home'], name: 'House', color: 'amber' });
+    const { result, token } = await run(updateProject, { projectIds: ['Home'], name: 'House' });
 
-    expect(result.summary).toBe('Renamed the project "Home" to "House" and changed its colour.');
-    expect(state().projects[0]).toMatchObject({ name: 'House', color: '#D69A22' });
+    expect(result.summary).toBe('Renamed the project "Home" to "House".');
+    expect(state().projects[0]).toMatchObject({ name: 'House' });
 
     applyUndo(token);
-    expect(state().projects[0]).toMatchObject({ name: 'Home', color: '#10B981' });
+    expect(state().projects[0]).toMatchObject({ name: 'Home' });
   });
 
   it('renames a list the way the board does — the tasks’ fallback name follows — and reverts both', async () => {
@@ -154,7 +155,7 @@ describe('creating and renaming', () => {
   });
 
   it('moves a list into another project with its tasks, and back on revert', async () => {
-    useStore.setState({ projects: [...state().projects, { id: 'p-work', name: 'Work', color: '#00A6C4', createdAt: 1, order: 1 }] });
+    useStore.setState({ projects: [...state().projects, { id: 'p-work', name: 'Work', createdAt: 1, order: 1 }] });
 
     const { token } = await run(updateList, { listIds: ['l-garden'], project: 'Work' });
     expect(state().taskLists.find((list) => list.id === 'l-garden')).toMatchObject({ projectId: 'p-work', order: 0 });
@@ -162,6 +163,30 @@ describe('creating and renaming', () => {
 
     applyUndo(token);
     expect(state().taskLists.find((list) => list.id === 'l-garden')).toMatchObject({ projectId: 'p-home', order: 1 });
+  });
+
+  it('BIG-2: creates a project inside another, moves one in and out, and reverts the move', async () => {
+    const created = await run(createProject, { projects: [{ name: 'Roof', inside: 'Home' }] });
+    expect(created.result.summary).toBe('Created the project "Roof" inside "Home", with no lists in it yet.');
+    const roof = state().projects.find((p) => p.name === 'Roof')!;
+    expect(roof.parentId).toBe('p-home');
+
+    useStore.setState({ projects: [...state().projects, { id: 'p-work', name: 'Work', createdAt: 1, order: 1 }] });
+    const { result, token } = await run(updateProject, { projectIds: ['Work'], inside: 'Home' });
+    expect(result.summary).toBe('Updated "Work": moved it inside "Home".');
+    expect(state().projects.find((p) => p.id === 'p-work')?.parentId).toBe('p-home');
+
+    // A project can never go inside something it holds.
+    const refused = await run(updateProject, { projectIds: ['Home'], inside: 'Work' });
+    expect(refused.result.ok).toBe(false);
+    expect(state().projects.find((p) => p.id === 'p-home')?.parentId).toBeUndefined();
+
+    applyUndo(token);
+    expect(state().projects.find((p) => p.id === 'p-work')?.parentId).toBeUndefined();
+
+    const out = await run(updateProject, { projectIds: ['Roof'], inside: '' });
+    expect(out.result.summary).toBe('Updated "Roof": moved it to the top level.');
+    expect(state().projects.find((p) => p.id === roof.id)?.parentId).toBeUndefined();
   });
 
   it('never reaches a project by part of its name, and never touches a built-in list', async () => {

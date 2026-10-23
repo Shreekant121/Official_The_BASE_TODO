@@ -48,12 +48,16 @@
  */
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Button, Dialog, FieldLabel, Icon, IconButton } from '../ui';
+import { Dialog, FieldLabel, GelButton, Icon, IconButton, SlideToStart, SoftToggle } from '../ui';
 import type { IconName } from '../ui';
+import { sessionMinutes, startsBySlide } from '../lib/focusCommitment';
+import { cue } from '../lib/sound';
 import { getListTitle, taskEstimatedMinutes, useStore, type Task } from '../store/useStore';
 import { useOverlayDismiss } from '../lib/useOverlayDismiss';
 import { Z } from '../lib/zLayers';
 import { buildSmartQueue } from '../lib/smartStart';
+import { smartStartHours } from '../lib/dashboard/hours';
+import { secondsLeftToday } from '../lib/dashboard/todayHours';
 import { usePriorityScores } from '../store/usePriorityScores';
 
 const QUICK_PICKS = [1, 2, 4, 8];
@@ -183,7 +187,9 @@ interface SmartStartModalProps {
 export default function SmartStartModal({ isOpen, onClose, backlogTasks, currentQueueCount, onStart }: SmartStartModalProps) {
   const { projects, taskLists } = useStore();
 
-  const [hours, setHours] = useState('2');
+  /* BIG-6, 29-1b: the box opens at the hours LEFT today — today's hours are
+     one number with the work session, less what he has worked (his call). */
+  const [hours, setHours] = useState(() => smartStartHours(secondsLeftToday()));
   /** Held-back tasks the user pressed "Schedule anyway" on. */
   const [overrides, setOverrides] = useState<ReadonlySet<string>>(() => new Set());
   const [showQueue, setShowQueue] = useState(false);
@@ -195,7 +201,7 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
     if (isOpen) {
-      setHours('2');
+      setHours(smartStartHours(secondsLeftToday()));
       setOverrides(new Set());
       setShowQueue(false);
       setShowHeldBack(false);
@@ -214,7 +220,7 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
   // see `onStart`.
   const result = useMemo(
     () => (isValid
-      ? buildSmartQueue(parsedHours, backlogTasks, { overrides, scores })
+      ? buildSmartQueue(parsedHours, backlogTasks, { overrides, scores, ignored: scores.ignored.ids })
       : { queue: [], heldBack: [] }),
     [isValid, parsedHours, backlogTasks, overrides, scores],
   );
@@ -259,7 +265,7 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
       style={{ gap: 0, padding: 0, gridTemplateColumns: 'minmax(0, 1fr)' }}
     >
       <div
-        className="ag-scroll"
+        className="ag-scroll ag-fade"
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 1fr)',
@@ -332,7 +338,7 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
               borderRadius: 'var(--r-lg)',
               backgroundImage: 'var(--glass-well)',
               boxShadow: hoursFocused
-                ? 'var(--glass-well-shadow), 0 0 0 1px var(--accent-hairline), 0 0 20px -6px oklch(0.70 0.15 162 / 0.5)'
+                ? 'var(--glass-well-shadow), var(--job-lime-focus)'
                 : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
               transition: 'box-shadow var(--dur-base) var(--ease-glass)',
             }}
@@ -377,26 +383,14 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
             {QUICK_PICKS.map((h) => {
               const on = parsedHours === h;
               return (
-                <button
+                <SoftToggle
                   key={h}
-                  type="button"
+                  pressed={on}
                   onClick={() => setHours(String(h))}
-                  aria-pressed={on}
-                  style={{
-                    height: 44,
-                    border: 0,
-                    cursor: 'pointer',
-                    borderRadius: 'var(--r-control)',
-                    background: on ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
-                    boxShadow: on ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
-                    color: on ? 'oklch(0.93 0.07 162)' : 'var(--fg-3)',
-                    font: 'var(--type-numeric)',
-                    fontSize: 'var(--text-sm)',
-                    transition: 'var(--t-hover)',
-                  }}
+                  style={{ padding: 0, font: 'var(--type-numeric)', fontSize: 'var(--text-sm)' }}
                 >
                   {h}h
-                </button>
+                </SoftToggle>
               );
             })}
           </div>
@@ -433,7 +427,7 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
                       style={{
                         font: 'var(--type-numeric)',
                         fontSize: 'var(--text-xs)',
-                        color: 'var(--hue-amber)',
+                        color: 'var(--status-overrun)', /* over time: coral, 29-1P2c2 */
                         fontVariantNumeric: 'tabular-nums',
                         whiteSpace: 'nowrap',
                       }}
@@ -580,10 +574,10 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
                           Waiting on: {blockerNames}
                         </span>
                       </div>
-                      <Button
+                      <SoftToggle
                         size="sm"
-                        variant={scheduled ? 'tint' : 'glass'}
-                        iconLeft={<Icon name={scheduled ? 'check' : 'zap'} size={14} />}
+                        pressed={scheduled}
+                        icon={<Icon name={scheduled ? 'check' : 'zap'} size={14} />}
                         onClick={() => toggleOverride(task.id)}
                         title={scheduled
                           ? 'Take it back out of the queue'
@@ -591,7 +585,7 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
                         style={{ flex: '0 0 auto' }}
                       >
                         {scheduled ? 'Scheduled' : 'Schedule anyway'}
-                      </Button>
+                      </SoftToggle>
                     </div>
                   );
                 })}
@@ -609,30 +603,42 @@ export default function SmartStartModal({ isOpen, onClose, backlogTasks, current
               gap: 'var(--sp-4)',
               padding: 'var(--sp-5) var(--sp-6)',
               borderRadius: 'var(--r-lg)',
-              background: 'var(--glass-tint-amber)',
-              boxShadow: 'var(--glass-rim-1), inset 0 0 0 1px oklch(0.72 0.14 82 / 0.22)',
+              /* A warning: quiet, grey with its icon (29-1P2c2). */
+              background: 'var(--glass-tint-warn)',
+              boxShadow: 'var(--glass-rim-1), inset 0 0 0 1px var(--line-soft)',
             }}
           >
-            <span style={{ display: 'flex', color: 'var(--hue-amber)', flex: '0 0 auto', marginTop: 1 }}>
+            <span style={{ display: 'flex', color: 'var(--status-warn)', flex: '0 0 auto', marginTop: 1 }}>
               <Icon name="triangle-alert" size={16} />
             </span>
-            <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'oklch(0.95 0.07 82)', textWrap: 'pretty' }}>
+            <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)', textWrap: 'pretty' }}>
               Today&apos;s session already has {currentQueueCount} task{currentQueueCount !== 1 ? 's' : ''} in it.
               Starting replaces {currentQueueCount !== 1 ? 'them' : 'it'}.
             </p>
           </div>
         )}
 
-        <Button
-          variant="gel"
-          size="lg"
-          block
-          disabled={!isValid || result.queue.length === 0}
-          iconLeft={<Icon name="zap" size={18} />}
-          onClick={handleStart}
-        >
-          {currentQueueCount > 0 ? 'Replace & Start Focusing' : 'Start Focusing'}
-        </Button>
+        {/* Since 29-1P2 the design system's Start — his orange gel with the
+            tile — or, for a session of 90 minutes or more (his call), the
+            slide, as on Set Deadlines and the Dashboard. */}
+        {startsBySlide(sessionMinutes(result.queue)) ? (
+          <SlideToStart
+            disabled={!isValid || result.queue.length === 0}
+            onConfirm={handleStart}
+            style={{ maxWidth: 'none' }}
+          >
+            {currentQueueCount > 0 ? 'Slide to replace and start' : 'Slide to start focusing'}
+          </SlideToStart>
+        ) : (
+          <GelButton
+            colour="orange"
+            block
+            disabled={!isValid || result.queue.length === 0}
+            onClick={() => { cue('start'); handleStart(); }}
+          >
+            {currentQueueCount > 0 ? 'Replace & Start Focusing' : 'Start Focusing'}
+          </GelButton>
+        )}
       </div>
     </Dialog>
   );

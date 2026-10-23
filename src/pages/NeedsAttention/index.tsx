@@ -19,7 +19,7 @@
  * `readScore`, but `readScore` now names what `lib/priority.ts` returned
  * instead of what `computePriorityScore` computed. Seven factors in the
  * `Instrument` where there were four, no Duration penalty, and the pane's
- * amber is Red Alert rather than a raw 10.
+ * coral (amber until 29-1P2c2) is Red Alert rather than a raw 10.
  *
  * WHAT IS UNCHANGED — and this is the part that matters
  * -----------------------------------------------------
@@ -86,10 +86,10 @@ function byAttentionOrder(a: Task, b: Task): number {
  * Which sections start open. The source opens Essentials and leaves Organize
  * and Advanced shut, and stepping to the next task resets to that — the point
  * of the session is the score, and the right-hand column is what you open when
- * a chip sends you there.
+ * a chip sends you there. OPT-5's Optional is shut on every task, his call.
  */
 const CLOSED: Record<SectionId, boolean> = {
-  essentials: true, organize: false, advanced: false, subtasks: false,
+  essentials: true, organize: false, advanced: false, subtasks: false, optional: false,
 };
 
 /** Which section a Needs chip has to open before it can scroll to its field. */
@@ -125,13 +125,15 @@ function NeedsAttentionScreen() {
   const updateBacklogTask = useStore((s) => s.updateBacklogTask);
   const scores = usePriorityScores();
 
+  // Ignored work is never here (BIG-3): it has no score to fill fields in for.
+  const ignored = scores.ignored;
   const attentionIds = useMemo(
     () =>
       backlogTasks
-        .filter((t) => !t.parent && taskNeedsAttention(t))
+        .filter((t) => !t.parent && !ignored.ids.has(t.id) && taskNeedsAttention(t))
         .sort(byAttentionOrder)
         .map((t) => t.id),
-    [backlogTasks],
+    [backlogTasks, ignored],
   );
 
   const [sessionIds, setSessionIds] = useState<string[]>(attentionIds);
@@ -294,7 +296,7 @@ function NeedsAttentionScreen() {
     <div className="ag-page" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
       {wide && (
         <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
-          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
         </div>
       )}
 
@@ -351,7 +353,7 @@ function NeedsAttentionScreen() {
             onBack={() => navigate(-1)}
             onEndSession={() => setEndedEarly(true)}
             asking={asking}
-            onAsk={() => setAsking((v) => !v)}
+            onAsk={() => setAsking(true)}
           />
 
           <QueueStrip
@@ -423,7 +425,7 @@ function NeedsAttentionScreen() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}

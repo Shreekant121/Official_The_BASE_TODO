@@ -68,9 +68,11 @@ import { chromium, type Browser, type BrowserContext, type Page } from 'playwrig
 import { createServer, type ViteDevServer } from 'vite';
 import { DEV_AUTH_KEY } from '../src/lib/devAuth.ts';
 import { ATLAS_URL_KEY } from '../src/lib/atlas/client.ts';
+import { LANDING_KEY } from '../src/lib/landingPref.ts';
 import {
   DEV_SHARE_IDS, DEV_STILL_PRESENCE_KEY, FROZEN_NOW, LOCALE, STORAGE_KEY, TIMEZONE, TRASH_STORAGE_KEY,
   ARCHIVE_STORAGE_KEY, serializedStore, serializedTrash, serializedArchive,
+  DASHBOARD_STORAGE_KEY, serializedDashboard,
 } from './fixture.ts';
 import { Comparator } from './imageDiff.ts';
 
@@ -243,8 +245,468 @@ function scrollTranscriptTo(page: Page, text: string, end: 'top' | 'bottom'): Pr
   }, end === 'top');
 }
 
+/** OPT-12: two open tasks made late against the frozen clock (12 March, 09:30). */
+const MAKE_TWO_LATE = `(async function () {
+  var S = await import('/src/store/useStore.ts');
+  var open = S.useStore.getState().backlogTasks.filter(function (t) { return !t.parent && t.status !== 'completed'; });
+  var late = {}; late[open[2].id] = '2026-03-08T21:30'; late[open[4].id] = '2026-03-11T18:00';
+  S.useStore.setState(function (s) { return { backlogTasks: s.backlogTasks.map(function (t) {
+    return late[t.id] ? Object.assign({}, t, { deadline: late[t.id] }) : t; }) }; });
+  return true;
+})()`;
+
+/**
+ * 29-1P14d1, idea 26: three notices up at once — the broken sync, a reminder
+ * that did not reach Google and a new version — so they pile.
+ */
+const PILE_NOTICES = `(async function () {
+  var U = await import('/src/store/useUIStore.ts');
+  var s = U.useUIStore.getState();
+  s.setCloudSyncOk(false);
+  s.setReminderSyncIssue('Google said the calendar could not be reached.');
+  U.useUIStore.setState({ updateReady: true });
+  return true;
+})()`;
+
+/** 29-1P14d1, idea 114: the connection drops. The page only hears the event. */
+const GO_OFFLINE = `(function () { window.dispatchEvent(new Event('offline')); return true; })()`;
+
+/** 29-1P10b: a session paused 3:12 into flow (see `focus-flow`). */
+const IN_FLOW = `(async function () {
+  var R = await import('/src/store/useFocusRun.ts');
+  R.useFocusRun.setState({ begun: true, taskBegun: true, taskLeft: -192, sessionLeft: 14400 - 5400 - 192 });
+  return true;
+})()`;
+
+/**
+ * 29-1P8c, idea 153: Shreekant Empire made a folder of four — Studio Launch
+ * moved inside, and three made here with fixed ids and covers (a project with
+ * no stored cover rolls one from its id, and `addProject`'s ids are random).
+ * Set straight into the store, so no undo toast is on the picture.
+ */
+const MAKE_A_FOLDER = `(async function () {
+  var S = await import('/src/store/useStore.ts');
+  var made = [
+    { id: 'p-hire', name: 'Hiring', cover: { kind: 'pattern', pattern: 'stripes', seed: 7 } },
+    { id: 'p-legal', name: 'Legal', cover: { kind: 'name', seed: 3 } },
+    { id: 'p-money', name: 'Money', cover: { kind: 'aurora', seed: 11 } },
+  ].map(function (p, i) { return Object.assign({ description: '', createdAt: 1740300000000 + i, order: i + 1, parentId: 'p-empire' }, p); });
+  S.useStore.setState(function (s) { return { projects: s.projects.map(function (p) {
+    return p.id === 'p-studio' ? Object.assign({}, p, { parentId: 'p-empire', order: 0 }) : p; }).concat(made) }; });
+  return true;
+})()`;
+
+/**
+ * 29-1P8c, idea 154: three projects opened on this device, against the frozen
+ * clock — Studio Launch twelve and a half minutes ago at a task (the half
+ * keeps the label clear of a minute's edge as the harness clock drifts),
+ * Shreekant Empire yesterday in a list, Personal on Monday with nowhere noted.
+ */
+const SEED_JUMP_BACK = `(async function () {
+  var J = await import('/src/store/useJumpBackStore.ts');
+  var now = Date.now(), min = 60000;
+  J.useJumpBackStore.setState({ spots: [
+    { projectId: 'p-studio', at: now - 12.5 * min, taskId: 't-invites', listId: 'l-studio-launch' },
+    { projectId: 'p-empire', at: now - 26 * 60 * min, listId: 'l-empire-ops' },
+    { projectId: 'p-personal', at: now - 3 * 24 * 60 * min },
+  ] });
+  return true;
+})()`;
+
 const SHOTS: Shot[] = [
   // ── Home ──
+  /*
+   * BIG-6 — the Dashboard, 29-1a. No stored layout in the fixture, so these
+   * photograph the default one: the one thing, today, the next deadline, the
+   * overdue pile and the busiest project, all read off the fixture at
+   * FROZEN_NOW.
+   */
+  { name: 'dashboard', path: '/dashboard', ready: 'text=Do this one thing' },
+  /* 29-1P14d1: the notices at the top, piled (idea 26), then fanned by the
+     mouse, and the offline pill (idea 114). Nothing else seeds either. */
+  {
+    name: 'notices-pile',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: (page) => page.evaluate(PILE_NOTICES),
+    opened: '[data-notice-stack="piled"]',
+  },
+  {
+    name: 'notices-fanned',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page, settle) => {
+      await page.evaluate(PILE_NOTICES);
+      await page.locator('[data-notice-stack="piled"]').waitFor();
+      await settle();
+      await page.locator('[data-notice-stack]').hover({ position: { x: 40, y: 20 } });
+    },
+    opened: '[data-notice-stack="fanned"]',
+  },
+  {
+    name: 'offline-pill',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: (page) => page.evaluate(GO_OFFLINE),
+    opened: '[data-offline-pill="offline"]',
+  },
+  {
+    name: 'dashboard-edit',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: (page) => page.getByRole('button', { name: 'Edit', exact: true }).click(),
+    opened: 'text=Pull its corner to resize it',
+  },
+  {
+    name: 'dashboard-gallery',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: (page) => page.getByRole('button', { name: 'Add widget' }).click(),
+    opened: 'text=It goes at the end',
+  },
+  {
+    name: 'dashboard-settings',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page, settle) => {
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await settle();
+      await page.getByRole('button', { name: 'Widget settings' }).last().click();
+    },
+    opened: 'text=Measure by',
+  },
+  /* OPT-12 — nothing in the fixture is late, so the Overdue block says "All
+     caught up" on `dashboard`. These two make two tasks late through the live
+     store, the oldest by three and a half days: a flame half grown. */
+  {
+    name: 'dashboard-flame',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: (page) => page.evaluate(MAKE_TWO_LATE),
+    opened: 'text=Oldest burning',
+  },
+  {
+    name: 'dashboard-overdue',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => {
+      await page.evaluate(MAKE_TWO_LATE);
+      await page.getByRole('button', { name: 'See every overdue task', exact: true }).click();
+    },
+    opened: 'text=Oldest first',
+  },
+  /* BIG-6, 29-1b — the hours block's two sheets. The fixture's Dashboard seed
+     sets today to four hours, so the first shows the override and its way back. */
+  {
+    name: 'dashboard-hours',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: (page) => page.getByRole('button', { name: 'Hours you have', exact: true }).click(),
+    opened: 'text=Every week',
+  },
+  {
+    name: 'dashboard-log-time',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: (page) => page.getByRole('button', { name: 'Log time by hand', exact: true }).click(),
+    opened: 'text=Work the timer did not see',
+  },
+  /* 29-1P13 — the three new blocks, which no default layout holds: a Stack,
+     the runway and Waiting on, put at the top through the live store, with two
+     names on tasks (one handed over eight days before the frozen clock). */
+  {
+    name: 'dashboard-new-blocks',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var S = await import('/src/store/useStore.ts');
+      var D = await import('/src/store/useDashboardStore.ts');
+      var open = S.useStore.getState().backlogTasks.filter(function (t) { return !t.parent && t.status !== 'completed'; });
+      S.useStore.getState().updateBacklogTask(open[1].id, { assignee: 'Priya' });
+      S.useStore.getState().updateBacklogTask(open[3].id, { assignee: 'Rahul (CA)' });
+      S.useStore.setState(function (s) { return { backlogTasks: s.backlogTasks.map(function (t) {
+        return t.id === open[3].id ? Object.assign({}, t, { assignedAt: Date.now() - 8 * 86400000 }) : t; }) }; });
+      var d = D.useDashboardStore.getState();
+      d.addBlock('stack', undefined, 0); d.addBlock('runway', undefined, 1); d.addBlock('waiting-on', undefined, 2);
+      return true;
+    })()`); },
+    opened: 'text=Next two weeks',
+  },
+  /* 29-1c1 — the quick-add note (idea 143), which no default layout holds,
+     put first with three jotted lines filing into a project's list. */
+  {
+    name: 'dashboard-quick-add',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var D = await import('/src/store/useDashboardStore.ts');
+      D.useDashboardStore.getState().addBlock('quick-add', {
+        listId: 'l-empire-build',
+        note: 'call priya about the logo\\n- buy printer ink\\nidea: a newsletter for the studio',
+      }, 0);
+      return true;
+    })()`); },
+    /* "Add 3" on the phone, where the block is one column wide. */
+    opened: 'text=Add 3',
+  },
+  /* 29-1c2 — the timeline (ideas 29, 38, 128), which no default layout holds.
+     Two of the fixture's tasks are put on the frozen day (12 March), one of
+     them at 7:30pm, so the Today block, made two tall, splits into now and
+     This evening with its moons; the timeline opens on the hours around the
+     orange now line at 9:30. The second shot is the week, four cells wide. */
+  {
+    name: 'dashboard-timeline',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var S = await import('/src/store/useStore.ts');
+      var D = await import('/src/store/useDashboardStore.ts');
+      var open = S.useStore.getState().backlogTasks.filter(function (t) { return !t.parent && t.status !== 'completed'; });
+      S.useStore.getState().updateBacklogTask(open[0].id, { deadline: '2026-03-12T11:00' });
+      S.useStore.getState().updateBacklogTask(open[4].id, { deadline: '2026-03-12T19:30' });
+      var d = D.useDashboardStore.getState();
+      d.addBlock('timeline', undefined, 0);
+      var today = d.blocks.find(function (b) { return b.kind === 'today'; });
+      D.useDashboardStore.getState().resizeBlock(today.id, 2, 2);
+      return true;
+    })()`); },
+    opened: '[aria-label="Back to the day"]',
+  },
+  {
+    name: 'dashboard-timeline-week',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var D = await import('/src/store/useDashboardStore.ts');
+      var d = D.useDashboardStore.getState();
+      d.addBlock('timeline', { range: 'week' }, 0);
+      var tl = D.useDashboardStore.getState().blocks[0];
+      D.useDashboardStore.getState().resizeBlock(tl.id, 4, 2);
+      return true;
+    })()`); },
+    opened: 'text=This week',
+  },
+  /* 29-1c3 — the week strip (ideas 40, 128) with another day picked: two of
+     the fixture's tasks are put on Friday 13 March, the day after the frozen
+     one, and Friday is tapped, so the timeline, the Today block (two tall)
+     and Hours all show Friday, the strip's Friday a lime gel with its dots. */
+  {
+    name: 'dashboard-week-strip',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => {
+      await page.evaluate(`(async function () {
+        var S = await import('/src/store/useStore.ts');
+        var D = await import('/src/store/useDashboardStore.ts');
+        var open = S.useStore.getState().backlogTasks.filter(function (t) { return !t.parent && t.status !== 'completed'; });
+        S.useStore.getState().updateBacklogTask(open[0].id, { deadline: '2026-03-13T11:00' });
+        S.useStore.getState().updateBacklogTask(open[4].id, { deadline: '2026-03-13T16:30' });
+        var d = D.useDashboardStore.getState();
+        d.addBlock('timeline', undefined, 0);
+        var today = d.blocks.find(function (b) { return b.kind === 'today'; });
+        D.useDashboardStore.getState().resizeBlock(today.id, 2, 2);
+        return true;
+      })()`);
+      await page.locator('[data-plus-day="2026-03-13"]').click();
+    },
+    opened: 'text=Tomorrow',
+  },
+  /* 29-1c4 — a new account's three questions. Only an account with no
+     projects of its own and a Dashboard document that says so is asked, so
+     the fixture's projects are taken away and the flag set, then two answers
+     picked (the first leads). */
+  {
+    name: 'dashboard-first-run',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => {
+      await page.evaluate(`(async function () {
+        var S = await import('/src/store/useStore.ts');
+        var D = await import('/src/store/useDashboardStore.ts');
+        S.useStore.setState({ projects: [] });
+        D.useDashboardStore.getState().askFirstRun();
+        return true;
+      })()`);
+      await page.getByRole('button', { name: /^Deadlines coming up/ }).click();
+      await page.getByRole('button', { name: /^How much I've worked/ }).click();
+    },
+    opened: 'text=· leads',
+  },
+  /* 29-1c4 — the Sample blocks, which a first run puts on a new account's
+     Dashboard and the gallery offers under "Coming next". Three since 29-2a
+     made the countdown real. */
+  {
+    name: 'dashboard-samples',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var D = await import('/src/store/useDashboardStore.ts');
+      var d = D.useDashboardStore.getState();
+      d.addBlock('sample-morning', undefined, 0);
+      d.addBlock('sample-streak', undefined, 1); d.addBlock('sample-routine', undefined, 2);
+      return true;
+    })()`); },
+    opened: 'text=days in a row',
+  },
+  /* 29-2a — the real Countdown widget, two tall: the soonest event, the next
+     two under it, and the archive button for the one that has passed. Dated
+     against FROZEN_NOW (12 March 2026). */
+  {
+    name: 'dashboard-countdown',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var E = await import('/src/store/useEventStore.ts');
+      var e = E.useEventStore.getState();
+      e.addEvent({ title: 'Mumbai Marathon', start: '2026-03-20T06:00', end: '2026-03-20T10:00', location: 'Marine Drive' }, 'ev-race');
+      e.addEvent({ title: "Mum's birthday", start: '1964-04-02', recurrence: 'yearly', colour: 'rose', countdown: 'days' }, 'ev-bday');
+      e.addEvent({ title: 'Goa trip', start: '2026-05-01', end: '2026-05-05', colour: 'teal', countdown: 'weeks' }, 'ev-goa');
+      e.addEvent({ title: 'Holi', start: '2026-03-04' }, 'ev-holi');
+      var D = await import('/src/store/useDashboardStore.ts');
+      var id = D.useDashboardStore.getState().addBlock('countdown', undefined, 0);
+      D.useDashboardStore.getState().resizeBlock(id, 2, 2);
+      return true;
+    })()`); },
+    opened: '[data-countdown-event="ev-race"]',
+  },
+  /* 29-2e1 — the Calendar, its three views, with the fixture's tasks and five
+     events (a weekly class, a birthday, a trip over four days, two one-offs),
+     dated against FROZEN_NOW (Thursday 12 March 2026). The month is its first
+     view on a device that has not picked one. */
+  {
+    name: 'calendar-month',
+    path: '/calendar',
+    ready: 'text=This month',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var E = await import('/src/store/useEventStore.ts');
+      var e = E.useEventStore.getState();
+      e.addEvent({ title: 'Mumbai Marathon', start: '2026-03-15T06:00', end: '2026-03-15T10:00', location: 'Marine Drive', colour: 'orange' }, 'ev-race');
+      e.addEvent({ title: 'Gym', start: '2026-03-02T07:00', recurrence: 'weekly', colour: 'teal' }, 'ev-gym');
+      e.addEvent({ title: 'Dentist', start: '2026-03-12T12:30', end: '2026-03-12T13:30', colour: 'violet', location: 'Bandra' }, 'ev-dent');
+      e.addEvent({ title: 'Goa trip', start: '2026-03-19', end: '2026-03-22', colour: 'teal' }, 'ev-goa');
+      e.addEvent({ title: "Mum's birthday", start: '1964-03-13', recurrence: 'yearly', colour: 'rose' }, 'ev-bday');
+      return true;
+    })()`); },
+    opened: '[aria-label^="Friday 13 March, 1 event"]',
+  },
+  {
+    name: 'calendar-week',
+    path: '/calendar',
+    ready: 'text=This month',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var E = await import('/src/store/useEventStore.ts');
+      var e = E.useEventStore.getState();
+      e.addEvent({ title: 'Mumbai Marathon', start: '2026-03-15T06:00', end: '2026-03-15T10:00', location: 'Marine Drive', colour: 'orange' }, 'ev-race');
+      e.addEvent({ title: 'Gym', start: '2026-03-02T07:00', recurrence: 'weekly', colour: 'teal' }, 'ev-gym');
+      e.addEvent({ title: 'Dentist', start: '2026-03-12T12:30', end: '2026-03-12T13:30', colour: 'violet', location: 'Bandra' }, 'ev-dent');
+      e.addEvent({ title: 'Goa trip', start: '2026-03-19', end: '2026-03-22', colour: 'teal' }, 'ev-goa');
+      e.addEvent({ title: "Mum's birthday", start: '1964-03-13', recurrence: 'yearly', colour: 'rose' }, 'ev-bday');
+      var C = await import('/src/store/useCalendarView.ts');
+      C.useCalendarView.getState().setView('week');
+      return true;
+    })()`); },
+    opened: 'text=This week',
+  },
+  {
+    name: 'calendar-day',
+    path: '/calendar',
+    ready: 'text=This month',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var E = await import('/src/store/useEventStore.ts');
+      var e = E.useEventStore.getState();
+      e.addEvent({ title: 'Mumbai Marathon', start: '2026-03-15T06:00', end: '2026-03-15T10:00', location: 'Marine Drive', colour: 'orange' }, 'ev-race');
+      e.addEvent({ title: 'Gym', start: '2026-03-02T07:00', recurrence: 'weekly', colour: 'teal' }, 'ev-gym');
+      e.addEvent({ title: 'Dentist', start: '2026-03-12T12:30', end: '2026-03-12T13:30', colour: 'violet', location: 'Bandra' }, 'ev-dent');
+      e.addEvent({ title: 'Goa trip', start: '2026-03-19', end: '2026-03-22', colour: 'teal' }, 'ev-goa');
+      e.addEvent({ title: "Mum's birthday", start: '1964-03-13', recurrence: 'yearly', colour: 'rose' }, 'ev-bday');
+      var C = await import('/src/store/useCalendarView.ts');
+      C.useCalendarView.getState().setView('day');
+      return true;
+    })()`); },
+    opened: 'text=Dentist',
+  },
+  /* 29-2b — the four new styles, one widget each: Cover (a made picture, as
+     no fixture has one), Shape (a burst), Journey (set twelve days ago) and
+     the split-flap board. Minimal is dashboard-countdown above. */
+  {
+    name: 'dashboard-countdown-styles',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var E = await import('/src/store/useEventStore.ts');
+      var e = E.useEventStore.getState();
+      var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='350'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#3a6fd8'/><stop offset='0.7' stop-color='#f08a4b'/><stop offset='1' stop-color='#5a2a1a'/></linearGradient></defs><rect width='600' height='350' fill='url(#g)'/><circle cx='420' cy='110' r='60' fill='#ffe9a8'/></svg>";
+      var day = 86400000;
+      e.putEvent({ id: 'ev-race', title: 'Mumbai Marathon', start: '2026-03-20T06:00', end: '2026-03-20T10:00', location: 'Marine Drive', colour: 'orange', imageUrl: 'data:image/svg+xml;base64,' + btoa(svg), createdAt: Date.now() - 12 * day });
+      e.putEvent({ id: 'ev-bday', title: "Mum's birthday", start: '1964-04-02', recurrence: 'yearly', colour: 'rose', shape: 'burst', countdown: 'days', createdAt: Date.now() - 400 * day });
+      e.putEvent({ id: 'ev-goa', title: 'Goa trip', start: '2026-05-01', end: '2026-05-05', colour: 'teal', countdown: 'weeks', createdAt: Date.now() - 12 * day });
+      var D = await import('/src/store/useDashboardStore.ts');
+      var d = D.useDashboardStore.getState();
+      d.addBlock('countdown', { eventId: 'ev-race', face: 'cover' }, 0);
+      d.addBlock('countdown', { eventId: 'ev-bday', face: 'shape' }, 1);
+      d.addBlock('countdown', { eventId: 'ev-goa', face: 'journey' }, 2);
+      d.addBlock('countdown', { eventId: 'ev-race', face: 'flap' }, 3);
+      return true;
+    })()`); },
+    opened: '[data-countdown-flap]',
+  },
+  /* 29-2d2 — the three things a Countdown counts to, each with what is due
+     before it switched on: the marathon (its linked task first, then the rest,
+     the invoices overdue), the bank account (what it waits on, the
+     incorporation, first) and a date he named, one tall, which only counts. */
+  {
+    name: 'dashboard-countdown-due',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var E = await import('/src/store/useEventStore.ts');
+      E.useEventStore.getState().addEvent({ title: 'Mumbai Marathon', start: '2026-03-20T06:00', end: '2026-03-20T10:00', location: 'Marine Drive' }, 'ev-race');
+      var S = await import('/src/store/useStore.ts');
+      var id = S.useStore.getState().addBacklogTask('Buy running shoes', 'action');
+      S.useStore.getState().updateBacklogTask(id, { eventId: 'ev-race', deadline: '2026-03-20T06:00' });
+      var D = await import('/src/store/useDashboardStore.ts');
+      var d = D.useDashboardStore.getState();
+      var a = d.addBlock('countdown', { eventId: 'ev-race', dueBefore: true }, 0); d.resizeBlock(a, 2, 3);
+      var b = d.addBlock('countdown', { taskId: 't-bank', dueBefore: true }, 1); d.resizeBlock(b, 2, 2);
+      var c = d.addBlock('countdown', { date: '2026-04-15', dateName: 'Exams', dateSince: Date.now() - 10 * 86400000, dueBefore: true }, 2);
+      d.resizeBlock(c, 2, 1);
+      return true;
+    })()`); },
+    opened: '[data-countdown-target="date"]',
+  },
+  /* 29-2d2 — a Countdown's ⚙ on a task: the three tabs, the task list
+     with how far off each is, and the switch. */
+  {
+    name: 'dashboard-countdown-settings',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page, settle) => {
+      await page.evaluate(`(async function () {
+        var D = await import('/src/store/useDashboardStore.ts');
+        D.useDashboardStore.getState().addBlock('countdown', { taskId: 't-bank', dueBefore: true });
+        return true;
+      })()`);
+      await settle();
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await settle();
+      await page.getByRole('button', { name: 'Widget settings' }).last().click();
+    },
+    opened: 'text=Show what is due before it',
+  },
+  /* 29-2a — one event open: the live countdown over its fields. */
+  {
+    name: 'event-sheet',
+    path: '/dashboard',
+    ready: 'text=Do this one thing',
+    open: async (page) => { await page.evaluate(`(async function () {
+      var E = await import('/src/store/useEventStore.ts');
+      E.useEventStore.getState().addEvent({ title: 'Mumbai Marathon', start: '2026-03-20T06:00', end: '2026-03-20T10:00', location: 'Marine Drive', notes: 'Bib 4127, gate C' }, 'ev-race');
+      var S = await import('/src/store/useEventSheet.ts');
+      S.useEventSheet.getState().openEvent('ev-race');
+      return true;
+    })()`); },
+    opened: '[data-event-preview]',
+  },
   { name: 'home', path: '/', ready: 'text=Your Projects' },
   {
     name: 'home-new-project',
@@ -269,6 +731,10 @@ const SHOTS: Shot[] = [
     ready: 'text=Your Projects',
     open: async (page, settle) => {
       await page.keyboard.press('s');
+      await settle();
+      // The box opens at the hours left today since BIG-6 29-1b — 2.5 on the
+      // fixture, one task. Two hours is the queue this shot has always shown.
+      await page.getByRole('button', { name: '2h', exact: true }).click();
       await settle();
       await page.getByRole('button', { name: /tasks queued/ }).click();
     },
@@ -343,9 +809,64 @@ const SHOTS: Shot[] = [
     },
     opened: 'text=Ask Atlas',
   },
+  /* 29-1P8c — Home's shape. A project holding projects is a folder whose
+     cover is theirs (153, his pick C); pressed, it unfolds them in a row
+     under its own row, with the way into it last. Jump back in (154, his
+     pick D) sits above the projects, and opens Ctrl+K before anything is
+     typed. */
+  {
+    name: 'home-folder',
+    path: '/',
+    ready: 'text=Your Projects',
+    open: (page) => page.evaluate(MAKE_A_FOLDER),
+    opened: '[aria-label="Shreekant Empire: 4 projects inside"]',
+  },
+  {
+    name: 'home-folder-open',
+    path: '/',
+    ready: 'text=Your Projects',
+    open: async (page, settle) => {
+      await page.evaluate(MAKE_A_FOLDER);
+      await settle();
+      await page.locator('[aria-label="Shreekant Empire: 4 projects inside"]').press('Enter');
+    },
+    opened: '[aria-label="Inside Shreekant Empire"]',
+  },
+  {
+    name: 'home-jump-back',
+    path: '/',
+    ready: 'text=Your Projects',
+    open: (page) => page.evaluate(SEED_JUMP_BACK),
+    opened: '#jump-back-title',
+  },
+  {
+    name: 'home-palette-jump-back',
+    path: '/',
+    ready: 'text=Your Projects',
+    open: async (page, settle) => {
+      await page.evaluate(SEED_JUMP_BACK);
+      await settle();
+      await page.keyboard.press('Control+k');
+    },
+    opened: '[aria-label="Command palette"] >> text=Jump back in',
+  },
 
   // ── Project view ──
   { name: 'project', path: '/project/p-empire', ready: 'text=Operations' },
+  /* BIG-5 — two boards: side by side on desktop, stacked on the upright
+     tablet and the phone. Each pane's slim header is the thing to check. */
+  {
+    name: 'project-split',
+    path: '/project/p-empire?beside=p-studio',
+    ready: '[data-split-pane="1"]:has-text("The Space")',
+  },
+  /* The AI panel about a task on the left board stands in for the right one
+     (his call) — the panel fixture opens on whichever board the URL names first. */
+  {
+    name: 'project-split-ai',
+    path: '/project/p-empire?beside=p-studio&__dev-panel-fixture__=task',
+    ready: '[data-ai-panel]:has-text("Two steps added")',
+  },
   {
     name: 'project-quick-add',
     path: '/project/p-empire',
@@ -424,6 +945,55 @@ const SHOTS: Shot[] = [
     open: (page) => page.getByRole('tab', { name: 'List' }).click(),
     opened: '[role="tab"][aria-selected="true"]:has-text("List")',
   },
+  /* 29-1P9a — idea 157, his pick A: a list folded into a thin spine, the
+     lists beside it wider (a flat one-line bar where the board is one
+     column), and idea 158, his pick E: the list view grouped by due date
+     and by Score through the "Group:" button. */
+  {
+    name: 'project-folded',
+    path: '/project/p-empire',
+    ready: 'text=Operations',
+    open: (page) => page.locator('button[aria-label="Fold Operations away"]').click(),
+    opened: '.ag-spine',
+  },
+  {
+    /*
+     * 29-1P9b (ideas 155, 156): "40% done" pressed open — the fixture's two
+     * milestones on their line (t-incorporate done-next, t-bank waiting on it)
+     * and the chart, with p-empire's Finish by as the coral line.
+     */
+    name: 'project-forecast',
+    path: '/project/p-empire',
+    ready: 'text=Operations',
+    open: (page) => page.locator('button[aria-expanded]', { hasText: '% done' }).first().click(),
+    opened: '[data-forecast-panel="open"]',
+  },
+  {
+    name: 'project-list-by-due',
+    path: '/project/p-empire',
+    ready: 'text=Operations',
+    open: async (page, settle) => {
+      await page.getByRole('tab', { name: 'List' }).click();
+      await settle();
+      await page.locator('button[aria-label^="Group tasks"]').click();
+      await settle();
+      await page.getByRole('menuitem', { name: 'By due date' }).click();
+    },
+    opened: 'button[aria-label="Group tasks: by due date"]',
+  },
+  {
+    name: 'project-list-by-score',
+    path: '/project/p-empire',
+    ready: 'text=Operations',
+    open: async (page, settle) => {
+      await page.getByRole('tab', { name: 'List' }).click();
+      await settle();
+      await page.locator('button[aria-label^="Group tasks"]').click();
+      await settle();
+      await page.getByRole('menuitem', { name: 'By Score' }).click();
+    },
+    opened: 'button[aria-label="Group tasks: by Score"]',
+  },
   {
     /*
      * "Show done" ON. The switch brings finished rows back and — this is the
@@ -497,6 +1067,37 @@ const SHOTS: Shot[] = [
       await page.locator('.ag-task-sheet-body').evaluate((el) => { el.scrollTop = 640; });
     },
     opened: 'text=Depends on',
+  },
+  {
+    // OPT-5 — the closed Optional section at the sheet's foot, opened: Start
+    // date, Reminder, Status, Value and Share, side by side.
+    name: 'project-task-detail-optional',
+    path: '/project/p-empire',
+    ready: 'text=Operations',
+    open: async (page, settle) => {
+      await page.getByText('Rewrite the landing page copy', { exact: true }).first().click();
+      await settle();
+      await page.getByRole('dialog').getByRole('button', { name: /^Optional/ }).click();
+      await settle();
+      await page.locator('.ag-task-sheet-body').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    },
+    opened: 'text=Keeps it out of sessions until then.',
+  },
+  {
+    // 29-1P9c — the closed Story row under Optional, opened. The fixture has
+    // no stored story (the harness never signs in), so what shows is what
+    // the task itself says: when it was made and the day it was focused on.
+    name: 'project-task-detail-story',
+    path: '/project/p-empire',
+    ready: 'text=Operations',
+    open: async (page, settle) => {
+      await page.getByText('Rewrite the landing page copy', { exact: true }).first().click();
+      await settle();
+      await page.getByRole('dialog').getByRole('button', { name: /^Story/ }).click();
+      await settle();
+      await page.locator('.ag-task-sheet-body').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    },
+    opened: 'text=Focused 1 h 30 m',
   },
 
   // ── Session flow ──
@@ -576,6 +1177,19 @@ const SHOTS: Shot[] = [
     opened: '[role="menu"][aria-hidden="false"]',
   },
   { name: 'deadlines', path: '/deadlines', ready: 'text=Set Deadlines' },
+  {
+    /* 29-1P10a, idea 97: a press on a task's time opens the minute ruler,
+       saying when the whole run would end. The first task whose time is its
+       own (a task with subtasks shows their sum, which has no ruler). */
+    name: 'deadlines-ruler',
+    path: '/deadlines',
+    ready: 'text=Set Deadlines',
+    open: async (page, settle) => {
+      await page.locator('input[aria-label^="Minutes allocated to"]').first().click();
+      await settle();
+    },
+    opened: 'text=The run ends at',
+  },
   {
     /*
      * The PERT sheet, drawing a real distribution. UI-27 made it open already
@@ -707,7 +1321,119 @@ const SHOTS: Shot[] = [
         await settle();
       }
     },
-    opened: 'text=Session complete',
+    /* "Session done" since 29-1P11a (idea 105): the counts and Another 25 ·
+       Done. No Break here: the fixture is not in pomodoro mode. */
+    opened: 'text=Session done',
+  },
+  {
+    /*
+     * 29-1P11a, idea 104: a real break, taken from "Session done" in pomodoro
+     * mode. The mode is set through the live module (it is read at load, so
+     * localStorage alone would need a reload), the idea is pinned to the
+     * seed's first, and the page clock is PAUSED at a moment the break's end
+     * is measured from — its readout is a countdown, and the harness's clock
+     * otherwise flows at wall speed between jumps, which would land it on a
+     * different second each run.
+     */
+    name: 'focus-break',
+    path: '/focus',
+    ready: 'text=Global work session',
+    open: async (page, settle) => {
+      await page.evaluate(`(async () => {
+        (await import('/src/lib/brownNoise.ts')).setNoisePrefs({ mode: 'pomodoro', breakMinutes: 5 });
+      })()`);
+      for (let i = 0; i < 3; i += 1) {
+        await page.getByRole('button', { name: 'Mark done' }).click();
+        await settle();
+      }
+      await page.getByRole('button', { name: /^Break/ }).click();
+      await settle();
+      const at = await page.evaluate(`(async () => {
+        const { useFocusBreak } = await import('/src/store/useFocusBreak.ts');
+        const at = Date.now() + 500;
+        useFocusBreak.setState((s) => ({ breakOn: { ...s.breakOn, ideaId: 's1', endsAt: at + 300000 } }));
+        return at;
+      })()`);
+      await page.clock.pauseAt(at as number);
+    },
+    opened: 'text=Look at something 6 metres away',
+  },
+  {
+    /*
+     * 29-1P10a, idea 96: the line written before the clock runs, and Mark
+     * done asking about it — Not yet, Partly, Yes in place of the controls.
+     */
+    name: 'focus-done-question',
+    path: '/focus',
+    ready: 'text=Global work session',
+    open: async (page, settle) => {
+      await page.locator('input[placeholder="uploaded the signed forms"]').fill('sent the signed forms to the CA');
+      await page.getByRole('button', { name: 'Mark done' }).click();
+      await settle();
+    },
+    opened: 'text=Did you?',
+  },
+  {
+    /* 29-1P10a, idea 97: + time opens the minute ruler. The clock is paused,
+       so the line under the number is the time left, not a time of day. */
+    name: 'focus-add-time',
+    path: '/focus',
+    ready: 'text=Global work session',
+    open: async (page, settle) => {
+      await page.locator('button[title="Add time to this task"]').click();
+      await settle();
+    },
+    opened: '[role="slider"][aria-label="Minutes to add"]',
+  },
+  {
+    /*
+     * 29-1P10b, idea 102: the task's clock past zero is "in flow" — gold,
+     * counting up, the stage glowing gold, Wrap up under the clock. A RUNNING
+     * clock cannot be photographed here (the fake clock flows between the
+     * harness's jumps, so it lands on a different second every run), so the
+     * session is set straight into the run, paused 3:12 past the first task's
+     * 90 minutes. The halfway note exists only while the clock runs, so it
+     * has no shot of its own: `design-while-you-work` holds its look.
+     */
+    name: 'focus-flow',
+    path: '/focus',
+    ready: 'text=Global work session',
+    open: (page) => page.evaluate(IN_FLOW),
+    opened: 'button:has-text("Wrap up")',
+  },
+  {
+    /*
+     * OPT-7: the switches live in a drawer behind one corner button, closed
+     * by default. Opened here, so the five are photographed, all pressed in.
+     */
+    name: 'focus-switches',
+    path: '/focus',
+    ready: 'text=Global work session',
+    open: async (page, settle) => {
+      await page.locator('button[aria-label="Show the screen switches"]').click();
+      await settle();
+    },
+    opened: 'button[aria-label="Show the top banner"][aria-pressed="true"]',
+  },
+  {
+    /*
+     * Pure focus (2026-09-30, OPT-7): every switch off — no top banner, no
+     * subtasks, no details, no session bar, no nav — and the drawer closed
+     * again. The stage alone, and the one button that brings it all back.
+     */
+    name: 'focus-pure',
+    path: '/focus',
+    ready: 'text=Global work session',
+    open: async (page, settle) => {
+      await page.locator('button[aria-label="Show the screen switches"]').click();
+      /* Soft toggles since 29-1P2: one name each, pressed in while showing. */
+      for (const what of ['the top banner', 'subtasks', 'task details', 'the session bar', 'the nav bar']) {
+        await page.locator(`button[aria-label="Show ${what}"][aria-pressed="true"]`).click();
+      }
+      await page.locator('button[aria-label="Hide the screen switches"]').click();
+      await settle();
+    },
+    opened: 'button[aria-label="Show the screen switches"][aria-expanded="false"]',
   },
   {
     /*
@@ -723,7 +1449,16 @@ const SHOTS: Shot[] = [
     path: '/focus',
     ready: 'text=Global work session',
     open: async (page, settle) => {
-      await page.getByRole('button', { name: 'Resume' }).click();
+      /* 29-1P10a: a session's first press is Start, and it breathes for five
+         seconds before the clock runs; Skip starts it at once. The fake
+         clock's jumps can carry it past the breath on their own, so Skip is
+         pressed only while it is there, and Pause is the proof either way. */
+      await page.getByRole('button', { name: 'Start', exact: true }).click();
+      const skip = page.getByRole('button', { name: 'Skip', exact: true });
+      const pause = page.getByRole('button', { name: 'Pause', exact: true });
+      await skip.or(pause).first().waitFor();
+      if (await skip.count()) await skip.click();
+      await pause.waitFor();
       await settle();
       await page.getByRole('button', { name: 'Back to set deadlines' }).click();
       await settle();
@@ -731,6 +1466,31 @@ const SHOTS: Shot[] = [
       await settle();
     },
     opened: 'text=Top left',
+  },
+  {
+    /*
+     * 29-1P11b, idea 16: the same pill, tapped, grown into its panel — Pause,
+     * + time, Mark done and the task up next, with Focus a tap further on.
+     * Reached exactly as the corners above; on the tablet it grows out of the
+     * centred lane.
+     */
+    name: 'focus-pill-open',
+    path: '/focus',
+    ready: 'text=Global work session',
+    open: async (page, settle) => {
+      await page.getByRole('button', { name: 'Start', exact: true }).click();
+      const skip = page.getByRole('button', { name: 'Skip', exact: true });
+      const pause = page.getByRole('button', { name: 'Pause', exact: true });
+      await skip.or(pause).first().waitFor();
+      if (await skip.count()) await skip.click();
+      await pause.waitFor();
+      await settle();
+      await page.getByRole('button', { name: 'Back to set deadlines' }).click();
+      await settle();
+      await page.getByRole('button', { name: /^Timer controls for/ }).click();
+      await settle();
+    },
+    opened: 'button[aria-label="Shrink the timer back"][aria-expanded="true"]',
   },
 
   // ── Needs Attention ──
@@ -760,8 +1520,8 @@ const SHOTS: Shot[] = [
       /*
        * `:not([aria-expanded])` is load-bearing as of UI-30. That session gave
        * every Section header a hint line stating what is inside it, so the
-       * Advanced header now READS "Every 2 weeks on Mon, Thu, 8x · 1 hour
-       * before" as part of its own accessible name — and a bare
+       * Advanced header now READS "Every 2 weeks on Mon, Thu, 8x" (plus
+       * "· 1 hour before" until OPT-5) as part of its own accessible name — and a bare
        * `getByRole('button', { name: /Every 2 weeks/ })` matched both it and
        * the Repeat control it describes. Only the section headers carry
        * `aria-expanded`, so excluding them leaves exactly the field.
@@ -788,7 +1548,8 @@ const SHOTS: Shot[] = [
     ready: 'text=Quarterly compliance review',
     maxCells: SCORING_CLUSTERED_CELLS,
     open: async (page, settle) => {
-      await page.getByRole('button', { name: /Advanced/ }).click();
+      // Reminder moved from Advanced to the last section, Optional, at OPT-5.
+      await page.getByRole('button', { name: /^Optional/ }).click();
       await settle();
       await page.locator('button[aria-label="Reminder"]').click();
       await settle();
@@ -827,7 +1588,7 @@ const SHOTS: Shot[] = [
      * so nothing had ever photographed it.
      *
      * Scoring one task first is not decoration: it is what makes the
-     * `ProgressRing` read `1/7` with a visible arc rather than an empty track,
+     * number read `1/7` rather than `0/7` (a ring until 29-1P14d2),
      * and it drives a real save through `useTaskDraft.commit` on the way,
      * which is the only place in the shot set that happens.
      */
@@ -1033,13 +1794,11 @@ const SHOTS: Shot[] = [
     opened: 'text=on charger',
   },
   {
-    /* BUILD-12's Downshift panel, which sits below every other capture of
-       this screen — `atlas-host` came back 0 cells moved over the whole
-       rewrite. Scrolled to a computed offset rather than by a click, for the
-       readings shot's reason above. Under the harness `/ceilings` is blocked
-       like every tailnet call, so the switch draws its not-reported state,
-       off and "Unavailable"; the live switch was driven against the laptop. */
-    name: 'atlas-host-downshift',
+    /* The "What leaves the laptop" panel, which sits below every other
+       capture of this screen. It held BUILD-12's Downshift switch until
+       OPT-4 removed it with the AI spending. Scrolled to a computed offset
+       rather than by a click, for the readings shot's reason above. */
+    name: 'atlas-host-offsite',
     path: '/atlas-host?__dev-host-fixture__=awake&__dev-model-fixture__=1',
     ready: 'h1:has-text("Atlas host")',
     open: async (page) => {
@@ -1049,7 +1808,7 @@ const SHOTS: Shot[] = [
            animation, and a `getBoundingClientRect` taken mid-flight landed
            a few pixels apart run to run (8,847 cells). */
         await document.fonts.ready;
-        const title = [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Keep it on the laptop');
+        const title = [...document.querySelectorAll('h2')].find((h) => h.textContent === 'What leaves the laptop');
         if (!title) return;
         /* The heading's own scrolling ancestor: the page has more than one
            `.ag-page`, and the first is not the one that scrolls. */
@@ -1066,6 +1825,145 @@ const SHOTS: Shot[] = [
       });
     },
     opened: 'text=Hand-off prompt',
+  },
+  /*
+   * ── The design system (29-1P1, BIG-15) ──
+   *
+   * `/design`, the hidden page showing every colour and button live. Two
+   * shots: the colours at the top, and the thirteen buttons further down.
+   * Every 29-1P session adds its pieces to the page, so these two move with
+   * each of them and are re-banked there on purpose.
+   */
+  { name: 'design', path: '/design', ready: 'text=One colour, one job' },
+  {
+    name: 'design-buttons',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: (page) =>
+      page.locator('h2', { hasText: /^Buttons$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      }),
+    opened: 'text=Hold to empty Trash',
+  },
+  /* 29-1P12: the Dashboard's pieces — the glass that fills, the dot-matrix
+     week, rolling numbers, the four block looks, the corner glyph and the
+     quiet blocks. The fixture seeds no block looks, so this is the one
+     baseline that holds the lamp and the tints. */
+  {
+    name: 'design-dashboard',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: (page) =>
+      page.locator('h2', { hasText: /^Dashboard$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      }),
+    opened: 'text=A glass that fills',
+  },
+  /* 29-1P6b: hold and flick at rest — the swipe row, the row to hold, the
+     toast and the notice to throw. The gestures themselves are invisible to
+     shots; this guards the pieces' looks. */
+  {
+    name: 'design-hold-flick',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: (page) =>
+      page.locator('h2', { hasText: /^Hold and flick$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      }),
+    opened: 'text=Flick me sideways',
+  },
+  /* 29-1P8a: covers made for you. The fixture's projects all wear the
+     default (a pattern from their ids, on `home`), so this is the one
+     baseline that holds the other five styles. */
+  {
+    name: 'design-covers',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: (page) =>
+      page.locator('h2', { hasText: /^Covers$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      }),
+    opened: 'text=Aurora',
+  },
+  /* 29-1P9a: the spine and the regrouped table, on pretend lists. */
+  {
+    name: 'design-fold-regroup',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: (page) =>
+      page.locator('h2', { hasText: /^Fold and regroup$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      }),
+    opened: 'text=Ideas parking',
+  },
+  {
+    name: 'design-project-header',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: (page) =>
+      page.locator('h2', { hasText: /^Milestones and when it'll be done$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      }),
+    opened: '[data-forecast-chart]',
+  },
+  {
+    // 29-1P9c — the task's story, every kind of moment, opened and shown in
+    // full, with the steps' white "40%" above it. A pretend task.
+    name: 'design-task-story',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: async (page, settle) => {
+      await page.locator('h2', { hasText: /^The task's story$/ }).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await page.getByRole('button', { name: /^Story\s*14 moments/ }).click();
+      await settle();
+      await page.getByRole('button', { name: 'Show all 14' }).click();
+      await settle();
+    },
+    opened: 'text=Made in Build',
+  },
+  /* 29-1P10b — a clock in flow with Wrap up, the halfway note and the away
+     card, on a pretend task. The only baseline of the last two. */
+  {
+    name: 'design-while-you-work',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: (page) =>
+      page.locator('h2', { hasText: /^While you work$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      }),
+    opened: 'text=Halfway. Still on',
+  },
+  /* 29-1P10c — the StandBy clock by day and by night, on a pretend task.
+     The real layer needs a running clock on a touch tablet held sideways
+     and a minute untouched, none of which the harness can hold still, so
+     this is its only baseline. */
+  {
+    name: 'design-standby',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: (page) =>
+      page.locator('h2', { hasText: /^StandBy$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      }),
+    opened: 'text=Night, 9pm to 5am',
+  },
+  /* 29-1P15b — Atlas at rest: the horizon, the ask box glowing with a draft
+     in it, and "Remembered" under a reply. The only baseline of the glow
+     (it needs text and the caret) and of the chip (no fixture turn saves a
+     note). */
+  {
+    name: 'design-atlas-at-rest',
+    path: '/design',
+    ready: 'text=One colour, one job',
+    open: async (page, settle) => {
+      await page.locator('h2', { hasText: /^Atlas at rest$/ }).evaluate((el) => {
+        el.scrollIntoView({ block: 'start' });
+      });
+      await page.getByLabel('Ask Atlas anything').click();
+      await page.keyboard.type('Plan my afternoon');
+      await settle();
+    },
+    opened: 'text=Remembered',
   },
   { name: 'settings', path: '/settings', ready: 'text=Settings' },
   /*
@@ -1085,9 +1983,11 @@ const SHOTS: Shot[] = [
   {
     name: 'settings-keys',
     path: '/settings',
-    ready: 'text=Gemini API keys',
+    /* BIG-1 renamed the card: one card, three tabs (Gemini, Claude, ChatGPT).
+       The shot stays on the Gemini tab, which is the one with the proxy row. */
+    ready: 'h2:has-text("AI keys")',
     open: (page) =>
-      page.getByText('Gemini API keys').evaluate((el) => {
+      page.locator('h2', { hasText: 'AI keys' }).evaluate((el) => {
         el.scrollIntoView({ block: 'start' });
       }),
     opened: 'text=Server proxy',
@@ -1104,6 +2004,33 @@ const SHOTS: Shot[] = [
    * Trash to `/trash`; the four shots below replace it, and cover more than it
    * did — it only ever photographed the list.
    */
+  /*
+   * OPT-8 — Settings → Atlas: the two model defaults and the voice, moved off
+   * the chat. The model fixture rides on the URL because both lists are
+   * fetched (`src/lib/devModelFixture.ts`, item 6: Google's endpoint and
+   * Ollama's tags, neither of which survives the network rule);
+   * `settings-atlas-models` opens the local picker over it, which is what
+   * `chat-models` photographed at the foot of the chat list before. Opened by
+   * the trigger's `title`, since its text is whichever model is the default.
+   */
+  {
+    name: 'settings-atlas',
+    path: '/settings?__dev-model-fixture__=1',
+    ready: 'text=Settings',
+    open: (page) => page.getByRole('tab', { name: 'Atlas' }).click(),
+    opened: 'text=Default cloud model',
+  },
+  {
+    name: 'settings-atlas-models',
+    path: '/settings?__dev-model-fixture__=1',
+    ready: 'text=Settings',
+    open: async (page, settle) => {
+      await page.getByRole('tab', { name: 'Atlas' }).click();
+      await settle();
+      await page.getByTitle('Choose the default local model').click();
+    },
+    opened: 'text=Running on your laptop, free',
+  },
   {
     name: 'settings-storage',
     path: '/settings',
@@ -1137,6 +2064,22 @@ const SHOTS: Shot[] = [
     ready: 'text=Settings',
     open: (page) => page.getByRole('tab', { name: 'App' }).click(),
     opened: 'text=Works offline',
+  },
+  {
+    /* 29-1P11a, idea 104: his break ideas, from the Focus / break cycle's
+       card (pomodoro mode, set through the live module as `focus-break`). */
+    name: 'settings-break-ideas',
+    path: '/settings',
+    ready: 'text=Settings',
+    open: async (page, settle) => {
+      await page.evaluate(`(async () => {
+        (await import('/src/lib/brownNoise.ts')).setNoisePrefs({ mode: 'pomodoro' });
+      })()`);
+      await page.getByRole('tab', { name: 'Brown noise' }).click();
+      await settle();
+      await page.getByRole('button', { name: 'Edit ideas' }).click();
+    },
+    opened: 'text=small things a break can offer',
   },
   /*
    * ── The Trash (item 9C) ──
@@ -1186,7 +2129,7 @@ const SHOTS: Shot[] = [
     path: '/trash',
     ready: 'h1:has-text("Trash")',
     open: (page) => page.getByLabel('Search the trash').fill('nothing here'),
-    opened: 'text=Nothing in the trash matches that',
+    opened: 'text=Nothing in the trash matches',
   },
   /*
    * ── The Archive (BUILD-11) ──
@@ -1208,7 +2151,7 @@ const SHOTS: Shot[] = [
     path: '/archive',
     ready: 'h1:has-text("Archive")',
     open: (page) => page.getByLabel('Search the archive').fill('nothing here'),
-    opened: 'text=Nothing on the shelf matches that',
+    opened: 'text=Nothing on the shelf matches',
   },
   {
     /* The empty shelf, reached the way the design says to reach it: put
@@ -1283,29 +2226,6 @@ const SHOTS: Shot[] = [
     open: (page) => scrollTranscriptTo(page, '2 changes written', 'bottom'),
   },
   /*
-   * The same conversation with the turn undone. The fixture seeds the snapshot
-   * ring as well as the transcript, so this presses the REAL Revert: it runs
-   * `revertTurn`, writes both deadlines back through `updateBacklogTask`, and
-   * the toast prints whatever `revertTurn` itself reported. What is being
-   * photographed is the spent container — dimmed, struck through, every glyph
-   * swapped for `undo-2`, the footer reading "Reverted". Playwright scrolls
-   * the button into view itself before clicking it, so this one needs no
-   * `scrollIntoView` of its own.
-   *
-   * The revert toast is deliberately absent and deterministically so: it
-   * dismisses itself after `TOAST_MS` (6s) on a `setTimeout` the fake clock
-   * owns, the click lands at `READY_AT_MS + OPEN_STEP_MS` = 13s of virtual
-   * time, and the shutter is at `OPENED_AT_MS` = 20s. What the toast says is
-   * `revertTurn`'s own summary, which `useSnapshotStore` already tests.
-   */
-  {
-    name: 'chat-turns-reverted',
-    path: '/chat?__dev-chat-fixture__=1',
-    ready: 'text=2 changes written',
-    open: (page) => page.getByRole('button', { name: 'Revert 2 changes' }).click(),
-    opened: 'text=Reverted',
-  },
-  /*
    * ── The marks themselves (item 13B) ──
    *
    * Atlas writes Markdown, and until this item every one of those marks
@@ -1357,45 +2277,6 @@ const SHOTS: Shot[] = [
     path: '/chat?__dev-chat-fixture__=markdown&__dev-host-fixture__=awake&__dev-model-fixture__=1',
     ready: 'text=A kicker, not a heading',
     open: (page) => scrollTranscriptTo(page, 'A kicker, not a heading', 'bottom'),
-  },
-  /*
-   * ── The model picker (item 6) ──
-   *
-   * Both of its lists are fetched — Google's models endpoint and Ollama's
-   * `/api/tags` — so neither survives the network rule above, and the local
-   * one is the single request in this app that could have *succeeded* against
-   * something outside the dev server. `src/lib/devModelFixture.ts` hands the
-   * store a literal catalogue for this query string only, behind the same
-   * folded-away `import.meta.env.DEV` guard as the transcript fixture: three
-   * hosted models and Shreekant's three local ones, with the 4B lit because
-   * that is what `resolveSelection` prefers when Ollama is reachable.
-   *
-   * Opened by the trigger's `title` rather than its text, which is whichever
-   * model is currently answering.
-   */
-  {
-    name: 'chat-models',
-    path: '/chat?__dev-model-fixture__=1',
-    ready: 'h1:has-text("Atlas")',
-    /*
-     * ITEM 13G, second pass — the picker moved to the foot of the chat list,
-     * so reaching it depends on whether the list is docked. Above 1180 it is
-     * a column and the trigger is simply there; below, the list is a drawer
-     * and the picker is inside it, so the drawer has to be opened first.
-     *
-     * **That is a real consequence of the move, not a harness detail**:
-     * changing model on a tablet is now two taps rather than one. Written out
-     * here because this shot is where anyone would notice it.
-     */
-    open: async (page, settle) => {
-      const size = page.viewportSize();
-      if (size !== null && size.width < 1180) {
-        await page.getByTitle('Show chats').click();
-        await settle();
-      }
-      await page.getByTitle('Choose which model answers').click();
-    },
-    opened: 'text=On your laptop',
   },
   {
     name: 'chat-composer',
@@ -1466,6 +2347,18 @@ const SHOTS: Shot[] = [
     ready: 'text=Thought for 4.2s',
     open: (page) => page.getByRole('button', { name: /Thought for/ }).click(),
     opened: 'text=The filing is the fixed date',
+  },
+  /*
+   * ── 29-1P15d: A LONG JOB (idea 77) ──
+   *
+   * The same running turn, twelve seconds in: violet light drifts inside its
+   * working pill and "12s" sits at the end. The count is read once under the
+   * harness (`useLongJob`), so the number is the same every run.
+   */
+  {
+    name: 'chat-long-job',
+    path: '/chat?__dev-chat-fixture__=long-job&__dev-host-fixture__=awake&__dev-model-fixture__=1',
+    ready: '[data-long-job]',
   },
   /*
    * ── ITEM 13G: FORTY-EIGHT ROWS, OPEN AND CLOSED ──
@@ -1697,7 +2590,19 @@ const SHOTS: Shot[] = [
     /* ITEM 13G, second pass - it is a `Customize` dial on the composer's
        own row now, not a sliders button on a header bar that no longer
        exists, and it opens upward. */
-    open: (page) => page.getByRole('button', { name: 'Customize' }).click(),
+    /* BIG-1 made Gemini the default, and the slider is a fact about a model
+       on the laptop — so the shot puts gemma on the Local side and flips the
+       switch to it, through the model store's own actions (OPT-8: Settings
+       picks the default, the composer's switch picks the side). */
+    open: async (page) => {
+      await page.evaluate(async () => {
+        const store = await import('/src/lib/agent/modelStore.ts');
+        const models = store.useModelStore.getState();
+        models.chooseDefault('local', 'ollama:gemma4:e4b');
+        models.chooseSide('local');
+      });
+      await page.getByRole('button', { name: 'Customize' }).click();
+    },
     opened: 'text=All of it on the graphics card',
   },
   {
@@ -1970,13 +2875,16 @@ async function newContext(browser: Browser, viewport: Viewport, baseUrl: string)
   );
 
   await context.addInitScript(
-    ({ storageKey, storeJson, trashKey, trashJson, archiveKey, archiveJson, authKey, atlasKey, atlasUrl, stillKey }) => {
+    ({ storageKey, storeJson, trashKey, trashJson, archiveKey, archiveJson, dashKey, dashJson, authKey, atlasKey, atlasUrl, stillKey, landingKey }) => {
       localStorage.setItem(storageKey, storeJson);
       // The Trash is a second persisted store under its own key — see
       // `src/store/useTrashStore.ts` for why it is not part of the first.
       localStorage.setItem(trashKey, trashJson);
       // BUILD-11's Archive is a third, for the same reason.
       localStorage.setItem(archiveKey, archiveJson);
+      // BIG-6's Dashboard hours: today's override keeps the work session at
+      // the fixture's four hours (`serializedDashboard` says why).
+      localStorage.setItem(dashKey, dashJson);
       localStorage.setItem(authKey, '1');
       /*
        * WHERE ATLAS IS, PINNED — so a baseline cannot record whether this
@@ -2003,14 +2911,24 @@ async function newContext(browser: Browser, viewport: Viewport, baseUrl: string)
        * numbers; the orb draws its state's settled frame instead.
        */
       localStorage.setItem(stillKey, '1');
+      /*
+       * HOME STAYS HOME AT `/`. BASE opens on the Dashboard since BIG-6, by
+       * moving a cold open at `/` to `/dashboard` before the router reads the
+       * address — which would photograph the Dashboard in every Home shot.
+       * This device is set to open on Home instead; the Dashboard's own shots
+       * open `/dashboard` directly.
+       */
+      localStorage.setItem(landingKey, 'home');
     },
     {
       storageKey: STORAGE_KEY, storeJson: serializedStore(),
       trashKey: TRASH_STORAGE_KEY, trashJson: serializedTrash(),
       archiveKey: ARCHIVE_STORAGE_KEY, archiveJson: serializedArchive(),
+      dashKey: DASHBOARD_STORAGE_KEY, dashJson: serializedDashboard(),
       authKey: DEV_AUTH_KEY,
       atlasKey: ATLAS_URL_KEY, atlasUrl: 'https://atlas.invalid',
       stillKey: DEV_STILL_PRESENCE_KEY,
+      landingKey: LANDING_KEY,
     },
   );
 

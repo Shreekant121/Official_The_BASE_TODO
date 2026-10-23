@@ -56,6 +56,7 @@
  */
 import type { Task, TaskList } from '../store/useStore';
 import { parseStoredDate, resolveUserTimeZone } from './agent/dates';
+import { isProjectBackburner } from './backburner';
 
 // ─── TUNING ──────────────────────────────────────────────────────────────────
 
@@ -301,6 +302,12 @@ export interface ScoreBreakdown {
   /** `n` — transitively-blocked incomplete tasks. */
   blockedCount: number;
   conductivity: ConductivityReading;
+  /**
+   * Ignored work (BIG-3). Every number above is zero and nothing is red: an
+   * ignored task is not ranked, so a screen that shows one prints "Ignored"
+   * where the score would be rather than a 0 that reads as a verdict.
+   */
+  ignored: boolean;
 }
 
 export interface ScoreOptions {
@@ -316,6 +323,35 @@ export interface ScoreOptions {
    * zone; pass it explicitly to keep a call fully pure (every test here does).
    */
   timeZone?: string;
+  /**
+   * Ignored work (BIG-3), from `lib/ignoredWork.ts`. An ignored task scores
+   * zero, is never counted as blocked, never lends its score to what it waits
+   * on through the conductivity floor, and adds nothing to its project's
+   * Runway. It is out of the ranking entirely, not merely at the bottom of it.
+   */
+  ignored?: ReadonlySet<string>;
+}
+
+const NOTHING_IGNORED: ReadonlySet<string> = new Set();
+
+/** The breakdown an ignored task gets: every number zero, nothing red. */
+function ignoredReading(taskId: string, latestStart: number | null, daysToLatestStart: number | null): ScoreBreakdown {
+  return {
+    taskId,
+    score: 0,
+    baseScore: 0,
+    linear: 0,
+    multiplicative: 0,
+    W: 0,
+    redAlert: false,
+    variables: { humanOverride: 0, deadlineProximity: 0, bottleneck: 0, duration: 0, emergency: 0, escalator: 0, avoided: 0 },
+    latestStart,
+    daysToLatestStart,
+    dangerThresholdDays: TUNING.dangerThresholdDays,
+    blockedCount: 0,
+    conductivity: { highestBlockedScore: 0, coefficient: 1, floor: 0, from: null, applied: false },
+    ignored: true,
+  };
 }
 
 // ─── The small pure pieces ───────────────────────────────────────────────────
@@ -631,30 +667,56 @@ function blend(v: ScoreVariables, W: number) {
  *
  * `now` is epoch milliseconds and never read from a clock in here.
  */
+/**
+ * The lists whose tasks never enter the danger zone: the two fixed ones, and
+ * (29-1P6c, idea 91) every project's own Backburner, which is the same parking
+ * lot kept inside a project. Recognised by name through `lib/backburner.ts`.
+ */
+function calmListIds(lists: readonly TaskList[] | undefined): ReadonlySet<string> {
+  const ids = new Set<string>(TUNING.excludedListIds);
+  for (const list of lists ?? []) if (isProjectBackburner(list)) ids.add(list.id);
+  return ids;
+}
+
 export function scoreAll(
   tasks: readonly PriorityTask[],
   now: number,
   options: ScoreOptions = {},
 ): Map<string, ScoreBreakdown> {
   const timeZone = options.timeZone ?? resolveUserTimeZone();
+  const ignored = options.ignored ?? NOTHING_IGNORED;
   const byId = new Map(tasks.map((t) => [t.id, t]));
-  const incomplete = new Set(tasks.filter((t) => t.status !== 'completed').map((t) => t.id));
+  // An ignored task is out of the graph's reckoning the way a finished one is:
+  // nothing counts it as blocked and it lends no score to what it waits on.
+  const incomplete = new Set(
+    tasks.filter((t) => t.status !== 'completed' && !ignored.has(t.id)).map((t) => t.id),
+  );
   const dependents = buildDependents(tasks);
   const blockedCounts = countBlocked(tasks, dependents, incomplete);
 
   const listProject = new Map<string, string | undefined>(
     (options.taskLists ?? []).map((list) => [list.id, list.projectId]),
   );
+  const calm = calmListIds(options.taskLists);
   const projectOf = new Map<string, string | undefined>(
     tasks.map((t) => [t.id, t.listId ? listProject.get(t.listId) : undefined]),
   );
-  const runways = projectRunwayDays(tasks, projectOf, now, timeZone);
+  const runways = projectRunwayDays(
+    ignored.size === 0 ? tasks : tasks.filter((t) => !ignored.has(t.id)),
+    projectOf,
+    now,
+    timeZone,
+  );
 
   // Pass one: everything that does not depend on another task's final score.
   const partial = new Map<string, ScoreBreakdown>();
   for (const task of tasks) {
     const latestStart = latestStartOf(task, timeZone);
     const daysToLatestStart = latestStart === null ? null : (latestStart - now) / DAY_MS;
+    if (ignored.has(task.id)) {
+      partial.set(task.id, ignoredReading(task.id, latestStart, daysToLatestStart));
+      continue;
+    }
     const blockedCount = blockedCounts.get(task.id) ?? 0;
 
     const projectId = projectOf.get(task.id);
@@ -668,7 +730,7 @@ export function scoreAll(
     // A parking lot that screams is a parking lot you stop reading: Backburner
     // and Reference Materials never enter the danger zone, so they are scored
     // by the calm linear sum and can never go Red Alert.
-    const excluded = task.listId !== undefined && TUNING.excludedListIds.includes(task.listId);
+    const excluded = task.listId !== undefined && calm.has(task.listId);
     const W = excluded ? 0 : sigmoid(daysToLatestStart, dangerThresholdDays);
 
     const { linear, multiplicative, score } = blend(variables, W);
@@ -687,6 +749,7 @@ export function scoreAll(
       dangerThresholdDays,
       blockedCount,
       conductivity: { highestBlockedScore: 0, coefficient: 1, floor: 0, from: null, applied: false },
+      ignored: false,
     });
   }
 
@@ -707,7 +770,7 @@ export function scoreAll(
 
   const finalScoreOf = (id: string): number => {
     const entry = partial.get(id)!;
-    if (resolved.has(id)) return entry.score;
+    if (resolved.has(id) || entry.ignored) return entry.score;
     if (resolving.has(id)) return entry.baseScore;
 
     resolving.add(id);
@@ -766,6 +829,7 @@ export function scoreDraft(
   const timeZone = options.timeZone ?? resolveUserTimeZone();
   const latestStart = latestStartOf(draft, timeZone);
   const daysToLatestStart = latestStart === null ? null : (latestStart - now) / DAY_MS;
+  if (options.ignored?.has(draft.id)) return ignoredReading(draft.id, latestStart, daysToLatestStart);
 
   const blockedCount = saved?.blockedCount ?? 0;
   const dangerThresholdDays = saved?.dangerThresholdDays ?? TUNING.dangerThresholdDays;
@@ -775,7 +839,7 @@ export function scoreDraft(
     bottleneck: bottleneckSeverity(blockedCount),
   };
 
-  const excluded = draft.listId !== undefined && TUNING.excludedListIds.includes(draft.listId);
+  const excluded = draft.listId !== undefined && calmListIds(options.taskLists).has(draft.listId);
   const W = excluded ? 0 : sigmoid(daysToLatestStart, dangerThresholdDays);
   const { linear, multiplicative, score: baseScore } = blend(variables, W);
 
@@ -799,6 +863,7 @@ export function scoreDraft(
     dangerThresholdDays,
     blockedCount,
     conductivity: { highestBlockedScore, coefficient, floor, from, applied },
+    ignored: false,
   };
 }
 

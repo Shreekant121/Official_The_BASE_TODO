@@ -1,10 +1,10 @@
-/* Mode, thinking effort and the context window: the per-device dials that
+/* Mode and the context window: the per-device dials that
    decide how the next turn runs. Moved out of `pages/ChatPage.tsx`, unchanged,
    when it was split (BUILD-7). */
 import { useCallback, useMemo, useState } from 'react';
-import type { AtlasEffort, AtlasMode } from '../../lib/atlas/client';
+import type { AtlasMode } from '../../lib/atlas/client';
 import { DEFAULT_CONTEXT_K, contextStepsFor } from '../../lib/atlas/contextReadings';
-import { CONTEXT_K_KEY, EFFORT_KEY, MODE_KEY, readDeviceValue, writeDeviceValue } from '../../lib/atlas/devicePrefs';
+import { CONTEXT_K_KEY, MODE_KEY, readDeviceValue, writeDeviceValue } from '../../lib/atlas/devicePrefs';
 
 /**
  * ITEM 13G — THE MODES MOVED, AND THIS IS WHERE THEY WENT.
@@ -31,19 +31,14 @@ function parseMode(raw: string | null): AtlasMode {
   return raw === 'plan' || raw === 'ask' ? raw : 'auto';
 }
 
-function parseEffort(raw: string | null): AtlasEffort {
-  // `off` was a real position until this session measured it out of existence,
-  // so a device still holding one must land on the default rather than break.
-  return raw === 'hard' ? 'hard' : 'some';
-}
-
 /**
  * `localModel` is the chosen model's id when it runs on the laptop, and `null`
  * for a Gemini model, which declares no context steps to keep the slider inside.
  */
 export function useTurnDials(localModel: string | null) {
   /*
-   * ITEM 12 — THE TWO DIALS.
+   * ITEM 12 — THE TWO DIALS. (One since OPT-8: thinking is always Max, so
+   * its dial and the `mutineer_atlas_effort` key are gone.)
    *
    * Per device, like the model and the context window beside them, and for the
    * same reason `devicePrefs.ts` gives: Atlas deliberately holds no opinion
@@ -52,18 +47,11 @@ export function useTurnDials(localModel: string | null) {
    * built before this item simply ignores.
    */
   const [mode, setMode] = useState<AtlasMode>(() => parseMode(readDeviceValue(MODE_KEY)));
-  const [effort, setEffort] = useState<AtlasEffort>(() => parseEffort(readDeviceValue(EFFORT_KEY)));
 
   const chooseMode = useCallback((next: string) => {
     const picked = parseMode(next);
     setMode(picked);
     writeDeviceValue(MODE_KEY, picked === 'auto' ? null : picked);
-  }, []);
-
-  const chooseEffort = useCallback((next: string) => {
-    const picked = parseEffort(next);
-    setEffort(picked);
-    writeDeviceValue(EFFORT_KEY, picked === 'some' ? null : picked);
   }, []);
 
   /** Thousands of tokens (DESIGN.md §4.1). 64K unless he has moved it. */
@@ -92,5 +80,5 @@ export function useTurnDials(localModel: string | null) {
     writeDeviceValue(CONTEXT_K_KEY, String(k));
   }, []);
 
-  return { mode, chooseMode, effort, chooseEffort, effectiveContextK, chooseContextK };
+  return { mode, chooseMode, effectiveContextK, chooseContextK };
 }

@@ -40,6 +40,7 @@
 import { useState } from 'react';
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { Checkbox } from '../forms/Checkbox';
+import { Strike } from '../forms/Strike';
 
 /**
  * `title` is omitted from the DOM attributes and redeclared: the `.d.ts`
@@ -88,14 +89,14 @@ export function TaskRow({
     padding: 'var(--sp-4) var(--sp-6)',
     borderRadius: 'var(--r-md)',
     backgroundImage: selected
-      ? 'var(--glass-tint-accent)'
+      ? 'var(--glass-tint-lime)'
       : hover
         ? 'var(--glass-fill-2)'
         : 'var(--glass-fill-1)',
     backdropFilter: 'var(--glass-bd-sm)',
     WebkitBackdropFilter: 'var(--glass-bd-sm)',
     boxShadow: selected
-      ? 'var(--glass-rim-2), var(--glow-accent-sm)'
+      ? 'var(--glass-rim-2), var(--job-lime-shine)'
       : hover
         ? 'var(--glass-rim-2), var(--glass-cast-2)'
         : 'var(--glass-rim-1)',
@@ -126,15 +127,11 @@ export function TaskRow({
           style={{
             font: 'var(--type-body)',
             color: done ? 'var(--fg-3)' : 'var(--fg-1)',
-            /* The LONGHAND, deliberately: React warns when a shorthand is
-               updated on a rerender while a longhand for the same property is
-               also set, and `done` is a prop that flips. */
-            textDecorationLine: done ? 'line-through' : 'none',
-            textDecorationColor: 'var(--fg-4)',
             overflowWrap: 'anywhere',
           }}
         >
-          {title}
+          {/* 29-1P4b: a line that slides through rather than a line-through. */}
+          <Strike on={done}>{title}</Strike>
         </span>
         {meta != null && (
           <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', overflowWrap: 'anywhere' }}>

@@ -13,11 +13,10 @@
  * the full argument, including why the card's own condense entrance is
  * switched off under a Framer wrapper that slides it in.
  *
- * `--status-review` (amber) rather than rose, and the distinction is the
- * design system's own: rose is `--status-overrun`, a live problem, which is
- * what a dead cloud sync is. A reminder that failed to reach Google needs a
- * decision — reconnect, or let it go — and amber is "needs a decision". Same
- * call UI-13 made for an incomplete prerequisite.
+ * **Coral, `tone="overrun"`, since 29-1P2c2** — his call: failed and broken are
+ * coral's job, and a reminder that did not reach Google failed. (It was amber,
+ * "needs a decision", and yellow is gold's now.) The two buttons that go back
+ * to Google wear sky on their glyph: the calendar is sky's job.
  *
  * **Neither banner says where it goes any more.** Both sit in one fixed column
  * owned by `App.tsx` — see `SyncStatusBanner`'s header for why two hard-coded
@@ -52,6 +51,9 @@
  * tint button when it was the only way forward. It is now the second one — the
  * place you go when trying again did not work — and two tinted buttons in one
  * row would say neither is the answer.
+ *
+ * Since 29-1P2 the one raised button is the design system's soft button, not
+ * tint: a banner's fix is a second action, and its colour is P2c's to give.
  */
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -60,7 +62,7 @@ import { useUIStore } from '../store/useUIStore';
 import { useStore } from '../store/useStore';
 import { useAuth } from '../contexts/AuthContext';
 import { reconcileAllNotifications } from '../lib/notificationSync';
-import { Button, Icon, NotificationCard } from '../ui';
+import { Button, Icon, NotificationCard, SoftButton } from '../ui';
 
 export default function ReminderSyncBanner() {
   const issue = useUIStore((s) => s.reminderSyncIssue);
@@ -104,11 +106,13 @@ export default function ReminderSyncBanner() {
           className="pointer-events-auto"
         >
           <NotificationCard
-            tone="review"
+            tone="overrun"
             icon={<Icon name="triangle-alert" size={16} />}
             title={needsReconnect ? 'BASE lost access to Google Calendar' : "Reminder didn't reach Google Calendar"}
             body={issue}
             defaultOpen
+            /* 29-1P6b: flicked away is the same "Hide this warning". */
+            onThrow={() => setIssue(null)}
             style={{ animation: 'none' }}
             /* UI-25 moved dismissal out of the card head and into the
                actions row, where the rest of the decision already is. The
@@ -117,31 +121,27 @@ export default function ReminderSyncBanner() {
               <>
                 {needsReconnect ? (
                   /* Reconnect lives on the Notifications page, which is where
-                     Connect Google already is — so this is the tint button and
-                     there is no second one, rather than two ways to the same
-                     place. */
-                  <Button
+                     Connect Google already is — so this is the raised button
+                     and there is no second one, rather than two ways to the
+                     same place. */
+                  <SoftButton
                     size="sm"
-                    variant="tint"
-                    tone="amber"
                     onClick={() => navigate('/notifications')}
-                    iconLeft={<Icon name="link" size={14} />}
+                    icon={<Icon name="link" size={14} style={{ color: 'var(--job-sky)' }} />}
                   >
                     Reconnect Google
-                  </Button>
+                  </SoftButton>
                 ) : (
                   <>
-                    <Button
+                    <SoftButton
                       size="sm"
-                      variant="tint"
-                      tone="amber"
                       onClick={retry}
-                      loading={retrying}
-                      disabled={!user}
-                      iconLeft={<Icon name="rotate-cw" size={14} />}
+                      disabled={!user || retrying}
+                      aria-busy={retrying || undefined}
+                      icon={<Icon name="rotate-cw" size={14} style={{ color: 'var(--job-sky)' }} />}
                     >
                       {retrying ? 'Trying again…' : 'Try again'}
-                    </Button>
+                    </SoftButton>
                     <Button
                       size="sm"
                       variant="ghost"

@@ -56,56 +56,27 @@
  * panel its visual centre, worth two and a half rows of models. The detail is
  * diagnosis: it belongs in the empty state, where somebody is actually asking
  * why.
+ *
+ * OPT-8 — ONE PICKER PER SIDE, AND THEY LIVE IN SETTINGS
+ * ------------------------------------------------------
+ * His words: *"there is a Ai model selector … shift it to settings and in
+ * settings allow me to select a default local Ai model and a Default Cloud Ai
+ * model"*. So this is drawn twice on Settings → Atlas, `side="local"` with the
+ * laptop's group and `side="cloud"` with Gemini's and Claude-and-ChatGPT's, and
+ * a pick sets that side's default without moving the chat's Local | Cloud
+ * switch (`chat/ModelSideSwitch.tsx`). The row trigger at the foot of the chat
+ * list, and the tinted pill before it, are gone. "One list, not two" above was
+ * the old picker's rule; his call replaced it.
  */
-import { Fragment, forwardRef, useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { Icon, IconButton } from '../ui';
 import { PickerButton, PickerHeading, PickerList, PickerOption } from './pickers';
 import { PortalDropdown } from './PortalDropdown';
-import { selectEffectiveModel, useModelStore } from '../lib/agent/modelStore';
-import type { ModelOption } from '../lib/agent/models';
+import { catalogueOf, useModelStore } from '../lib/agent/modelStore';
+import { defaultOf, type ModelOption, type ModelSide } from '../lib/agent/models';
 
-/** Wider than the trigger, and hung off its right edge — see `PortalDropdown`'s `align`. */
+/** Wider than the trigger when the trigger is narrow; see `PortalDropdown`. */
 const PANEL_PX = 340;
-
-/**
- * ITEM 9D — THE TRIGGER IS A TINTED PILL, AND THE COLOUR IS THE READOUT
- * ----------------------------------------------------------------------
- * `screens/atlas.html` draws this control and comments its own reason:
- * *"emerald when the answer came from the house, cyan when it left it — the
- * colour IS the privacy readout."* That is the one thing a name alone cannot
- * say at a glance, and it is the whole argument for this control looking
- * different from the six task-field pickers, which stay wells.
- *
- * **Three departures from the mockup, all for the app's own consistency.**
- * It keeps `PickerButton` rather than becoming a bespoke `<button>`, so the
- * focus ring, the ellipsis and the chevron stay the ones every picker has. It
- * keeps `laptop`/`globe` rather than taking the mockup's `cpu`/`cloud`,
- * because the panel's two headings already wear those glyphs and swapping only
- * the trigger would make one control speak two vocabularies — 9C's call about
- * the trash chips, for the same reason. And it keeps its `title`, which is how
- * the harness opens it.
- *
- * **The glow is inside `readme.md`'s ration, not an exception to it.** Emission
- * is for what is *live, selected, running or overrun*; this pill is a live
- * selection, and it is the only thing on the instrument bar that is either.
- */
-const TRIGGER_TINT = {
-  local: {
-    backgroundImage: 'var(--glass-tint-accent)',
-    boxShadow: 'var(--glass-rim-2), var(--glow-accent-sm)',
-  },
-  hosted: {
-    backgroundImage: 'var(--glass-tint-cyan)',
-    boxShadow: 'var(--glass-rim-2), var(--glow-cyan-md)',
-  },
-} as const;
-
-/**
- * The glyph's ink on the emerald tint. `--accent` itself is too dark to read
- * against `--glass-tint-accent` — the same lifted emerald `ChatPage`'s mark
- * uses, and for the same reason.
- */
-const MODEL_INK = 'oklch(0.93 0.07 162)';
 
 /**
  * The size beside a local model, or the id beside a hosted one whose id is not
@@ -152,7 +123,7 @@ function Problem({ children, onRetry }: { children: React.ReactNode; onRetry?: (
         padding: 'var(--sp-4) var(--sp-4) var(--sp-5)',
       }}
     >
-      <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', paddingTop: 2, color: 'var(--status-review)' }}>
+      <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', paddingTop: 2, color: 'var(--status-overrun)' }}>
         <Icon name="circle-alert" size={14} />
       </span>
       <span style={{ flex: 1, minWidth: 0, font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
@@ -208,20 +179,8 @@ function Group({
   );
 }
 
-/**
- * ITEM 13G, second pass — `row` puts this at the foot of the chat list.
- *
- * Shreekant's call, 2026-09-08: *"put the model picker below the chats with a
- * small icon and text just like others"*. It used to be a tinted pill on the
- * header's instrument bar; that bar is gone, and which model answers is a
- * standing fact about the conversation rather than something set per turn — so
- * it belongs beside the conversations, not above the transcript.
- *
- * The row shape is `AtlasNavPanel`'s `SubRow`, which is the "others" he means:
- * a glyph, a name, and a line of note under it. The panel it opens, and every
- * word in that panel, is unchanged — only the trigger has two shapes now.
- */
-export default function ModelPicker({ row = false }: { row?: boolean } = {}) {
+/** The default model of one side, chosen in Settings → Atlas (OPT-8). */
+export default function ModelPicker({ side }: { side: ModelSide }) {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -231,34 +190,18 @@ export default function ModelPicker({ row = false }: { row?: boolean } = {}) {
   const localWithoutTools = useModelStore((s) => s.localWithoutTools);
   const hostedError = useModelStore((s) => s.hostedError);
   const localError = useModelStore((s) => s.localError);
+  const cloud = useModelStore((s) => s.cloud);
+  const cloudError = useModelStore((s) => s.cloudError);
   const loading = useModelStore((s) => s.loading);
-  const select = useModelStore((s) => s.select);
+  const chooseDefault = useModelStore((s) => s.chooseDefault);
   const refresh = useModelStore((s) => s.refresh);
-  const active = useModelStore(selectEffectiveModel);
+  /* A safe selector: it returns an entry out of the lists (or `null`), never
+     a fresh object — `selectEffectiveModel`'s reasoning. */
+  const active = useModelStore((s) => defaultOf(catalogueOf(s), s.choice, side));
 
-  const isLocal = active.provider === 'ollama';
   const retry = () => { void refresh(); };
-  const pick = (option: ModelOption) => { select(option.key); setIsOpen(false); };
-
-  /*
-   * ── Which group is drawn first ────────────────────────────────────────
-   *
-   * The one the current model is in, so the panel always opens on the ticked
-   * row. That is not a flourish; the lists are wildly different lengths.
-   * Google returns thirty-odd models and Ollama returns three, so with a fixed
-   * order one device or the other opens this panel onto a wall of rows that
-   * are not the answer, and has to scroll to find the model it is already
-   * using. Measured with only four hosted rows in the fixture, the local group
-   * was already past the fold.
-   *
-   * It also keeps the tablet from opening on a complaint it can never act on:
-   * there, the active model is hosted, so the working list comes first and the
-   * "no local models, and here is why" row sits underneath it rather than at
-   * the top of every visit. In practice this is stable per device — the
-   * desktop always leads with local, the tablet always with hosted — so it
-   * reorders in principle and never in front of anyone.
-   */
-  const groups = isLocal ? ['local', 'hosted'] : ['hosted', 'local'];
+  const pick = (option: ModelOption) => { chooseDefault(side, option.key); setIsOpen(false); };
+  const activeKey = active?.key ?? '';
 
   const hostedGroup = (
     <Fragment key="hosted">
@@ -266,11 +209,11 @@ export default function ModelPicker({ row = false }: { row?: boolean } = {}) {
         icon={<Icon name="globe" size={14} />}
         trailing={<Count n={hosted.length} loading={loading} />}
       >
-        Hosted
+        Gemini
       </PickerHeading>
 
       {hosted.length > 0 ? (
-        <Group models={hosted} active={active.key} onPick={pick} />
+        <Group models={hosted} active={activeKey} onPick={pick} />
       ) : loading ? (
         <Note>Asking Google…</Note>
       ) : (
@@ -323,7 +266,7 @@ export default function ModelPicker({ row = false }: { row?: boolean } = {}) {
               </>
             )}
           </Note>
-          <Group models={local} active={active.key} onPick={pick} />
+          <Group models={local} active={activeKey} onPick={pick} />
         </>
       ) : loading ? (
         <Note>Asking your laptop…</Note>
@@ -333,133 +276,74 @@ export default function ModelPicker({ row = false }: { row?: boolean } = {}) {
         <Problem onRetry={retry}>
           {localError ?? 'Your laptop is answering but has no model that can use tools.'} These
           models run on your laptop and reach this screen through Atlas, so they are listed only
-          while the laptop is awake, on your network, and running Atlas. Gemini keeps working
+          while the laptop is awake, on your network, and running Atlas. Cloud keeps working
           either way.
         </Problem>
       )}
     </Fragment>
   );
 
+  /*
+   * BIG-1: Claude and ChatGPT, on his own keys, answered through the laptop.
+   *
+   * Their list is the laptop's, so like the local group it empties when the
+   * lid closes — that is the rule (laptop only, his call), and the note says
+   * so rather than apologising for it. With no Claude or ChatGPT key in the
+   * sheet there is nothing to ask for, and the group says where keys go.
+   */
+  const cloudGroup = (
+    <Fragment key="cloud">
+      <PickerHeading
+        icon={<Icon name="sparkles" size={14} />}
+        trailing={<Count n={cloud.length} loading={loading} />}
+      >
+        Claude and ChatGPT
+      </PickerHeading>
+
+      {cloud.length > 0 ? (
+        <>
+          <Note>Through your laptop, on your own keys — while the laptop is awake.</Note>
+          <Group models={cloud} active={activeKey} onPick={pick} />
+        </>
+      ) : loading ? (
+        <Note>Asking your laptop…</Note>
+      ) : cloudError !== null ? (
+        <Problem onRetry={retry}>{cloudError}</Problem>
+      ) : (
+        <Note>Add a Claude or ChatGPT key in Settings → Connections to list their models here.</Note>
+      )}
+    </Fragment>
+  );
+
+  const label = side === 'local' ? 'Choose the default local model' : 'Choose the default cloud model';
+
   return (
     <>
-      {row ? (
-        <ModelRow
-          ref={triggerRef}
-          open={isOpen}
-          local={isLocal}
-          label={active.label}
-          onClick={() => setIsOpen((v) => !v)}
-        />
-      ) : (
-        <PickerButton
-          ref={triggerRef}
-          open={isOpen}
-          glyph={
-            <Icon
-              name={isLocal ? 'laptop' : 'globe'}
-              size={16}
-              style={{ color: isLocal ? MODEL_INK : 'var(--fg-1)' }}
-            />
-          }
-          /* The harness opens this by its `title`; the label is whichever model
-             is answering and changes with what is installed. */
-          title="Choose which model answers"
-          aria-label="Choose which model answers"
-          onClick={() => setIsOpen((v) => !v)}
-          style={{ flex: '0 1 auto', maxWidth: 220, ...TRIGGER_TINT[isLocal ? 'local' : 'hosted'] }}
-        >
-          {active.label}
-        </PickerButton>
-      )}
+      <PickerButton
+        ref={triggerRef}
+        open={isOpen}
+        glyph={<Icon name={side === 'local' ? 'laptop' : 'globe'} size={16} />}
+        /* The harness opens these by their `title`. */
+        title={label}
+        aria-label={label}
+        onClick={() => setIsOpen((v) => !v)}
+        style={{ width: '100%' }}
+      >
+        {active?.label ?? (loading ? 'Looking…' : side === 'local' ? 'No local model listed' : 'No cloud model listed')}
+      </PickerButton>
 
       <PortalDropdown
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
+        onOpen={() => setIsOpen(true)}
         triggerRef={triggerRef}
         width={PANEL_PX}
-        align={row ? 'left' : 'right'}
+        align="left"
       >
         <PickerList maxHeight="min(60vh, 420px)">
-          {groups.map((name) => (name === 'hosted' ? hostedGroup : localGroup))}
+          {side === 'local' ? localGroup : [hostedGroup, cloudGroup]}
         </PickerList>
       </PortalDropdown>
     </>
   );
 }
-
-
-/**
- * The row form of the trigger — `AtlasNavPanel`'s `SubRow`, near enough that
- * the two read as one kind of thing when they are three inches apart.
- *
- * The glyph carries the one fact worth colour here: emerald for a model on the
- * laptop, plain for a hosted one. `readme.md` rations the accent to what is
- * live, and "this is running on your own machine, free" is the live fact.
- */
-const ModelRow = forwardRef<HTMLButtonElement, {
-  open: boolean;
-  local: boolean;
-  label: string;
-  onClick: () => void;
-}>(function ModelRow({ open, local, label, onClick }, ref) {
-  const [hover, setHover] = useState(false);
-  const lit = open || hover;
-
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onClick}
-      aria-expanded={open}
-      title="Choose which model answers"
-      aria-label="Choose which model answers"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', width: '100%', minWidth: 0,
-        minHeight: 42, padding: '0 var(--sp-4)', border: 0, cursor: 'pointer', textAlign: 'left',
-        borderRadius: 'var(--r-sm)',
-        backgroundImage: lit ? 'var(--glass-fill-2)' : 'none',
-        boxShadow: lit ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'none',
-        transition:
-          'box-shadow var(--dur-base) var(--ease-glass),'
-          + ' background-image var(--dur-fast) var(--ease-glass)',
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{ display: 'flex', flex: '0 0 auto', color: local ? MODEL_INK : 'var(--fg-3)' }}
-      >
-        <Icon name={local ? 'laptop' : 'globe'} size={16} />
-      </span>
-      <span style={{ display: 'grid', gap: 0, minWidth: 0, flex: 1 }}>
-        <span
-          style={{
-            font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-1)',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}
-        >
-          {label}
-        </span>
-        <span
-          style={{
-            font: 'var(--type-caption)', color: 'var(--fg-4)',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}
-        >
-          {local ? 'On your laptop' : 'Hosted by Google'}
-        </span>
-      </span>
-      <span
-        aria-hidden="true"
-        style={{
-          display: 'flex', flex: '0 0 auto', color: 'var(--fg-4)',
-          transform: open ? 'rotate(180deg)' : undefined,
-          transition: 'transform var(--dur-base) var(--ease-morph)',
-        }}
-      >
-        <Icon name="chevron-down" size={14} />
-      </span>
-    </button>
-  );
-});

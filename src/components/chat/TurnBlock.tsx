@@ -71,7 +71,7 @@
  *
  * **What is deliberately NOT here**, because it is items 10 to 13: the
  * conversation list and the context slider (10), the modes, the effort dial,
- * the question card and the cost per turn (12), the approval card and the
+ * the question card (12), the approval card and the
  * waiting-for-you tray (13). They were read in `atlas.html` first, which is
  * what the instrument bar has room for.
  *
@@ -82,42 +82,36 @@
  * already made the same call for the same reason.
  */
 import { useState, type CSSProperties } from 'react';
-import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import { AskCard, AskReceipt, Button, Icon, IconButton, Well } from '../../ui';
+import { useNavigate } from 'react-router-dom';
+import { AskCard, AskReceipt, Icon, IconButton, Remembered, Well, useWordReveal } from '../../ui';
+import { catalogLink, noteName, rememberedNotes } from '../../lib/atlas/remembered';
 import { isAskTool, parseAnswerMessage, readAskCard } from '../../lib/askCard';
 import { describeTaskRows, describeToolCall, type ToolChip } from '../../lib/agent/toolChip';
-import type { AtlasMode, AtlasTurnCost } from '../../lib/atlas/client';
+import type { AtlasMode } from '../../lib/atlas/client';
 import type { AgentToolCall, TokenUsage } from '../../lib/agent/types';
-import type { SnapshotTurn } from '../../store/useSnapshotStore';
 import { Markdown } from './Markdown';
 import { ToolResult } from './ToolResult';
 import { WorkingPill } from './WorkingPill';
 import { CHIP_ICONS, MARK_INK, type ChatTurn } from './chatShared';
-import { PlanCard, CeilingStopCard, MonthlyCeilingCard, HeldCard } from './TurnCards';
+import { PlanCard, HeldCard } from './TurnCards';
 import { ChangeList } from './ChangeList';
 import { ApprovalCard } from './ApprovalCard';
 
 export function TurnBlock({
   turn,
   timezone,
-  snapshot,
   isLast,
   answeredBelow,
   busy,
-  onRevert,
   onSend,
   onEdit,
   approvalStateOf,
   failureOf,
   deciding,
   onDecide,
-  onCarryOn,
-  onRunAnyway,
 }: {
   turn: ChatTurn;
   timezone: string;
-  snapshot: SnapshotTurn | undefined;
   /**
    * Whether this is the turn at the bottom (item 12).
    *
@@ -135,21 +129,8 @@ export function TurnBlock({
    */
   answeredBelow: boolean;
   busy: boolean;
-  onRevert: (snapshotTurnId: string) => void;
   /** Answer a question, or approve a plan — always as an ordinary next message. */
   onSend: (text: string, runFor?: AtlasMode) => void;
-  /**
-   * Carry on a turn that stopped at the per-turn ceiling (item 13A, §3.4).
-   *
-   * **Not `onSend`**, and the difference is the whole of resumption: this
-   * sends no message at all. Atlas reads the original ask out of the action
-   * log and continues from the tool results already recorded there, rather
-   * than starting the job again — which for a turn that had already created
-   * two tasks is the difference between finishing and doing it twice.
-   */
-  onCarryOn: (logTurnId: string, ask: string) => void;
-  /** Run one hosted turn past the monthly ceiling (§3.4). One tap, one turn. */
-  onRunAnyway: (ask: string) => void;
   /** Take the last message back into the composer to change it. */
   onEdit: () => void;
   /**
@@ -173,6 +154,9 @@ export function TurnBlock({
      that works. Falls back to the in-browser answer for a turn that predates
      the field — the `devChatFixture` transcript, and nothing else. */
   const onAtlas = turn.ranOnAtlas ?? false;
+  /* 29-1P15a, idea 20: the reply is drawn a word at a time as it arrives,
+     and finishes typing after the turn does (`useWordReveal`). */
+  const reveal = useWordReveal(turn.assistantText, turn.status === 'running');
   const thinking = turn.status === 'running' && turn.assistantText === '' && turn.toolCalls.length === 0;
 
   /*
@@ -211,6 +195,10 @@ export function TurnBlock({
   }));
   const writes = chips.filter((entry) => entry.chip.wrote);
   const reads = chips.filter((entry) => !entry.chip.wrote);
+  /* 29-1P15b, idea 94: the notes Atlas saved in this turn, as "Remembered"
+     under the reply once it has finished writing itself out. */
+  const remembered = rememberedNotes(turn.toolCalls);
+  const navigate = useNavigate();
 
   /* Item 12. Editable only where taking the turn back loses nothing: the last
      turn, nothing running, and no writes on it — a turn holding a Revert must
@@ -229,7 +217,8 @@ export function TurnBlock({
   return (
     <div
       style={{
-        display: 'grid', gap: 'var(--sp-7)',
+        /* A fixed column for OPT-1's reason; see the Atlas column below. */
+        display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-7)',
         animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
       }}
     >
@@ -282,6 +271,7 @@ export function TurnBlock({
         <WorkingPill
           label={onAtlas ? 'Thinking on the laptop' : 'Reading your backlog'}
           tool={runningTool}
+          since={turn.startedAt}
         />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: 'var(--sp-5)' }}>
@@ -290,8 +280,14 @@ export function TurnBlock({
           {/* `--sp-6` inside an Atlas turn, which is the redrawn mockup's
               innermost gap and one step up from what was here. A turn now
               stacks a thought, six rows of result, prose and a card; at
-              `--sp-5` those four ran together. */}
-          <div style={{ display: 'grid', gap: 'var(--sp-6)', minWidth: 0 }}>
+              `--sp-5` those four ran together.
+              `minmax(0, 1fr)` is OPT-1's fix, and `minWidth: 0` alone is not
+              it: a grid with no columns makes one `auto` column as wide as its
+              widest unbreakable child, and a change row (a title that never
+              wraps, then its date) is wider than a phone. The column grew to
+              448px in a 304px space and took the whole reply off the right
+              edge, text and all. A fixed column makes the row truncate. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-6)', minWidth: 0 }}>
             {/* ── What it did, before what it concluded ────────────────
                 `atlas.html` puts the tool chips *above* the reply and the task
                 rows below it, and the order is the argument: the chips are the
@@ -342,25 +338,27 @@ export function TurnBlock({
                 rather than the container so a fenced code block can still use
                 the full width and scroll inside itself.
 
-                The caret moves in here. It is the same blinking span it always
-                was, but a streaming reply is several blocks now, so `Markdown`
-                puts it at the end of whichever one is currently last. */}
+                The caret moves in here. A streaming reply is several blocks,
+                so `Markdown` puts it at the end of whichever one is last.
+                Since 29-1P15a (idea 20) it is Atlas's violet and still — the
+                words arriving are the motion — and it stays until the last
+                word is typed out, which can be just after the turn ends. */}
             {turn.assistantText !== '' && (
               <Markdown
-                text={turn.assistantText}
-                caret={
-                  turn.status === 'running' ? (
-                    <motion.span
-                      style={{
-                        display: 'inline-block', width: 2, height: '1em', marginLeft: 2,
-                        verticalAlign: 'text-bottom', background: 'var(--fg-2)',
-                      }}
-                      animate={{ opacity: [1, 0.15, 1] }}
-                      transition={{ repeat: Infinity, duration: 1 }}
-                    />
-                  ) : null
-                }
+                text={reveal.shown}
+                caret={turn.status === 'running' || reveal.revealing ? <Caret /> : null}
               />
+            )}
+
+            {/* 29-1P15b, idea 94 — "Remembered", under the reply that saved
+                something. It lands once the reply is written out, and a tap
+                opens the note (his call, 2026-10-15). */}
+            {remembered.length > 0 && turn.status !== 'running' && !reveal.revealing && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3)', minWidth: 0 }}>
+                {remembered.map((path) => (
+                  <Remembered key={path} name={noteName(path)} onOpen={() => navigate(catalogLink(path))} />
+                ))}
+              </div>
             )}
 
             {/* What it found, under the sentence describing it. `search_tasks`
@@ -388,13 +386,7 @@ export function TurnBlock({
 
             {/* What it wrote. */}
             {writes.length > 0 && (
-              <ChangeList
-                chips={writes.map((entry) => entry.chip)}
-                turn={turn}
-                snapshot={snapshot}
-                onAtlas={onAtlas}
-                onRevert={onRevert}
-              />
+              <ChangeList chips={writes.map((entry) => entry.chip)} onAtlas={onAtlas} />
             )}
 
             {/* ── Item 12's three cards ─────────────────────────────────
@@ -445,30 +437,6 @@ export function TurnBlock({
               />
             ))}
 
-            {/* ── ITEM 13A — the two spending ceilings (DESIGN.md §3.4) ────
-                Both are *live controls on the last turn*, like item 12's
-                three above and unlike the front door: each is a decision
-                about a turn that is happening now, and a Continue button four
-                turns up would carry on something the conversation has moved
-                past. `isLast` is what enforces that. */}
-            {turn.ceilingStop !== undefined && (
-              <CeilingStopCard
-                stop={turn.ceilingStop}
-                live={live}
-                superseded={!isLast}
-                onCarryOn={() => onCarryOn(turn.ceilingStop!.logTurnId!, turn.userText)}
-              />
-            )}
-
-            {turn.monthlyStop !== undefined && (
-              <MonthlyCeilingCard
-                stop={turn.monthlyStop}
-                live={live}
-                superseded={!isLast}
-                onRunAnyway={() => onRunAnyway(turn.userText)}
-              />
-            )}
-
             {/* BUILD-16 — the question card. Live on the last turn; once
                 answered it gives way to the receipt on the turn below; left
                 unanswered under a message he typed instead, it stays as a
@@ -481,11 +449,12 @@ export function TurnBlock({
               <Well
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)',
-                  backgroundImage: 'var(--glass-tint-amber)',
+                  /* A turn that failed is coral (29-1P2c2: failed is coral's job). */
+                  backgroundImage: 'var(--glass-tint-coral)',
                   boxShadow: 'var(--glass-rim-1)',
                 }}
               >
-                <span style={{ display: 'flex', flex: '0 0 auto', marginTop: 1, color: 'var(--hue-amber)' }}>
+                <span style={{ display: 'flex', flex: '0 0 auto', marginTop: 1, color: 'var(--status-overrun)' }}>
                   <Icon name="triangle-alert" size={16} />
                 </span>
                 <div style={{ minWidth: 0, display: 'grid', gap: 'var(--sp-4)', justifyItems: 'flex-start' }}>
@@ -497,18 +466,6 @@ export function TurnBlock({
                   >
                     {turn.error}
                   </span>
-                  {/* ITEM 13G, second pass - the keys moved to Settings, so
-                      this offer goes there rather than opening a dialog that no
-                      longer exists on this screen. A `Link` and not a handler:
-                      it is navigation now, and should behave like it -
-                      middle-click, open in a tab. */}
-                  {turn.keysWouldHelp && (
-                    <Link to="/settings" style={{ textDecoration: 'none' }}>
-                      <Button variant="ghost" size="sm" iconLeft={<Icon name="key-round" size={15} />}>
-                        Add or swap an API key
-                      </Button>
-                    </Link>
-                  )}
                 </div>
               </Well>
             )}
@@ -540,7 +497,7 @@ export function TurnBlock({
                 is, and hiding the rows to keep the spinner would be the screen
                 withholding what it already knows. */}
             {runningTool !== undefined && (
-              <WorkingPill label={onAtlas ? 'Working on the laptop' : 'Working'} tool={runningTool} />
+              <WorkingPill label={onAtlas ? 'Working on the laptop' : 'Working'} tool={runningTool} since={turn.startedAt} />
             )}
 
             {/* ITEM 13G — motion 7. The per-turn bar, revealed on hover and
@@ -598,17 +555,31 @@ export function TurnBlock({
 
             {turn.status !== 'running' && (
               <TurnFooter
-                readOnly={writes.length === 0 && !turn.error && turn.held === undefined}
+                /* A note saved is a change: "nothing changed" under
+                   "Remembered" would contradict it (29-1P15b). */
+                readOnly={writes.length === 0 && remembered.length === 0 && !turn.error && turn.held === undefined}
                 usage={turn.usage}
                 model={turn.model}
                 elapsedMs={turn.elapsedMs}
-                cost={turn.cost}
               />
             )}
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/** The violet caret at the end of a reply being written (idea 20). */
+function Caret() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: 'inline-block', width: 2, height: '1em', marginLeft: 2,
+        verticalAlign: 'text-bottom', background: 'var(--job-violet)',
+      }}
+    />
   );
 }
 
@@ -619,8 +590,8 @@ function Mark({ live = false }: { live?: boolean }) {
       aria-hidden="true"
       style={{
         display: 'grid', placeItems: 'center', width: 30, height: 30, marginTop: 2, flex: '0 0 auto',
-        borderRadius: '50%', backgroundImage: 'var(--glass-tint-accent)',
-        boxShadow: live ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-2)',
+        borderRadius: '50%', backgroundImage: 'var(--glass-tint-violet)',
+        boxShadow: live ? 'var(--glass-rim-2), var(--job-violet-shine)' : 'var(--glass-rim-2)',
         color: MARK_INK,
         animation: live ? 'var(--kf-pulse) 1600ms var(--ease-glass) infinite' : undefined,
       }}
@@ -728,7 +699,8 @@ function Thought({ text, ms, again = false }: { text: string; ms: number; again?
  * What a finished turn says about itself, on one line.
  *
  * `atlas.html` draws four fields — `{model} · {tokens} tk · {secs}s · ₹{cost}`
- * — and 9D takes the three this screen can answer honestly.
+ * — and this screen draws the first three. The cost went with the rest of the
+ * AI spending (OPT-4, 2026-10-06).
  *
  * **The model is the one that was missing and the one that mattered.** The
  * picker in the bar says what will answer the *next* turn; a conversation that
@@ -736,33 +708,17 @@ function Thought({ text, ms, again = false }: { text: string; ms: number; again?
  * record anywhere of which turn was which. On the Atlas path it is
  * `modelUsed`, not the model asked for, because Ollama's swaps fail and the
  * resident one answers instead.
- *
- * **ITEM 12 ADDS THE FOURTH FIELD, AND IT HAS THREE STATES RATHER THAN TWO.**
- * 9D left the cost out and said item 13 would count it; the split turned out
- * to be that 12 counts and 13 caps. What is printed here is:
- *
- * - **`free`** — a local model. `₹0.00` is a *fact about the architecture*,
- *   not a rounding: the model is on the desk (§3.4).
- * - **a figure** — a hosted model with a price in `agent/pricing.ts`.
- * - **nothing at all** — a hosted model with no recorded price, or a turn from
- *   the in-browser fallback, which has never counted. Deliberately not `₹—` on
- *   the line: `/atlas-host` and the context slider both established that an
- *   unmeasured number is stated once where it can be explained, and repeating
- *   a dash on every turn spends the line on an absence. The instrument bar
- *   carries the sentence.
  */
 function TurnFooter({
   readOnly,
   usage,
   model,
   elapsedMs,
-  cost,
 }: {
   readOnly: boolean;
   usage?: TokenUsage;
   model?: string;
   elapsedMs?: number;
-  cost?: AtlasTurnCost;
 }) {
   const spent = usage && usage.totalTokens > 0 ? usage : null;
   const facts = [
@@ -771,7 +727,6 @@ function TurnFooter({
     spent ? `${spent.requests} request${spent.requests === 1 ? '' : 's'}` : null,
     // Sub-second turns round to `0.0s`, which reads as broken rather than fast.
     elapsedMs !== undefined && elapsedMs >= 100 ? `${(elapsedMs / 1000).toFixed(1)}s` : null,
-    formatRupees(cost),
   ].filter((fact): fact is string => Boolean(fact));
 
   if (!readOnly && facts.length === 0) return null;
@@ -793,23 +748,6 @@ function TurnFooter({
       )}
     </div>
   );
-}
-
-/**
- * A turn's cost as the meta line prints it, or `null` for "say nothing".
- *
- * The two-paise resolution is chosen rather than defaulted: §3.4's per-turn
- * ceiling is *"roughly ₹5"*, so a turn is normally a few rupees at most and
- * `₹1.20` is the shape `atlas.html` draws. A local turn is `₹0.00` — the zero
- * is the point, and rounding it away to "free" would hide that the number is
- * real. A turn under half a paisa reads `< ₹0.01` rather than `₹0.00`, because
- * those two mean different things and only one of them is free.
- */
-function formatRupees(cost: AtlasTurnCost | undefined): string | null {
-  if (cost === undefined || cost.rupees === null) return null;
-  if (cost.rupees === 0) return '₹0.00';
-  if (cost.rupees < 0.005) return '< ₹0.01';
-  return `₹${cost.rupees.toFixed(2)}`;
 }
 
 /**
@@ -875,13 +813,13 @@ function ToolChipRow({ chip, call }: { chip: ToolChip; call: AgentToolCall }) {
           minHeight: 32, padding: '0 var(--sp-3) 0 var(--sp-5)', maxWidth: '100%', minWidth: 0,
           border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
           backgroundImage: lit ? 'var(--glass-fill-2)' : 'var(--glass-fill-1)',
-          /* A failed call is amber — "needs a decision" — never rose: nothing
-             was lost, the agent simply could not do it. */
+          /* A failed call is coral since 29-1P2c2, his call: failed and broken
+             are coral's job (it was amber, which is gold's hue). */
           boxShadow: chip.ok
             ? lit
               ? 'var(--glass-rim-2), var(--glass-cast-1)'
               : 'var(--glass-rim-1)'
-            : `${lit ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)'}, 0 0 0 1px oklch(0.75 0.15 82 / 0.42)`,
+            : `${lit ? 'var(--glass-rim-2), var(--glass-cast-1)' : 'var(--glass-rim-1)'}, 0 0 0 1px var(--job-coral-line)`,
           font: 'var(--type-caption)', color: 'var(--fg-2)',
           transition: 'var(--t-hover)',
           animation: 'var(--kf-condense) var(--dur-fast) var(--ease-glass) both',
@@ -889,14 +827,14 @@ function ToolChipRow({ chip, call }: { chip: ToolChip; call: AgentToolCall }) {
       >
         <span
           aria-hidden="true"
-          style={{ display: 'flex', flex: '0 0 auto', color: chip.ok ? 'var(--fg-3)' : 'var(--hue-amber)' }}
+          style={{ display: 'flex', flex: '0 0 auto', color: chip.ok ? 'var(--fg-3)' : 'var(--status-overrun)' }}
         >
           <Icon name={CHIP_ICONS[chip.icon]} size={14} />
         </span>
         <span
           style={{
             minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            color: chip.ok ? 'var(--fg-2)' : 'oklch(0.95 0.07 82)',
+            color: chip.ok ? 'var(--fg-2)' : 'var(--job-coral-text)',
           }}
         >
           {chip.verb}

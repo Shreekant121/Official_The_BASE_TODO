@@ -10,14 +10,22 @@
  * and tracking as the ones the host draws around them; they used to be
  * `fieldStyles.labelCls`, which was a hand-rolled copy of it.
  *
+ * **Its two fields are the host's grid items (OPT-5 follow-up).** The root is
+ * `display: contents`, so in the task sheet's horizontal Context pane List &
+ * project and Also shown in take a cell each, and in the Score screen's
+ * stacked Organize section they stack exactly as before. The sentence under
+ * them ("Shared tasks stay perfectly in sync…") is gone, his call.
+ *
  * **The violet chips are neutral now.** Violet is `--status-backburner` in
  * this design system, and a list a task is also shown in is not a backburner
  * item — it was decoration, which `colors.css` forbids for the status hues.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/useStore';
-import { FieldLabel, Icon, IconButton } from '../../ui';
+import { buildProjectTree, projectPath } from '../../lib/projectTree';
+import { iconAsText } from '../../lib/projectIcon';
+import { FieldLabel, Icon, SoftIconButton } from '../../ui';
 import CustomDropdown from '../CustomDropdown';
 import FieldChip from './FieldChip';
 
@@ -34,11 +42,17 @@ export default function ListLocationPicker({
   const { taskLists, projects } = useStore();
   const [pendingShareId, setPendingShareId] = useState('');
 
+  // A project inside another is named with its path (BIG-2).
+  const tree = useMemo(() => buildProjectTree(projects), [projects]);
   const listLabel = (id: string) => {
     const list = taskLists.find((l) => l.id === id);
     if (!list) return 'Unknown list';
     const owningProject = projects.find((p) => p.id === list.projectId);
-    return owningProject ? `${owningProject.icon ?? '📋'} ${list.title} · ${owningProject.name}` : `🗂️ ${list.title}`;
+    /* A native option is text: an emoji he chose shows, a Phosphor icon cannot. */
+    const glyph = owningProject ? iconAsText(owningProject.icon) : '';
+    return owningProject
+      ? `${glyph ? `${glyph} ` : ''}${list.title} · ${projectPath(tree, owningProject)}`
+      : `🗂️ ${list.title}`;
   };
 
   const primaryOptions = taskLists.map((l) => ({ value: l.id, label: listLabel(l.id) }));
@@ -53,7 +67,7 @@ export default function ListLocationPicker({
   const TRACK = 'minmax(0, 1fr)';
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: TRACK, gap: 'var(--gap-stack)' }}>
+    <div style={{ display: 'contents' }}>
       <div style={{ display: 'grid', gridTemplateColumns: TRACK, gap: 'var(--sp-3)' }}>
         <FieldLabel icon={<Icon name="folder-open" size={14} />}>List &amp; project</FieldLabel>
         <CustomDropdown
@@ -94,10 +108,12 @@ export default function ListLocationPicker({
                 value={pendingShareId}
                 onChange={(v) => setPendingShareId(v as string)}
                 options={shareableOptions}
-                placeholder="Share into another list…"
+                /* Short enough to fit a quarter of the sheet's Context pane;
+                   the label above already says what it is for. */
+                placeholder="Add a list…"
               />
             </div>
-            <IconButton
+            <SoftIconButton
               size="sm"
               label="Share into list"
               disabled={!pendingShareId}
@@ -108,14 +124,9 @@ export default function ListLocationPicker({
               }}
             >
               <Icon name="plus" size={16} />
-            </IconButton>
+            </SoftIconButton>
           </div>
         )}
-
-        <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-          Shared tasks stay perfectly in sync — editing, completing, or scoring this task updates it
-          everywhere it appears.
-        </p>
       </div>
     </div>
   );

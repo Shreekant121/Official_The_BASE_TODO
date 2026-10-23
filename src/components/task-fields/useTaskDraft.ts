@@ -20,7 +20,6 @@ import { REMINDER_USE_DEFAULT, reminderToPicker, resolveReminderMinutes } from '
 export interface TaskDraft {
   title: string;
   description: string;
-  notes: string;
   status: TaskStatus;
   startDate: string;
   deadline: string;
@@ -30,6 +29,8 @@ export interface TaskDraft {
    * question it answers is about *this* deadline: can the app move it.
    */
   deadlineIsFixed: boolean;
+  /** 29-2d1: the event it is due before, `''` for none (`EventLinkField`). */
+  eventId: string;
   humanOverride?: number;
   estimatedTime: string;
   valueINR: string;
@@ -39,7 +40,6 @@ export interface TaskDraft {
   /** May hold a `REMINDER_*` sentinel while editing; see `reminderOptions.ts`. */
   reminderMinutes: number;
   customReminderMinutes: string;
-  tags: string[];
   links: TaskLink[];
   imageUrl: string;
   subtasks: Subtask[];
@@ -47,6 +47,8 @@ export interface TaskDraft {
   listId: string;
   sharedListIds: string[];
   dependsOn: string[];
+  /** 29-1P9b (idea 155): one of the project's big steps. */
+  milestone: boolean;
 }
 
 /** The four fields `taskNeedsAttention()` gates on — drives the "Needs …" chips. */
@@ -62,11 +64,11 @@ export function taskToDraft(task?: Task): TaskDraft {
   return {
     title: task?.title ?? '',
     description: task?.description ?? '',
-    notes: task?.notes ?? '',
     status: task?.status ?? 'needsAction',
     startDate: task?.startDate ?? '',
     deadline: task?.deadline ?? '',
     deadlineIsFixed: task?.deadlineIsFixed ?? false,
+    eventId: task?.eventId ?? '',
     humanOverride: task?.humanOverride,
     estimatedTime: task?.estimatedTime?.toString() ?? '',
     valueINR: task?.valueINR?.toString() ?? '',
@@ -77,7 +79,6 @@ export function taskToDraft(task?: Task): TaskDraft {
     recurrenceRule: task ? customRRuleOf(task) : undefined,
     reminderMinutes: task ? reminder.value : REMINDER_USE_DEFAULT,
     customReminderMinutes: reminder.custom,
-    tags: task?.tags ?? [],
     links: task?.links ?? [],
     imageUrl: task?.imageUrl ?? '',
     subtasks: task?.subtasks ?? [],
@@ -85,6 +86,7 @@ export function taskToDraft(task?: Task): TaskDraft {
     listId: task?.listId ?? '',
     sharedListIds: task?.sharedListIds ?? [],
     dependsOn: task?.dependsOn ?? [],
+    milestone: task?.milestone ?? false,
   };
 }
 
@@ -105,15 +107,21 @@ function draftToUpdates(draft: TaskDraft, task: Task, taskLists: TaskList[]): Pa
   return {
     title: draft.title.trim() || task.title,
     description: draft.description.trim() || undefined,
-    notes: draft.notes.trim() || undefined,
     status: draft.status,
     startDate: draft.startDate || undefined,
-    deadline: draft.deadline || undefined,
+    // 29-2d1: still linked to the same event, the date is the stored one —
+    // the event moves it (`useEventStore`), and the draft's copy may be from
+    // before an event moved while the sheet was open. Re-reading the event
+    // here instead would roll a missed birthday's task on to next year.
+    deadline: draft.eventId && draft.eventId === task.eventId ? task.deadline : draft.deadline || undefined,
     // `false` and absent are one fact for this flag, so unticking it REMOVES
     // the key rather than storing a `false` on every task that was never
     // fixed. `withPatch` does the removing; same treatment item 17 gave a
     // zeroed `emergencyBoost`, for the same reason.
     deadlineIsFixed: draft.deadlineIsFixed ? true : undefined,
+    // Always said, so `applyTaskUpdate` reads the link as this sheet's choice
+    // and never as a hand-set date breaking it (29-2d1).
+    eventId: draft.eventId || undefined,
     estimatedTime,
     // Keeps the Set Deadlines / Focus Mode duration connected to this same
     // estimate, so a task selected for today already has its time filled in
@@ -134,7 +142,6 @@ function draftToUpdates(draft: TaskDraft, task: Task, taskLists: TaskList[]): Pa
     // would reject.
     customRecurrence: undefined,
     reminderMinutes: resolveReminderMinutes(draft.reminderMinutes, draft.customReminderMinutes),
-    tags: draft.tags.length > 0 ? draft.tags : undefined,
     links: draft.links.length > 0 ? draft.links : undefined,
     imageUrl: draft.imageUrl || undefined,
     subtasks: draft.subtasks,
@@ -144,6 +151,8 @@ function draftToUpdates(draft: TaskDraft, task: Task, taskLists: TaskList[]): Pa
     listName: newPrimaryList?.title ?? task.listName,
     sharedListIds: draft.sharedListIds.length > 0 ? draft.sharedListIds : undefined,
     dependsOn: draft.dependsOn.length > 0 ? draft.dependsOn : undefined,
+    // Absent, never `false`, like `deadlineIsFixed` above.
+    milestone: draft.milestone ? true : undefined,
   };
 }
 

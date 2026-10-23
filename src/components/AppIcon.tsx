@@ -1,8 +1,10 @@
 import type { CSSProperties } from 'react';
 import { resolveIconSrc } from '../lib/customIcons';
+import { FALLBACK_PROJECT_ICON, phosphorName } from '../lib/projectIcon';
+import { useGlyph } from '../lib/projectIcons/glyphs';
 
 interface AppIconProps {
-  /** Emoji character, or a `CUSTOM_ICONS` registry key. */
+  /** A Phosphor icon (`ph:rocket-launch`), an emoji character, or a `CUSTOM_ICONS` registry key. */
   icon?: string;
   /** The box, in px. Both kinds of icon are drawn inside a square this size. */
   size: number;
@@ -12,8 +14,12 @@ interface AppIconProps {
 }
 
 /**
- * Renders a project icon that may be either a literal emoji (today's
- * default) or a custom image registered in `src/lib/customIcons.ts`.
+ * Renders a project icon: a white Phosphor glyph (`ph:<name>`, the default
+ * since 29-1P8a2, idea 150), a literal emoji he chose before that (kept until
+ * he changes it, his call), or a custom image registered in
+ * `src/lib/customIcons.ts`. A Phosphor glyph is `currentColor`, so it takes
+ * the colour of whatever it sits in — white on a `ProjectIcon` tile, the
+ * row's text colour in a list. The tile with its glow is `ProjectIcon`.
  * Every icon render site in the app should go through this so dropping a
  * new custom icon in later "just works" wherever it's selected.
  *
@@ -42,8 +48,9 @@ interface AppIconProps {
  *    the one place the glyph *is* the choice — `CreateProjectModal`'s icon
  *    picker — labels its own buttons `Glyph ${em}`.
  */
-export default function AppIcon({ icon, size, className = '', fallback = '📋', style }: AppIconProps) {
+export default function AppIcon({ icon, size, className = '', fallback = FALLBACK_PROJECT_ICON, style }: AppIconProps) {
   const src = resolveIconSrc(icon);
+  const ph = phosphorName(icon || fallback);
 
   /*
     A POSITIONING FRAME, not a centring container — see the glyph below for
@@ -59,6 +66,14 @@ export default function AppIcon({ icon, size, className = '', fallback = '📋',
     userSelect: 'none',
     ...style,
   };
+
+  if (ph) {
+    return (
+      <span aria-hidden="true" className={className} style={box}>
+        <PhosphorGlyph name={ph} />
+      </span>
+    );
+  }
 
   if (src) {
     return (
@@ -111,5 +126,24 @@ export default function AppIcon({ icon, size, className = '', fallback = '📋',
         {icon ?? fallback}
       </span>
     </span>
+  );
+}
+
+/**
+ * Phosphor's 256-unit glyph filling the box. Empty (the box still holds its
+ * place) while the catalogue is on its way, which only happens the first
+ * time this device draws an icon (`lib/projectIcons/glyphs.ts`).
+ */
+function PhosphorGlyph({ name }: { name: string }) {
+  const paths = useGlyph(name);
+  if (!paths) return null;
+  return (
+    <svg
+      viewBox="0 0 256 256"
+      fill="currentColor"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
+    >
+      {paths.map((d, i) => <path key={i} d={d} />)}
+    </svg>
   );
 }

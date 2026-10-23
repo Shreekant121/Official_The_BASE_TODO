@@ -41,9 +41,9 @@
  *     system's cap of a single primary per view, and "Back to Notifications"
  *     dropped to `ghost` behind it. Before, the two were an emerald pill and a
  *     white pill of equal weight, so the screen offered two primaries.
- *   - The failure tile stays amber (`--status-review`). A connection that did
- *     not happen is a decision waiting on you, not a live problem — the same
- *     reading UI-13 gave a blocked task and UI-18 gave a submitted one.
+ *   - The failure tile is coral since 29-1P2c2 (it was amber): his call,
+ *     failed is coral's job. "Try again" is a sky gel, because what it
+ *     reconnects is the calendar, and dates are sky's job.
  *
  * The `isolation: isolate` this wrapper used to carry inline now lives on
  * `.ag-page` itself, in `ui/tokens/backdrop.css` — UI-36 found that every
@@ -57,7 +57,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Button, Card, Icon, TravellingTrack } from '../ui';
+import { Button, Card, GelButton, Icon, TravellingTrack } from '../ui';
 
 export default function OAuthCallbackPage() {
   const [params] = useSearchParams();
@@ -131,9 +131,9 @@ export default function OAuthCallbackPage() {
                   width: 54,
                   height: 54,
                   borderRadius: 'var(--r-circle)',
-                  backgroundImage: 'var(--glass-tint-amber)',
+                  backgroundImage: 'var(--glass-tint-coral)',
                   boxShadow: 'var(--glass-rim-2)',
-                  color: 'var(--status-review)',
+                  color: 'var(--status-overrun)',
                 }}
               >
                 <Icon name="triangle-alert" size={24} />
@@ -172,10 +172,15 @@ export default function OAuthCallbackPage() {
                   marginTop: 'var(--sp-2)',
                 }}
               >
-                <Button
-                  variant="gel"
-                  loading={retrying}
-                  iconLeft={<Icon name="refresh-cw" size={16} />}
+                {/* The screen's one action: the design system's plain gel
+                    since 29-1P2, emerald as V3's gel was. */}
+                <GelButton
+                  tile={false}
+                  size="md"
+                  colour="sky"
+                  disabled={retrying}
+                  aria-busy={retrying || undefined}
+                  icon={<Icon name="refresh-cw" size={16} />}
                   onClick={async () => {
                     setRetrying(true);
                     const started = await startCalendarConnect('/notifications');
@@ -186,8 +191,8 @@ export default function OAuthCallbackPage() {
                     }
                   }}
                 >
-                  Try again
-                </Button>
+                  {retrying ? 'Opening Google…' : 'Try again'}
+                </GelButton>
                 <Button variant="ghost" onClick={() => navigate('/notifications', { replace: true })}>
                   Back to Notifications
                 </Button>

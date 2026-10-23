@@ -44,7 +44,7 @@ import type { AgentTaskRow } from '../../lib/agent/toolChip';
 const DOT: Record<AgentTaskRow['status'], string> = {
   running: 'var(--status-running)',
   queued: 'var(--status-queued)',
-  done: 'var(--accent)',
+  done: 'var(--job-lime)',
   overrun: 'var(--status-overrun)',
 };
 
@@ -119,7 +119,7 @@ export function ToolResult({
       {rest.length > 0 && (
         <>
           <div
-            className="ag-scroll"
+            className="ag-scroll ag-fade"
             style={{
               display: 'grid', minWidth: 0, overflowY: 'auto', overscrollBehavior: 'contain',
               maxHeight: open ? 320 : 0,

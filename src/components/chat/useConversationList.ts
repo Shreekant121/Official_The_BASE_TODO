@@ -1,22 +1,19 @@
 /* The chat list beside the conversation. Moved out of `pages/ChatPage.tsx`
    when it was split (BUILD-7). */
-import { useCallback, useEffect, useState } from 'react';
-import {
-  AtlasMemoryUnavailable,
-  fetchConversations,
-  type AtlasConversationSummary,
-} from '../../lib/atlas/client';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AtlasMemoryUnavailable, type AtlasConversationSummary } from '../../lib/atlas/client';
+import { loadConversations, type MemorySource } from '../../lib/atlas/memorySource';
 import type { AtlasStatus } from '../../lib/atlas/atlasStore';
 import { devChatFixture } from '../../lib/devChatFixture';
 
 /** One read of the list, with a failure turned into the sentence the sidebar shows. */
 async function readList(
-  atlasBase: string,
+  source: MemorySource,
   search: string,
   signal?: AbortSignal,
 ): Promise<{ conversations: AtlasConversationSummary[]; problem: string | null }> {
   try {
-    return { conversations: await fetchConversations(atlasBase, search, signal), problem: null };
+    return { conversations: await loadConversations(source, search, signal), problem: null };
   } catch (err) {
     return {
       conversations: [],
@@ -37,10 +34,20 @@ function listIsSeeded(): boolean {
   return import.meta.env.DEV && Boolean(devChatFixture(window.location.search)?.conversations);
 }
 
-export function useConversationList(onAtlas: boolean, atlasBase: string | null, atlasStatus: AtlasStatus) {
+export function useConversationList(
+  onAtlas: boolean,
+  atlasBase: string | null,
+  atlasStatus: AtlasStatus,
+  /** BIG-4: the cloud copy, when the laptop is asleep. The list is read from it, to read. */
+  lidShut: MemorySource | null,
+) {
   const [conversations, setConversations] = useState<AtlasConversationSummary[]>([]);
   const [chatQuery, setChatQuery] = useState('');
   const [listProblem, setListProblem] = useState<string | null>(null);
+  /* Which source the list on screen was read from. Until the first read from
+     this one lands, the sidebar waits in placeholder rows (29-1P14d2, idea
+     116); a search keeps the last list up instead. */
+  const [readFrom, setReadFrom] = useState<MemorySource | null>(null);
 
   /*
    * ITEM 10 — the chat list, and what its absence means.
@@ -60,17 +67,26 @@ export function useConversationList(onAtlas: boolean, atlasBase: string | null, 
    * deleted from another device meanwhile is the only row that can be wrong
    * for that beat, and opening it lands in the restore's start-clean path.
    */
-  const live = onAtlas && atlasBase !== null;
+  const source = useMemo<MemorySource | null>(
+    () =>
+      onAtlas && atlasBase !== null
+        ? { kind: 'laptop', baseUrl: atlasBase }
+        : lidShut?.kind === 'cloud'
+          ? lidShut
+          : null,
+    [atlasBase, onAtlas, lidShut],
+  );
+  const live = source !== null;
 
   /** A re-read after something changed the list: a turn that named its chat, a rename, a delete. */
   const reloadConversations = useCallback(
     async (search: string) => {
-      if (listIsSeeded() || !onAtlas || atlasBase === null) return;
-      const next = await readList(atlasBase, search);
+      if (listIsSeeded() || source === null) return;
+      const next = await readList(source, search);
       setConversations(next.conversations);
       setListProblem(next.problem);
     },
-    [atlasBase, onAtlas],
+    [source],
   );
 
   /* The read on arrival, on every search keystroke, and when the laptop comes
@@ -79,15 +95,16 @@ export function useConversationList(onAtlas: boolean, atlasBase: string | null, 
      state change in the effect's own body. Aborted when superseded, so a slow
      answer to "gro" cannot land on top of the answer to "groceries". */
   useEffect(() => {
-    if (listIsSeeded() || !onAtlas || atlasBase === null) return;
+    if (listIsSeeded() || source === null) return;
     const controller = new AbortController();
-    void readList(atlasBase, chatQuery, controller.signal).then((next) => {
+    void readList(source, chatQuery, controller.signal).then((next) => {
       if (controller.signal.aborted) return;
       setConversations(next.conversations);
       setListProblem(next.problem);
+      setReadFrom(source);
     });
     return () => controller.abort();
-  }, [atlasBase, onAtlas, chatQuery]);
+  }, [source, chatQuery]);
 
   return {
     conversations: live || listIsSeeded() ? conversations : [],
@@ -100,6 +117,7 @@ export function useConversationList(onAtlas: boolean, atlasBase: string | null, 
         : atlasStatus === 'awake'
           ? 'Chats are kept on the laptop. This one is answering in the browser, so it has none.'
           : 'Chats are kept on the laptop, and it is not answering.',
+    listWaiting: !listIsSeeded() && (atlasStatus === 'unknown' || (live && readFrom !== source)),
     setListProblem,
     reloadConversations,
   };

@@ -1,0 +1,106 @@
+/* ---------------------------------------------------------------
+   LAYERED GLASS ICONS (29-1P5b, idea 80). `LayeredIcon.tsx` says what
+   it is and why the frost is a blurred copy, not a backdrop-filter.
+
+   Every size is a share of `--licon-box`, so one icon fits a 48px nav
+   cell and a gallery tile alike. The back is rotated behind; the glass
+   sits over its lower right; the frost is the back again, inside the
+   glass, offset by exactly where the glass sits so the two line up.
+
+   ON HOVER the back turns further and slips up-left, the glass slips
+   down-right. The frost has to follow the back while living inside the
+   glass, so its transform is the glass's move undone, then the back's
+   own — the same three functions at rest and on hover, so all three
+   interpolate in step and never come apart mid-move.
+   --------------------------------------------------------------- */
+
+.ag-licon {
+  --licon-c: oklch(0.44 0.008 260);
+  --licon-back: calc(var(--licon-box) * 0.7);
+  --licon-front: calc(var(--licon-box) * 0.78);
+  --licon-at: calc(var(--licon-box) - var(--licon-front));
+  /* How far the layers part on hover. */
+  --licon-pull: calc(var(--licon-box) * 0.035);
+  --licon-turn: -12deg;
+  --licon-bx: 0px;
+  --licon-by: 0px;
+  --licon-fx: 0px;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--licon-box);
+  height: var(--licon-box);
+  pointer-events: none;
+}
+
+.ag-licon-back,
+.ag-licon-frost {
+  position: absolute;
+  width: var(--licon-back);
+  height: var(--licon-back);
+  border-radius: calc(var(--licon-box) * 0.24);
+  background-color: var(--licon-c);
+  transition:
+    transform 0.5s var(--ease-springy),
+    background-color var(--dur-slow) var(--ease-glide);
+}
+.ag-licon-back {
+  left: 0;
+  top: 0;
+  transform: rotate(var(--licon-turn)) translate(var(--licon-bx), var(--licon-by));
+}
+
+.ag-licon-front {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: var(--licon-front);
+  height: var(--licon-front);
+  border-radius: calc(var(--licon-box) * 0.26);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: oklch(1 0 0);
+  box-shadow: 0 6px 12px -6px oklch(0 0 0 / 0.7);
+  transform: translate(var(--licon-fx), var(--licon-fx));
+  transition: transform 0.5s var(--ease-springy);
+}
+.ag-licon-frost {
+  left: calc(-1 * var(--licon-at));
+  top: calc(-1 * var(--licon-at));
+  filter: blur(calc(var(--licon-box) * 0.1));
+  transform:
+    translate(calc(-1 * var(--licon-fx)), calc(-1 * var(--licon-fx)))
+    rotate(var(--licon-turn)) translate(var(--licon-bx), var(--licon-by));
+}
+/* The glass itself, over the frost and under the glyph. */
+.ag-licon-front::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: oklch(1 0 0 / 0.12);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.42), inset 0 0 0 1px oklch(1 0 0 / 0.14);
+}
+.ag-licon-glyph {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  filter: drop-shadow(0 1px 3px oklch(0 0 0 / 0.4));
+  transition: opacity var(--dur-base) var(--ease-glass);
+}
+/* The glyph is drawn at half the icon, whatever size its caller asked the
+   `<Icon>` for: the nav hands over its 20px glyphs unchanged. */
+.ag-licon-glyph svg {
+  width: calc(var(--licon-box) * 0.47);
+  height: calc(var(--licon-box) * 0.47);
+}
+
+@media (hover: hover) {
+  .ag-licon-host:hover .ag-licon {
+    --licon-turn: -20deg;
+    --licon-bx: calc(-2 * var(--licon-pull));
+    --licon-by: calc(-1.5 * var(--licon-pull));
+    --licon-fx: var(--licon-pull);
+  }
+}

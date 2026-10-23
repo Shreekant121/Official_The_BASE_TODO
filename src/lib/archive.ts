@@ -8,7 +8,7 @@
  * the store actions stay free of anything said on screen, which is what keeps
  * `mcp/` (the same store, in Node) from needing a UI store to load.
  */
-import { useStore, DEFAULT_LISTS, upgradeTaskScoring } from '../store/useStore';
+import { useStore, DEFAULT_LISTS, upgradeTaskNotesAndTags, upgradeTaskScoring } from '../store/useStore';
 import { useArchiveStore } from '../store/useArchiveStore';
 import { useUIStore } from '../store/useUIStore';
 import { planRestore, type RestoreResult } from './trashModel';
@@ -61,7 +61,7 @@ export function putBackFromArchive(entryId: string): RestoreResult | null {
   const result = planRestore({ projects, taskLists, backlogTasks }, entry, FALLBACK_LIST);
   // An entry keeps whatever shape it was archived in, for good — so it passes
   // through the same scoring upgrade the Trash's restore does.
-  useStore.setState({ ...result.next, backlogTasks: upgradeTaskScoring(result.next.backlogTasks) });
+  useStore.setState({ ...result.next, backlogTasks: upgradeTaskNotesAndTags(upgradeTaskScoring(result.next.backlogTasks)) });
   useArchiveStore.getState().remove(entryId);
   return result;
 }

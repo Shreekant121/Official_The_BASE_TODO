@@ -16,8 +16,9 @@
  * message, and a card that hid it behind a chevron would be a card announcing
  * that something moved and declining to say what.
  *
- * **Two tones, one card.** A push is amber (`review`): the app did something
- * reasonable and you may want to look at it. A conflict is rose (`overrun`): a
+ * **Two tones, one card.** A push is a grey warning (`review`, amber until
+ * 29-1P2c2): the app did something reasonable and you may want to look at it.
+ * A conflict is coral (`overrun`): a
  * task cannot be finished on time and its date is not allowed to move, which
  * is a live problem and not a decision the app can take for you. When a
  * cascade produces both, the conflict wins the tone and the title — it is the
@@ -38,7 +39,9 @@ const plural = (n: number, one: string, many: string): string => (n === 1 ? one 
 /** One line of the list: a strong task name, then the plain sentence about it. */
 function Line({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <li style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
+    /* `anywhere`: a task titled with one long word (a pasted link) widened
+       the whole banner off the right edge (OPT-1). */
+    <li style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty', overflowWrap: 'anywhere' }}>
       <span style={{ color: 'var(--fg-1)' }}>{title}</span>
       {' — '}
       {children}
@@ -86,6 +89,8 @@ export default function DeadlineShiftBanner() {
                its own spring, exactly as the two banners beside it do. */
             style={{ animation: 'none' }}
             actions={<Button size="sm" variant="ghost" onClick={clear}>Dismiss</Button>}
+            /* 29-1P6b: flicked away is the same Dismiss. */
+            onThrow={clear}
           >
             <ul style={{ display: 'grid', gap: 'var(--sp-3)', margin: 0, padding: 0, listStyle: 'none' }}>
               {conflicts.map((conflict) => (

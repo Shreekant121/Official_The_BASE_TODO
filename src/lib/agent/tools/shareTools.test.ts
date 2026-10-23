@@ -11,7 +11,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   allTools,
-  fallbackTools,
   frontDoorTools,
   IRREVERSIBLE_TOOL_NAMES,
   mcpTools,
@@ -24,7 +23,7 @@ const NOW = new Date('2026-03-12T09:30:00+05:30');
 
 function harness(over: Partial<AgentStoreState> = {}) {
   const state: AgentStoreState = {
-    projects: [{ id: 'p1', name: 'Studio Launch', color: '#8b5cf6', createdAt: 1, order: 0 } as Project],
+    projects: [{ id: 'p1', name: 'Studio Launch', createdAt: 1, order: 0 } as Project],
     taskLists: [{ id: 'l1', title: 'Build', projectId: 'p1', order: 0 } as TaskList],
     backlogTasks: [
       { id: 't1', title: 'Sign the lease', status: 'needsAction', listId: 'l1', listName: 'Build', order: 0, subtasks: [] } as Task,
@@ -68,7 +67,7 @@ function harness(over: Partial<AgentStoreState> = {}) {
     timezone: 'Asia/Kolkata',
     store,
     ...(preview ? { preview: true } : {}),
-    snapshots: { captureTask: () => {}, captureList: () => {}, captureProject: () => {} },
+    snapshots: { captureTask: () => {}, captureList: () => {}, captureProject: () => {}, captureEvent: () => {} },
   });
 
   return { state, ctx };
@@ -101,14 +100,7 @@ describe('the registry guard', () => {
      * nothing standing in front of it.
      */
     expect(mcpTools.map((tool) => tool.name)).toContain('publish_share_link');
-    expect(fallbackTools.map((tool) => tool.name)).not.toContain('publish_share_link');
-    expect(fallbackTools.map((tool) => tool.name)).not.toContain('revoke_share_link');
     expect(allTools.filter((tool) => tool.frontDoor === true)).toHaveLength(3);
-    // The same reasoning covers BUILD-3's deletes: with no tray, a held delete
-    // on the browser path would simply delete.
-    for (const tool of allTools.filter((candidate) => candidate.frontDoor === true)) {
-      expect(fallbackTools).not.toContain(tool);
-    }
   });
 });
 

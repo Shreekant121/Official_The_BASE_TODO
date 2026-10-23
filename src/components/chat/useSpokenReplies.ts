@@ -1,9 +1,8 @@
 /* Item 25 — reading an answer aloud. Moved out of `pages/ChatPage.tsx`,
    unchanged, when it was split (BUILD-7); why the whole of voice was measured
    on the tablet first is written on the page, beside `useVoiceChoice`. */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SPEAK_REPLIES_KEY, readDeviceValue, writeDeviceValue } from '../../lib/atlas/devicePrefs';
-import type { useVoiceChoice } from '../../lib/voice/useVoice';
+import { useEffect, useMemo, useRef } from 'react';
+import { useVoicePrefs, type useVoiceChoice } from '../../lib/voice/useVoice';
 import { speak, speakable, stopSpeaking, trimForSpeech } from '../../lib/voice/synthesis';
 import type { ChatTurn } from './chatShared';
 
@@ -14,13 +13,8 @@ export function useSpokenReplies(
   docked: boolean,
   voice: ReturnType<typeof useVoiceChoice>,
 ) {
-  const [speakReplies, setSpeakReplies] = useState<boolean>(() => readDeviceValue(SPEAK_REPLIES_KEY) === '1');
-
-  const chooseSpeakReplies = useCallback((on: boolean) => {
-    setSpeakReplies(on);
-    writeDeviceValue(SPEAK_REPLIES_KEY, on ? '1' : null);
-    if (!on) stopSpeaking();
-  }, []);
+  /* Set in Settings → Atlas since OPT-8, so read from the shared store. */
+  const speakReplies = useVoicePrefs((s) => s.speakReplies);
 
   /**
    * The answer to read out: the newest turn that has actually finished.
@@ -58,5 +52,5 @@ export function useSpokenReplies(
      feature can do that has no visible off switch. */
   useEffect(() => () => stopSpeaking(), []);
 
-  return { speakReplies, chooseSpeakReplies, lastReply };
+  return { lastReply };
 }

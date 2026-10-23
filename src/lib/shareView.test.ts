@@ -14,7 +14,8 @@ import { describe, expect, it } from 'vitest';
 import { buildShareDoc, shareExpiryInstant } from './publicShareSnapshot';
 import type { FocusLogEntry, Project, Task, TaskList } from '../store/useStore';
 import {
-  clockText, dueLine, durationText, estimateText, initials, isClosed, liveRunShown, readSummary, workPhase,
+  clockText, dueLine, durationText, estimateText, initials, isClosed, liveRunShown, projectListsDeep, readSummary,
+  shareTasks, workPhase,
 } from './shareView';
 
 const at = (local: string) => new Date(local).getTime();
@@ -131,7 +132,7 @@ describe('readSummary', () => {
 
 const OWNER = 'Xy7Qp2Lm9Rt4Vb8Nc1Kd5Fg3Hj6';
 const project = (over: Partial<Project> = {}): Project => ({
-  id: 'p1', name: 'Website refresh', color: '#8b5cf6', createdAt: 0, order: 0, shareId: 's1',
+  id: 'p1', name: 'Website refresh', createdAt: 0, order: 0, shareId: 's1',
   imageUrl: 'data:image/jpeg;base64,AAAA', ...over,
 });
 const lists: TaskList[] = [{ id: 'l1', title: 'Design', projectId: 'p1' }];
@@ -226,5 +227,39 @@ describe('buildShareDoc — what a link may carry', () => {
     const d = doc({ shareShowPeople: true });
     expect(liveRunShown(d, NOW)).toEqual(live);
     expect(liveRunShown(d, live.until)).toBeNull();
+  });
+});
+
+describe("a mega project's link (BIG-2)", () => {
+  const P = (id: string, parentId?: string): Project =>
+    ({ id, name: id.toUpperCase(), createdAt: 0, order: 0, ...(parentId ? { parentId } : {}) });
+  const L = (id: string, projectId: string): TaskList => ({ id, title: id, projectId, order: 0 }) as TaskList;
+  const T = (id: string, listId: string, valueINR = 0): Task =>
+    ({ id, title: id, listId, status: 'needsAction', subtasks: [], valueINR }) as Task;
+  const projects = [P('mega'), P('inner', 'mega'), P('deep', 'inner'), P('other')];
+  const lists = [L('own', 'mega'), L('in', 'inner'), L('down', 'deep'), L('elsewhere', 'other')];
+  const tasks = [T('a', 'own', 100), T('b', 'in', 20), T('c', 'down', 3), T('d', 'elsewhere', 5000)];
+
+  const doc = buildShareDoc('sh', 'owner', 'Shreekant', {
+    type: 'project', project: projects[0], allLists: lists, allTasks: tasks, allProjects: projects,
+  }, { now: NOW });
+
+  it('publishes every project inside it, at any depth, and nothing outside it', () => {
+    expect(projectListsDeep(doc.project).map((x) => x.title)).toEqual(['own', 'INNER › in', 'INNER › DEEP › down']);
+    expect(shareTasks(doc).map((t) => t.id)).toEqual(['a', 'b', 'c']);
+    expect(doc.project!.totalValueINR).toBe(123);
+  });
+
+  it("keeps the shared project's own description and cover off the ones inside", () => {
+    const inner = doc.project!.children![0];
+    expect('description' in inner).toBe(false);
+    expect(inner.coverUrl).toBeUndefined();
+  });
+
+  it('writes no children key for a project with none, so an old page reads it as before', () => {
+    const solo = buildShareDoc('sh', 'owner', undefined, {
+      type: 'project', project: projects[3], allLists: lists, allTasks: tasks, allProjects: projects,
+    }, { now: NOW });
+    expect('children' in solo.project!).toBe(false);
   });
 });

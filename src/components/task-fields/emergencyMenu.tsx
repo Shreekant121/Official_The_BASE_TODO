@@ -16,8 +16,10 @@
  * rows, and its own `.prompt.md` is emphatic that the panel is items grouped
  * by intent rather than a place to hang custom controls. So the 0–5 scale is
  * expressed the way a menu can express it: **one row that raises it a step and
- * one that clears it outright**, with the level itself in the section label and
- * in the raise row's `meta`.
+ * one that clears it outright**, with the level itself in the raise row's
+ * `meta`. **No "Emergency" heading above them** since his BASE list
+ * (2026-10-06) — the rows say what they are, and a lapsed flag says so in that
+ * same `meta`.
  *
  * That shape is not a compromise on the clear. *"One-click clear"* is item
  * 17's phrase and it is exactly what "Clear emergency" is — a single press
@@ -33,11 +35,9 @@
  * from the *new* array and read one too high. The live number is in `meta`,
  * which is the row's own readout.
  *
- * **The warning past `EMERGENCY_CROWD` is the section label going rose.** It is
- * the only channel a menu section has — `tone: 'danger'` — and it lands
- * directly above the row that would add a seventh flag, which is where the
- * sentence is worth reading. The count is live, from the same scoring pass the
- * task sheet's note reads, so the two cannot disagree.
+ * **The warning past `EMERGENCY_CROWD` went with the heading** it was written
+ * in; the Score screen's note under the trough still says it, from the same
+ * live count.
  */
 import { Icon, type MorphMenuItem } from '../../ui';
 import { EMERGENCY_CROWD, EMERGENCY_MAX } from '../../store/useStore';
@@ -45,8 +45,6 @@ import { EMERGENCY_CROWD, EMERGENCY_MAX } from '../../store/useStore';
 export interface EmergencyMenuOptions {
   /** The task's stored level, live. */
   level: number;
-  /** How many tasks in the whole backlog are carrying a live emergency. */
-  count: number;
   /** The engine has stopped counting this one — its anchor date has gone by. */
   lapsed?: boolean;
   /** `setEmergencyBoost(taskId, …)`, already bound to this row's task. */
@@ -54,25 +52,13 @@ export interface EmergencyMenuOptions {
 }
 
 /**
- * The section header plus one or two rows, ready to spread into an `items`
- * array. Always returns at least two entries, so a task with no emergency
- * still offers the flag.
+ * One or two rows, ready to spread into an `items` array. Always at least
+ * one, so a task with no emergency still offers the flag.
  */
-export function emergencyMenuItems({ level, count, lapsed = false, onSet }: EmergencyMenuOptions): MorphMenuItem[] {
-  const crowded = count > EMERGENCY_CROWD;
+export function emergencyMenuItems({ level, lapsed = false, onSet }: EmergencyMenuOptions): MorphMenuItem[] {
   const atMax = level >= EMERGENCY_MAX;
 
-  const heading = lapsed
-    ? `Emergency ${level} · lapsed`
-    : level > 0
-      ? `Emergency ${level} of ${EMERGENCY_MAX}`
-      : 'Emergency';
-
   return [
-    {
-      section: crowded ? `${heading} · ${count} flagged, too many` : heading,
-      tone: crowded ? 'danger' : 'default',
-    },
     {
       value: 'emergency-raise',
       /* All three fit `MorphMenu`'s 244px beside a glyph and a `n/5` meta.
@@ -80,7 +66,7 @@ export function emergencyMenuItems({ level, count, lapsed = false, onSet }: Emer
          ellipsised in the browser, which is a menu row that cannot be read. */
       label: atMax ? 'At the maximum' : level > 0 ? 'Raise emergency' : 'Flag as emergency',
       icon: <Icon name="zap" size={18} />,
-      meta: `${level}/${EMERGENCY_MAX}`,
+      meta: lapsed ? 'lapsed' : `${level}/${EMERGENCY_MAX}`,
       /* No flash at the top of the scale: nothing changes, so nothing should
          report that it did. The row still reads, which is what says why. */
       flash: atMax ? undefined : 'Raised',

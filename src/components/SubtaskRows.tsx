@@ -27,7 +27,7 @@
  *   `DeadlineSubtaskRow` keeps 18: its own mockup says 26 and correcting it
  *   would move the deadlines baselines, which belongs to that screen's own
  *   session rather than to this one.
- * - **The number on the right is the step's TIME**, in `--accent` once it is
+ * - **The number on the right is the step's TIME**, in `--job-lime` once it is
  *   done. It was the priority score, which is a reading nothing on this
  *   screen acts on — Focus asks how long, and every other surface that wants
  *   a subtask's score still shows one.
@@ -121,7 +121,7 @@ export function FocusSubtaskRow({ sub, depth, onToggle, disabled = false }: Focu
             style={{
               font: 'var(--type-numeric)',
               fontSize: 'var(--text-2xs)',
-              color: isDone ? 'var(--accent)' : 'var(--fg-4)',
+              color: isDone ? 'var(--job-lime)' : 'var(--fg-4)',
               fontVariantNumeric: 'tabular-nums',
               flex: '0 0 auto',
             }}
@@ -191,6 +191,8 @@ export function DeadlineSubtaskRow({ sub, depth, onChangeTime }: DeadlineSubtask
           locked={!isLeaf}
           name={`allocated to "${sub.title}"`}
           onSeconds={(secs) => onChangeTime(sub.id, secs)}
+          /* 29-1P10a: a leaf's time opens the same ruler as its task's. */
+          ruler={isLeaf ? {} : undefined}
         />
       </div>
       <AnimatePresence>

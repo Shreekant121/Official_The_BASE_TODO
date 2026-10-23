@@ -7,7 +7,7 @@
  * a dropdown in the same column sit at the same depth.
  *
  * The series note keeps its two voices, and both are now the system's:
- * `--status-review` on the last occurrence, because that is the one that needs
+ * a grey warning with its triangle (`--status-warn`, 29-1P2c2) on the last occurrence, because that is the one that needs
  * a decision, and `--fg-3` for everything else.
  *
  * **UI-18 rebuilt both controls this field opens** — `CustomDropdown` is the
@@ -112,9 +112,12 @@ export default function RecurrencePicker({ value, customRule, onChange, task }: 
           style={{
             font: 'var(--type-kicker)',
             letterSpacing: 'var(--tracking-kicker)',
-            color: status.kind === 'last' ? 'var(--status-review)' : 'var(--fg-3)',
+            color: status.kind === 'last' ? 'var(--status-warn)' : 'var(--fg-3)',
+            /* The last occurrence is a warning: grey with its icon (29-1P2c2). */
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-3)',
           }}
         >
+          {status.kind === 'last' && <Icon name="triangle-alert" size={12} style={{ flex: '0 0 auto' }} />}
           {note}
         </p>
       )}

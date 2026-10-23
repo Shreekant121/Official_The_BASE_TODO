@@ -3,41 +3,44 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { currentAssistantRoute } from '../accountAccess';
+import {
+  EMPTY_RING,
+  atlasKeyOf,
+  chosenKey,
+  keyProblem,
+  keysOf,
+  parseRing,
+  providerOf,
+  withChosen,
+  type KeyProvider,
+  type KeyRing,
+  type StoredApiKey,
+} from './keyRing';
+
+export type { KeyProvider, StoredApiKey } from './keyRing';
+
+/**
+ * The key sheet's store: this browser's copy, the synced Firestore document,
+ * and the Zustand state the Settings card reads.
+ *
+ * Every rule about a key — whose it is, whether it can be added, which one a
+ * turn spends — is in `keyRing.ts`, which is pure and tested. BIG-1 added
+ * Claude and ChatGPT keys beside Gemini's; this file only learned to store
+ * which provider a key belongs to and to pass that along.
+ *
+ * The storage key keeps its Gemini-era name so the keys already saved on his
+ * two devices are found where they are.
+ */
 
 const STORAGE_KEY = 'mutineer_gemini_keys';
 
-/** Enough to rotate through a few free keys; not a key manager. */
-const MAX_KEYS = 6;
-
-export interface StoredApiKey {
-  id: string;
-  /** What the user calls it — "personal", "work", "the paid one". */
-  label: string;
-  key: string;
-  addedAt: number;
-}
-
-interface KeyRing {
-  keys: StoredApiKey[];
-  /** `null` means "use the server proxy", which is the default. */
-  activeId: string | null;
-}
-
-const EMPTY: KeyRing = { keys: [], activeId: null };
-
 function readRing(): KeyRing {
-  if (typeof localStorage === 'undefined') return EMPTY;
+  if (typeof localStorage === 'undefined') return EMPTY_RING;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return EMPTY;
-    const parsed = JSON.parse(raw) as Partial<KeyRing>;
-    const keys = Array.isArray(parsed.keys)
-      ? parsed.keys.filter((k): k is StoredApiKey => typeof k?.id === 'string' && typeof k?.key === 'string')
-      : [];
-    const activeId = keys.some((k) => k.id === parsed.activeId) ? (parsed.activeId as string) : null;
-    return { keys, activeId };
+    return raw ? parseRing(JSON.parse(raw)) : EMPTY_RING;
   } catch {
-    return EMPTY;
+    return EMPTY_RING;
   }
 }
 
@@ -61,13 +64,7 @@ let userRingUnsubscribe: (() => void) | null = null;
 async function loadUserRing(uid: string): Promise<KeyRing | null> {
   try {
     const snap = await getDoc(agentKeysDoc(uid));
-    if (!snap.exists()) return null;
-    const data = snap.data() as Partial<KeyRing>;
-    const keys = Array.isArray(data.keys)
-      ? data.keys.filter((k): k is StoredApiKey => typeof k?.id === 'string' && typeof k?.key === 'string')
-      : [];
-    const activeId = keys.some((k) => k.id === data.activeId) ? (data.activeId as string) : null;
-    return { keys, activeId };
+    return snap.exists() ? parseRing(snap.data()) : null;
   } catch {
     return null;
   }
@@ -91,12 +88,7 @@ async function syncUserRing(ring: KeyRing): Promise<void> {
 function watchUserRing(uid: string) {
   return onSnapshot(agentKeysDoc(uid), (snap) => {
     if (!snap.exists()) return;
-    const data = snap.data() as Partial<KeyRing>;
-    const keys = Array.isArray(data.keys)
-      ? data.keys.filter((k): k is StoredApiKey => typeof k?.id === 'string' && typeof k?.key === 'string')
-      : [];
-    const activeId = keys.some((k) => k.id === data.activeId) ? (data.activeId as string) : null;
-    const ring: KeyRing = { keys, activeId };
+    const ring = parseRing(snap.data());
     writeRing(ring);
     useApiKeyStore.setState(ring);
   }, () => {
@@ -119,8 +111,11 @@ async function hydrateUserRing(uid: string, localRing: KeyRing): Promise<KeyRing
       mergedKeys.push(localKey);
     }
   }
-  const activeId = persisted.activeId ?? localRing.activeId;
-  return { keys: mergedKeys, activeId: mergedKeys.some((k) => k.id === activeId) ? activeId : null };
+  return parseRing({
+    keys: mergedKeys,
+    activeId: persisted.activeId ?? localRing.activeId,
+    activeByProvider: { ...localRing.activeByProvider, ...persisted.activeByProvider },
+  });
 }
 
 function setUserRingListener(uid: string) {
@@ -133,65 +128,60 @@ function setUserRingListener(uid: string) {
 
 interface ApiKeyState extends KeyRing {
   /** Returns an error string when the key is unusable, so the form can say why. */
-  addKey: (label: string, key: string) => string | null;
+  addKey: (label: string, key: string, provider?: KeyProvider) => string | null;
   removeKey: (id: string) => void;
-  /** `null` selects the server proxy. */
-  selectKey: (id: string | null) => void;
+  /** Chooses a key for its own provider. `null` selects the Gemini server proxy. */
+  selectKey: (id: string | null, provider?: KeyProvider) => void;
+}
+
+function commit(next: KeyRing, set: (ring: KeyRing) => void): void {
+  writeRing(next);
+  set(next);
+  void syncUserRing(next);
 }
 
 export const useApiKeyStore = create<ApiKeyState>()((set, get) => ({
   ...readRing(),
 
-  addKey: (label, key) => {
-    const trimmed = key.trim();
-    if (trimmed === '') return 'Paste a key first.';
-    if (/\s/.test(trimmed)) return 'That has whitespace in it — keys never do.';
-    if (trimmed.length < 20) return 'That is too short to be a Gemini API key.';
-
-    const { keys } = get();
-    if (keys.length >= MAX_KEYS) return `That is ${MAX_KEYS} keys already. Remove one first.`;
-    if (keys.some((k) => k.key === trimmed)) return 'That key is already here.';
+  addKey: (label, key, provider = 'gemini') => {
+    const ring = get();
+    const problem = keyProblem(ring, key, provider);
+    if (problem) return problem;
 
     const entry: StoredApiKey = {
       id: crypto.randomUUID(),
-      label: label.trim() === '' ? `Key ${keys.length + 1}` : label.trim(),
-      key: trimmed,
+      label: label.trim() === '' ? `Key ${keysOf(ring, provider).length + 1}` : label.trim(),
+      key: key.trim(),
       addedAt: Date.now(),
+      provider,
     };
-    const next: KeyRing = { keys: [...keys, entry], activeId: entry.id };
-    writeRing(next);
-    set(next);
-    void syncUserRing(next);
+    // A new key is the chosen one for its provider, as a new Gemini key always was.
+    commit(withChosen({ ...ring, keys: [...ring.keys, entry] }, entry.id, provider), set);
     return null;
   },
 
   removeKey: (id) => {
-    const { keys, activeId } = get();
-    const next: KeyRing = {
-      keys: keys.filter((k) => k.id !== id),
-      activeId: activeId === id ? null : activeId,
-    };
-    writeRing(next);
-    set(next);
-    void syncUserRing(next);
+    const ring = get();
+    const gone = ring.keys.find((k) => k.id === id);
+    const keys = ring.keys.filter((k) => k.id !== id);
+    let next: KeyRing = { ...ring, keys };
+    if (gone && chosenKey(ring, providerOf(gone))?.id === id) next = withChosen(next, null, providerOf(gone));
+    commit(next, set);
   },
 
-  selectKey: (id) => {
-    const { keys } = get();
-    const next: KeyRing = { keys, activeId: id !== null && keys.some((k) => k.id === id) ? id : null };
-    writeRing(next);
-    set(next);
-    void syncUserRing(next);
+  selectKey: (id, provider = 'gemini') => {
+    commit(withChosen(get(), id, provider), set);
   },
 }));
 
+/** The chosen Gemini key, or `null` for the proxy. */
 export function activeApiKey(): StoredApiKey | null {
-  const { keys, activeId } = useApiKeyStore.getState();
-  return keys.find((k) => k.id === activeId) ?? null;
+  return chosenKey(useApiKeyStore.getState(), 'gemini');
 }
 
 /**
- * What the transport asks for: the raw key, or `null` to use the server proxy.
+ * What the in-browser Gemini transport asks for: the raw key, or `null` to use
+ * the server proxy.
  *
  * BUILD-6 decides which. Only an account the proxy will answer — the owner, or
  * one he switched onto his key — has "none chosen" mean the proxy; any other
@@ -199,6 +189,9 @@ export function activeApiKey(): StoredApiKey | null {
  * assistant is switched off gets `null` whatever it holds, and the proxy's
  * refusal is the message it sees. None of this is the lock — the proxy checks
  * again on every call (`server/keyAccess.ts`).
+ *
+ * **Gemini keys only** since BIG-1: a Claude key sent to Google is a 400 that
+ * says nothing useful.
  */
 export function getActiveApiKey(): string | null {
   const route = currentAssistantRoute();
@@ -206,7 +199,15 @@ export function getActiveApiKey(): string | null {
   const chosen = activeApiKey();
   if (chosen) return chosen.key;
   if (route === 'owner-key') return null;
-  return useApiKeyStore.getState().keys[0]?.key ?? null;
+  return keysOf(useApiKeyStore.getState(), 'gemini')[0]?.key ?? null;
+}
+
+/**
+ * The key a turn on Atlas carries for this provider (BIG-1), or `null`.
+ * See `atlasKeyOf` for why Gemini's may differ from `getActiveApiKey`.
+ */
+export function atlasApiKey(provider: KeyProvider): string | null {
+  return atlasKeyOf(useApiKeyStore.getState(), provider);
 }
 
 /** `AIza…9fQ4` — enough to tell two keys apart, not enough to use one. */

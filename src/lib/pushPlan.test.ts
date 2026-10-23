@@ -30,7 +30,7 @@ const ist = (wall: string) => Date.parse(`${wall}:00+05:30`);
 const MIN = 60_000;
 
 const PROJECTS: Project[] = [
-  { id: 'p-empire', name: 'Shreekant Empire', color: '#8b5cf6', createdAt: 0, order: 0 },
+  { id: 'p-empire', name: 'Shreekant Empire', createdAt: 0, order: 0 },
 ];
 const LISTS: TaskList[] = [{ id: 'l-ops', title: 'Operations', projectId: 'p-empire', order: 0 }];
 

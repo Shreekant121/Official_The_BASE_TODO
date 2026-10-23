@@ -1,0 +1,233 @@
+/* ---------------------------------------------------------------
+   MOTION (29-1P5c, ideas 59, 57 and 61). Three small pieces that
+   CSS can drive on its own; `BlurAcross.tsx` (60) and the Dashboard's
+   glow (13, `components/dashboard/dashboard.css`) are elsewhere.
+
+   Nothing here moves at rest: the pad moves while the mouse does, the
+   title while the page scrolls, an icon once when its state flips.
+   --------------------------------------------------------------- */
+
+[data-v3] {
+  /* The idea page's own timing for an icon changing shape. */
+  --dur-icon-morph: 380ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-v3] { --dur-icon-morph: 1ms; }
+}
+
+/* ── 59 A HIGHLIGHT THAT GLIDES ──────────────────────────────────
+   ONE soft pad per list that slides from row to row under the mouse,
+   instead of each row lighting up on its own (`useGlide.ts`). Its host
+   is positioned; its rows sit above it (`position: relative; z-index: 1`).
+   `data-snap` puts it somewhere without the glide — its first showing,
+   or a list whose rows just changed. */
+.ag-glide {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: var(--r-sm);
+  background-color: oklch(1 0 0 / 0.10);
+  opacity: 0;
+  transition:
+    translate var(--dur-slow) var(--ease-glide),
+    width var(--dur-slow) var(--ease-glide),
+    height var(--dur-slow) var(--ease-glide),
+    opacity var(--dur-fast) var(--ease-glass);
+}
+.ag-glide[data-on] { opacity: 1; }
+.ag-glide[data-snap] { transition: opacity var(--dur-fast) var(--ease-glass); }
+/* A delete row's pad is coral, as its own hover was. */
+.ag-glide[data-tone='danger'] {
+  background-color: transparent;
+  background-image: var(--glass-tint-coral);
+}
+/* The rail's: a quieter tile behind the icon, the nav's own shape. */
+.ag-glide--rail {
+  border-radius: var(--r-md);
+  background-color: oklch(1 0 0 / 0.07);
+}
+
+/* ── 57 A BIG TITLE THAT TUCKS AWAY ──────────────────────────────
+   Scroll down and the page's big title shrinks towards its corner and
+   fades; scroll back and it grows out again (his call: no bar takes
+   its place). A scroll-driven animation on the page's own scroller, so
+   no script runs and nothing is measured; the browser plays it on the
+   compositor. Where the browser cannot, the title simply stays. */
+@keyframes ag-tuck {
+  to { scale: 0.65; opacity: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    [data-v3] .ag-tuck-title {
+      transform-origin: left bottom;
+      animation: ag-tuck linear both;
+      animation-timeline: scroll(nearest block);
+      animation-range: 0 56px;
+    }
+  }
+}
+
+/* ── 61 ICONS THAT MORPH ─────────────────────────────────────────
+   `MorphIcon.tsx`: a shape that becomes the next one instead of being
+   swapped for it. Paths change through the CSS `d` property; the + turns
+   into an ✕ by turning. */
+.ag-morph path {
+  transition: d var(--dur-icon-morph) var(--ease-glide);
+}
+.ag-morph-turn {
+  display: inline-grid;
+  transition: rotate var(--dur-icon-morph) var(--ease-springy);
+}
+
+/* ── 58 THE PAGE SINKS BEHIND A SHEET (29-1P6a) ──────────────────
+   While a dialog is open the whole app shrinks back a little and
+   rounds its corners (`overlay/sheetMotion.ts` says why `#root`, and
+   counts the sheets). `#root` sits outside the V3 scope, so the timing
+   is written out: the sheet's own 420ms grow, on the glide curve.
+   At rest `transform` is `none`, never `scale(1)`: any value makes `#root`
+   the containing block of every fixed bar for as long as it stays. */
+#root {
+  transform-origin: 50% 40%;
+  /* Clips the sunk page to its rounded corners all the way down and up.
+     `clip`, not `hidden`: it makes no scroll container, so nothing can
+     scroll `#root` itself, and `#root` is the viewport's size anyway. */
+  overflow: clip;
+}
+/* Two things measured on the tablet stand-in: `transform`, not the `scale`
+   property (27 frames drawn opening a sheet against 10), and the corners
+   never animate — a moving round on the clip repaints the whole page every
+   frame. They round at once on the way down and square only once the page
+   is back up, where nobody sees it. */
+@media (prefers-reduced-motion: no-preference) {
+  #root {
+    transition:
+      transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      border-radius 0s linear 420ms;
+  }
+  html[data-sheet-sunk] #root {
+    transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+html[data-sheet-sunk] #root {
+  transform: scale(0.965);
+  border-radius: 28px;
+}
+
+/* ── 75 HOLD, SLIDE, LET GO (29-1P6a) ───────────────────────────
+   The row under a held finger, from `useHoldSlide.ts`. It lights
+   where it is: no pad glides after the finger (his fix). An inset
+   shadow and the `scale` property, because the rows write their
+   own `background` and `transform` inline. */
+[data-hold-hot] {
+  box-shadow: inset 0 0 0 100vmax oklch(1 0 0 / 0.10);
+  scale: 1.02;
+  transition: scale var(--dur-fast) var(--ease-springy);
+}
+
+/* ── 17 SWIPE A TASK (29-1P6b) ─────────────────────────────────
+   The colour that opens up behind a row being swiped
+   (`core/SwipeRow.tsx`): its job's colour, quiet until letting go
+   would do it, then stronger, and the icon swells. Built only while
+   a finger is on the row; nothing here runs at rest. Mixed in
+   OKLab, never OKLCH: OKLCH walks the hue from lime to the dark
+   grey's blue and lands on teal, which is Focus's colour. */
+.ag-swipe-under {
+  color: var(--swipe-colour);
+  background-color: color-mix(in oklab, var(--swipe-colour) 12%, var(--void-1));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--swipe-colour) 22%, transparent);
+  transition: background-color var(--dur-fast) var(--ease-glass);
+}
+.ag-swipe-under[data-armed='true'] {
+  background-color: color-mix(in oklab, var(--swipe-colour) 30%, var(--void-1));
+}
+.ag-swipe-under__icon {
+  transition: scale var(--dur-fast) var(--ease-springy);
+}
+.ag-swipe-under[data-armed='true'] .ag-swipe-under__icon {
+  scale: 1.25;
+}
+
+/* ── 22 HOLD TO PEEK (29-1P6b) ─────────────────────────────────
+   A row you can hold to peek at (`lib/peek.ts`): a long press on
+   it must not select its words or raise Android's own menu.
+   `user-select` is the line doing that on his tablet (index.css
+   says why); the callout is WebKit's and inert there. */
+[data-peek] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── 25 CARDS THAT TILT (29-1P6c) ──────────────────────────
+   `useTilt.ts` writes `--tilt-rx`/`--tilt-ry` (the lean) and
+   `--tilt-gx`/`--tilt-gy` (where the mouse is) on a card, and
+   `data-tilt` only while it leans, so a still card holds no 3D
+   transform. A card that owns its own `transform` (ProjectCard) spells
+   the lean into it; `.ag-tilt` is for one that does not (a Dashboard
+   block). Laptop only: the hook attaches nothing without a mouse. */
+.ag-tilt[data-tilt] {
+  transform: perspective(1100px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transition: transform var(--dur-fast) var(--ease-glass);
+}
+/* A project card's `transform` is Framer's (its arrival), so it leans by
+   the separate `rotate` property, one turn about one axis, with the depth
+   on its drag wrapper — only while it leans, since `perspective` makes
+   the wrapper a stacking context and the card's open menu must rise
+   above its neighbours (the lean is off while that menu is open). */
+.ag-card[data-tilt] {
+  rotate: var(--tilt-axis, 0 0 1 0deg);
+}
+[data-drag-row]:has(> .ag-card[data-tilt]) {
+  perspective: 1000px;
+}
+/* The light that slides across it: the screen's own light, faint, in a
+   circle round the pointer — never white (he wants no bloom on glass). */
+.ag-tilt-shine {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background-image: radial-gradient(260px circle at var(--tilt-gx, 50%) var(--tilt-gy, 50%), color-mix(in oklab, var(--screen-light) 14%, transparent), transparent 65%);
+  transition: opacity var(--dur-base) var(--ease-glass);
+}
+[data-tilt] > .ag-tilt-shine { opacity: 1; }
+
+/* ── 91 PULL DOWN FOR THE BACKBURNER (29-1P6c) ─────────────
+   The pill above a project's board while it is pulled down
+   (`project/usePullForBackburner.tsx`). It fills with indigo, rest's
+   colour (his call), by `scale` on its fill so the finger costs no
+   layout; armed, its arrow flips and its words turn to the ink. */
+.ag-pull-pill {
+  position: absolute;
+  top: var(--sp-5);
+  left: 50%;
+  translate: -50% 0;
+  height: 32px;
+  padding: 0 var(--sp-6) 0 var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  overflow: hidden;
+  border-radius: 16px;
+  white-space: nowrap;
+  font: var(--type-caption);
+  font-weight: var(--weight-medium);
+  color: var(--fg-2);
+  background-color: var(--void-2);
+  box-shadow: var(--glass-rim-1), 0 8px 20px -10px oklch(0 0 0 / 0.7);
+  pointer-events: none;
+}
+.ag-pull-pill > i {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  scale: 0 1;
+  background-image: linear-gradient(90deg, color-mix(in oklab, var(--job-indigo) 55%, var(--void-1)), var(--job-indigo));
+}
+.ag-pull-pill > :not(i) { position: relative; }
+.ag-pull-pill > svg { transition: rotate var(--dur-base) var(--ease-springy); }
+.ag-pull-pill[data-armed='true'] { color: var(--job-indigo-ink); }

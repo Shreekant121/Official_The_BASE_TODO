@@ -27,9 +27,11 @@
  * unmount only in that case — a session started from Focus Mode is never
  * touched.
  */
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { Card, FieldLabel, Icon, SegmentedControl, Slider, Switch, Waveform, Well } from '../ui';
+import {
+  Card, FieldLabel, Icon, Knob, MorphIcon, SegmentedControl, Slider, SoftButton, SoftToggle, Switch, Waveform, Well,
+} from '../ui';
 import {
   getNoisePrefs,
   isNoisePlaying,
@@ -41,6 +43,10 @@ import {
   type NoisePrefs,
   type NoiseVariant,
 } from '../lib/brownNoise';
+import { useBreakIdeas } from '../lib/breakIdeaStore';
+
+/* Built on first open (CLAUDE.md "Performance" rule 2). */
+const BreakIdeasSheet = lazy(() => import('./BreakIdeasSheet'));
 
 /** The three sources, with the spectral slope that actually distinguishes them. */
 const VARIANTS: Array<{ id: NoiseVariant; name: string; slope: string; blurb: string }> = [
@@ -87,6 +93,11 @@ export default function BrownNoiseSection() {
      note at the top — it is what makes leaving safe without making Focus
      Mode's session fragile. */
   const startedHere = useRef(false);
+  /* 29-1P11a: the break ideas sheet, built the first time it is opened. */
+  const ideas = useBreakIdeas();
+  const [ideasOpen, setIdeasOpen] = useState(false);
+  const [ideasBuilt, setIdeasBuilt] = useState(false);
+  const openIdeas = () => { setIdeasBuilt(true); setIdeasOpen(true); };
 
   useEffect(() => subscribeNoise(setPlaying), []);
 
@@ -141,23 +152,16 @@ export default function BrownNoiseSection() {
             reading, so the running state needs no invented indicator. */}
         <Well style={{ marginTop: 'var(--sp-6)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
-            <button
-              type="button"
+            {/* Pressed in while it plays (29-1P2): an on/off among buttons. */}
+            <SoftToggle
+              size="sm"
+              pressed={playing}
               onClick={togglePreview}
-              aria-pressed={playing}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)',
-                padding: 'var(--sp-3) var(--sp-5)', borderRadius: 'var(--r-pill)',
-                border: 0, cursor: 'pointer',
-                backgroundImage: 'var(--glass-fill-3)',
-                boxShadow: 'var(--glass-rim-2)',
-                color: 'var(--fg-1)', font: 'var(--type-label)',
-              }}
+              icon={<MorphIcon kind="play-pause" on={playing} size={15} />}
             >
-              <Icon name={playing ? 'pause' : 'play'} size={15} />
               {playing ? 'Stop preview' : 'Preview'}
-            </button>
-            <Waveform active={playing} bars={22} height={26} label="Noise level" />
+            </SoftToggle>
+            <Waveform active={playing} bars={22} height={26} tone="teal" label="Noise level" />
             <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', marginLeft: 'auto' }}>
               {playing ? 'Playing' : 'Silent'}
             </span>
@@ -178,27 +182,24 @@ export default function BrownNoiseSection() {
           {VARIANTS.map((v) => {
             const on = prefs.variant === v.id;
             return (
-              <button
+              /* Pick one, pressed in while chosen (29-1P2) — a soft toggle
+                 laid out as a card, as Share's access modes are. */
+              <SoftToggle
                 key={v.id}
-                type="button"
+                pressed={on}
                 onClick={() => patch({ variant: v.id })}
-                aria-pressed={on}
                 style={{
-                  textAlign: 'left', cursor: 'pointer', border: 0,
+                  display: 'grid', gap: 2, justifyItems: 'start', alignContent: 'start',
+                  textAlign: 'left', whiteSpace: 'normal', height: 'auto',
                   padding: 'var(--sp-5)', borderRadius: 'var(--r-md)',
-                  display: 'grid', gap: 2,
-                  backgroundImage: on ? 'var(--glass-tint-accent)' : 'var(--glass-well)',
-                  boxShadow: on
-                    ? 'var(--glass-rim-2), var(--glow-accent-sm)'
-                    : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
                 }}
               >
                 <span style={{ font: 'var(--type-label)', color: 'var(--fg-1)' }}>{v.name}</span>
-                <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--accent)' }}>
+                <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--job-teal)' }}>
                   {v.slope}
                 </span>
                 <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>{v.blurb}</span>
-              </button>
+              </SoftToggle>
             );
           })}
         </div>
@@ -206,6 +207,7 @@ export default function BrownNoiseSection() {
         <div style={{ display: 'grid', gap: 'var(--sp-7)', marginTop: 'var(--sp-7)' }}>
           <LabelledSlider name="Tone" hint="low-pass cutoff">
             <Slider
+              tone="teal"
               label="Tone"
               value={prefs.toneHz}
               min={120}
@@ -223,20 +225,26 @@ export default function BrownNoiseSection() {
             the preview runs to compare.
           </p>
 
+          {/* 29-1P3, idea 132: the level is a knob you turn, here and on
+              Focus's stage — every 5% clicks. */}
           <LabelledSlider name="Level" hint="how loud">
-            <Slider
+            <Knob
               label="Level"
               value={Math.round(prefs.level * 100)}
               min={0}
               max={100}
+              step={5}
+              size={112}
               format={(v) => `${v}%`}
               valueText={`${Math.round(prefs.level * 100)} percent`}
               onValueChange={(v) => patch({ level: v / 100 })}
+              style={{ justifySelf: 'start' }}
             />
           </LabelledSlider>
 
           <LabelledSlider name="Fade" hint="in and out">
             <Slider
+              tone="teal"
               label="Fade"
               value={prefs.fadeSeconds}
               min={0}
@@ -256,6 +264,7 @@ export default function BrownNoiseSection() {
 
         <div style={{ marginTop: 'var(--sp-5)' }}>
           <SegmentedControl
+            look="soft"
             value={prefs.mode}
             onChange={(v) => patch({ mode: v as NoisePrefs['mode'] })}
             options={[
@@ -272,13 +281,17 @@ export default function BrownNoiseSection() {
           </p>
         ) : (
           <>
+            {/* 29-1P11a, idea 104: the break is real now. Its lengths are these
+                numbers, his call, and the ideas are his own list. */}
             <p style={{ margin: 'var(--sp-5) 0 var(--sp-6)', font: 'var(--type-body)', color: 'var(--fg-3)' }}>
-              Plays through each focus block, fades out for the break, and comes back. The task's own
-              countdown keeps running underneath — this only decides when there is sound.
+              At the end of each focus block, Focus offers a break: the task's clock and the sound
+              pause, and the break doesn't count towards your hours. Every fourth break
+              is a long one.
             </p>
             <div style={{ display: 'grid', gap: 'var(--sp-7)' }}>
               <LabelledSlider name="Focus block">
                 <Slider
+                  tone="teal"
                   label="Focus block"
                   value={prefs.focusMinutes}
                   min={5}
@@ -291,6 +304,7 @@ export default function BrownNoiseSection() {
               </LabelledSlider>
               <LabelledSlider name="Break">
                 <Slider
+                  tone="teal"
                   label="Break"
                   value={prefs.breakMinutes}
                   min={1}
@@ -300,7 +314,34 @@ export default function BrownNoiseSection() {
                   onValueChange={(v) => patch({ breakMinutes: v })}
                 />
               </LabelledSlider>
+              <LabelledSlider name="Long break" hint="every fourth">
+                <Slider
+                  tone="teal"
+                  label="Long break"
+                  value={prefs.longBreakMinutes}
+                  min={5}
+                  max={60}
+                  step={5}
+                  format={(v) => `${v} min`}
+                  valueText={`${prefs.longBreakMinutes} minutes`}
+                  onValueChange={(v) => patch({ longBreakMinutes: v })}
+                />
+              </LabelledSlider>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 240px', minWidth: 0, display: 'grid', gap: 'var(--sp-2)' }}>
+                  <FieldLabel>Break ideas</FieldLabel>
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }}>
+                    {ideas.length} small things to do on a break, like {'\u201c'}{ideas[0]?.text ?? 'drink a glass of water.'}{'\u201d'}
+                  </span>
+                </div>
+                <SoftButton size="sm" icon={<Icon name="pencil" size={15} />} onClick={openIdeas}>Edit ideas</SoftButton>
+              </div>
             </div>
+            {ideasBuilt && (
+              <Suspense fallback={null}>
+                <BreakIdeasSheet open={ideasOpen} onClose={() => setIdeasOpen(false)} />
+              </Suspense>
+            )}
           </>
         )}
       </Card>

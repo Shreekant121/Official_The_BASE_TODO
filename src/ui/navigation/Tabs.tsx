@@ -89,7 +89,7 @@ export function Tabs({ tabs = [], value, onChange, className = '', style, ...res
                 style={{
                   font: 'var(--type-numeric)',
                   fontSize: 'var(--text-xs)',
-                  color: on ? 'var(--accent)' : 'var(--fg-4)',
+                  color: on ? 'var(--job-lime)' : 'var(--fg-4)',
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
@@ -108,8 +108,8 @@ export function Tabs({ tabs = [], value, onChange, className = '', style, ...res
           width: bar.width,
           height: 2,
           borderRadius: 'var(--r-pill)',
-          background: 'var(--accent)',
-          boxShadow: '0 0 12px -1px var(--accent)',
+          background: 'var(--job-lime)',
+          boxShadow: '0 0 12px -1px var(--job-lime)',
           transition: 'left var(--dur-base) var(--ease-morph), width var(--dur-base) var(--ease-morph)',
         }}
       />

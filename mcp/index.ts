@@ -6,13 +6,9 @@ import { silenceStorageWarnings } from './storageStub.ts';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setDeletionEffectHandler } from '../src/lib/deletionEffects';
-import { liveSnapshotCapture } from '../src/lib/agent/liveContext';
-import { drawerOf, DRAWERS, frontDoorKindOf, getTool, mcpTools } from '../src/lib/agent/tools/index';
-import type { ToolContext } from '../src/lib/agent/types';
+import { APP_TOOL_SERVER, createToolServer } from '../src/lib/agent/toolServer/index';
 import { AtlasStore } from './store.ts';
-import { ConsistencyGuard, idsIn } from './consistency.ts';
-import { applyUndo, beginCapture, endCapture } from './undo.ts';
-import { log, serveStdio, type McpTool, type McpToolResult } from './protocol.ts';
+import { log, serveStdio } from './protocol.ts';
 
 /**
  * BASE as an MCP server (item 9).
@@ -45,7 +41,7 @@ import { log, serveStdio, type McpTool, type McpToolResult } from './protocol.ts
  *   inferred.
  */
 
-const SERVER_INFO = { name: 'mutineer-os', version: '1.0.0' };
+const SERVER_INFO = { name: APP_TOOL_SERVER, version: '1.0.0' };
 
 /**
  * A tiny `.env` reader, in the same spirit as Atlas's.
@@ -151,59 +147,12 @@ function config(): { serviceAccountJson: string; uid: string } {
   return { serviceAccountJson, uid };
 }
 
-/**
- * The registry, as MCP describes tools.
- *
- * The drawer travels in `_meta`, which MCP reserves for out-of-band data. A
- * client that ignores it sees a flat list of every tool and still works; Atlas
- * reads it and shows the model one drawer at a time (DESIGN.md §7.1). The
- * drawer definitions ride along on the first tool of each so a client can
- * render a drawer's own title and description without a second call.
- */
-function describeTools(): McpTool[] {
-  return mcpTools.map((tool) => {
-    const drawer = drawerOf(tool.name);
-    return {
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.parametersSchema as unknown as Record<string, unknown>,
-      _meta: {
-        drawer,
-        drawerTitle: drawer ? DRAWERS[drawer].title : undefined,
-        drawerDescription: drawer ? DRAWERS[drawer].description : undefined,
-        mutates: tool.mutates,
-        /*
-         * Item 13, DESIGN.md §5.2. Declared by the server that owns the act,
-         * because whether something can be taken back is a fact about the act
-         * — Atlas holding a list of irreversible tool names would be Atlas
-         * knowing what its servers do, which is the one thing the MCP boundary
-         * exists to prevent. `tools/index.ts` throws at import if a
-         * known-irreversible name is registered without it.
-         */
-        frontDoor: tool.frontDoor === true,
-        /*
-         * BUILD-3. WHY it is behind the door — `irreversible` (a share link,
-         * mail) or `undoable` (a delete that takes a whole project or list, and
-         * that Revert can still fetch back from the Trash). Atlas words the
-         * waiting sentence, the tray card and the log from it, and treats a
-         * front-door tool with no kind as irreversible, which is the safe
-         * reading for a server that has never heard of this field.
-         */
-        frontDoorKind: frontDoorKindOf(tool),
-      },
-    };
-  });
-}
-
 async function main(): Promise<void> {
   // The one warning the stand-in storage cannot prevent, on a stream that also
   // carries real failures. `storageStub.ts` has the reasoning.
   silenceStorageWarnings();
 
   const store = new AtlasStore(config());
-  /* §5.4, per turn. One per process because one process serves one Atlas, and
-     `enterTurn` empties it whenever the turn id changes. */
-  const guard = new ConsistencyGuard();
 
   /*
    * Nothing is registered as a deletion effect, and that is the documented
@@ -226,141 +175,23 @@ async function main(): Promise<void> {
   setDeletionEffectHandler(null);
 
   await store.hydrate();
+
+  /* BIG-12: the handler is shared with the tablet, which runs it in its own
+     page with the lid shut. This host's half is the fresh read around every
+     call and the zone from `.env`. */
+  const tools = createToolServer({
+    agentStore: store.agentStore,
+    withFreshState: (mutates, run) => store.withFreshState(mutates, run),
+    timezone: () => process.env.ATLAS_TIMEZONE?.trim() || 'Asia/Kolkata',
+  });
   log(`[mcp] mutineer-os ready — ${store.describe()}`);
 
   await serveStdio({
     serverInfo: SERVER_INFO,
 
-    listTools: () => describeTools(),
+    listTools: () => tools.listTools(),
 
-    callTool: async (name, args, meta): Promise<McpToolResult> => {
-      /*
-       * ITEM 13: PUTTING A CHANGE BACK IS NOT A TOOL THE MODEL CAN SEE.
-       *
-       * `revert_actions` is handled here and is absent from `tools/list`, so
-       * it costs no tokens and the model can never reach for it. Reverting is
-       * something *Shreekant* does, from the action log, and routing it down
-       * the same pipe is what lets Atlas offer the button without knowing what
-       * undoing a task means (DESIGN.md §5.3, `undo.ts`).
-       */
-      if (name === 'revert_actions') {
-        const report = await store.withFreshState(true, async () =>
-          applyUndo((args as { payload?: unknown }).payload),
-        );
-        return { content: [{ type: 'text', text: report.summary }], isError: !report.ok };
-      }
-
-      const tool = getTool(name);
-      if (!tool) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `There is no tool called "${name}". Available tools: ${mcpTools.map((t) => t.name).join(', ')}.`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      /*
-       * ITEM 13: A PREVIEW NEVER WRITES, AND THAT IS ENFORCED HERE RATHER THAN
-       * TRUSTED OF THE TOOL.
-       *
-       * `preview` reaches the tool as `ctx.preview` so that it can *describe*
-       * what it would do — which is what fills a front-door approval card. But
-       * the safety does not rest on the tool honouring it: a preview runs
-       * through the read-only path, which never flushes, and the next call
-       * re-hydrates from Firestore. So a tool that ignored the flag entirely
-       * would still change nothing outside this process's memory for one call.
-       */
-      const preview = meta?.preview === true;
-      const mutates = tool.mutates && !preview;
-      const turnId = typeof meta?.turnId === 'string' ? meta.turnId : null;
-      guard.enterTurn(turnId);
-
-      const result = await store.withFreshState(mutates, async () => {
-        /*
-         * `now` is pinned per call rather than per turn, which is the one
-         * place this host is weaker than the browser's. In the app a whole
-         * turn shares one clock (decision D14) so six tool calls cannot
-         * disagree about "tomorrow"; over MCP each call arrives on its own.
-         * Item 13 puts a `turnId` in `_meta` — used below for §5.4 — so the
-         * grouping now exists and pinning the clock to it is the obvious next
-         * step; it is not taken here because it changes what dates a turn
-         * resolves to, which is a behaviour change wanting its own session.
-         *
-         * The timezone is Shreekant's, not the laptop's, for the reason the
-         * chat route already gives: the tablet decides what "today" is.
-         */
-        const ctx: ToolContext = {
-          snapshotHandle: beginCapture(turnId ?? 'no-turn', name),
-          now: new Date(),
-          timezone: process.env.ATLAS_TIMEZONE?.trim() || 'Asia/Kolkata',
-          store: store.agentStore,
-          ...(preview ? { preview: true } : {}),
-          /*
-           * ITEM 13: THE SNAPSHOT RING RUNS HERE NOW.
-           *
-           * It used to be three no-ops with a note saying the action log would
-           * replace them. It does — but not by replacing the *capture*, which
-           * was always the right mechanism and the only one that knows to keep
-           * the first value a turn saw. What the log adds is durability: the
-           * entries are lifted out after the call and travel to Atlas, which
-           * writes them to the laptop. See `undo.ts`.
-           */
-          snapshots: liveSnapshotCapture,
-        };
-
-        /*
-         * §5.4, checked before the tool runs and after the fresh read.
-         *
-         * The targets come out of the *arguments* — every id the model named —
-         * and are matched against what Atlas saw earlier in this turn. See
-         * `consistency.ts` for why this is not the same thing as
-         * `withFreshState` re-reading.
-         */
-        if (mutates) {
-          const refusal = guard.check(store.agentStore.getState(), idsIn(args));
-          if (refusal !== null) return { ok: false, summary: refusal, handle: ctx.snapshotHandle };
-        }
-
-        const outcome = await tool.execute(args, ctx);
-        return { ...outcome, handle: ctx.snapshotHandle };
-      });
-
-      const { handle, ...toolResult } = result;
-      /* Closed unconditionally — a capture left open would pin every entity a
-         refused call touched in a process that lives as long as Atlas does.
-         Only a write that actually landed produces a token. */
-      const captured = endCapture(handle);
-      const undo = mutates && toolResult.ok ? captured : null;
-
-      /*
-       * What Atlas has now seen, recorded after the call rather than before.
-       *
-       * A read records what it returned; a successful write records the new
-       * value, so Atlas writing the same task twice in one turn is not Atlas
-       * fighting itself. Both come from the freshly-read state the call just
-       * ran against.
-       */
-      const state = store.agentStore.getState();
-      if (!mutates) guard.observe(state, idsIn(toolResult.data));
-      else if (toolResult.ok) guard.refresh(state, idsIn(args));
-
-      return {
-        // `summary` is written to be read by a model on its next turn — that
-        // is its whole purpose — so it is the text content, and the structured
-        // payload rides alongside for a client that wants it.
-        content: [{ type: 'text', text: toolResult.summary }],
-        isError: !toolResult.ok,
-        structuredContent: toolResult.data === undefined ? undefined : toolResult.data,
-        /* Item 13. Beside the result, never inside it — this is a complete
-           copy of everything the call touched and must not cost the model a
-           token. `drawers.ts` on Atlas's side reads it. */
-        ...(undo === null ? {} : { _meta: { undo: { payload: undo } } }),
-      };
-    },
+    callTool: (name, args, meta) => tools.callTool(name, args, meta),
   });
 
   log('[mcp] stdin closed — exiting.');

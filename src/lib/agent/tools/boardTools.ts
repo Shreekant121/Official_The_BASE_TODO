@@ -1,6 +1,7 @@
 import { DEFAULT_LISTS, type Project, type TaskList } from '../../../store/useStore';
-import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, PROJECT_HUES } from '../../projectHues';
+import { DEFAULT_PROJECT_ICON } from '../../projectIcon';
 import { TRASH_RETENTION_MS } from '../../trashModel';
+import { buildProjectTree, planProjectMove } from '../../projectTree';
 import {
   ToolArgError,
   defineTool,
@@ -117,17 +118,6 @@ export function findList(state: AgentStoreState, ref: string): Lookup<TaskList> 
 const BUILT_IN_REASON =
   'it is one of the three built-in lists every task can fall back to, so it cannot be renamed, moved or deleted.';
 
-/** `#10B981`, `10b981`, or one of the six hue names the New Project sheet offers. */
-function readColor(raw: string): string {
-  const value = raw.trim();
-  const hue = PROJECT_HUES.find((candidate) => candidate.id === value.toLowerCase());
-  if (hue) return hue.hex;
-  if (/^#?[0-9a-f]{6}$/i.test(value)) return value.startsWith('#') ? value : `#${value}`;
-  throw new ToolArgError(
-    `"color" must be one of ${PROJECT_HUES.map((candidate) => candidate.id).join(', ')}, or a hex colour like #10B981 (got "${raw}").`,
-  );
-}
-
 /** A string is one title; an array is several. Blank and repeated titles (case aside) collapse. */
 function readTitles(value: unknown, key: string): string[] {
   const items = value === undefined ? [] : Array.isArray(value) ? value : [value];
@@ -156,6 +146,15 @@ function listContents(state: AgentStoreState, listId: string): number {
   return state.backlogTasks.filter((task) => !task.parent && task.listId === listId).length;
 }
 
+/**
+ * BIG-2 — where `inside` puts a project: `null` for the top level (an empty
+ * string), a project by id or exact name, or a reason it cannot.
+ */
+function readInside(state: AgentStoreState, ref: string): Lookup<Project | null> {
+  if (ref.trim() === '') return { found: null };
+  return findProject(state, ref);
+}
+
 function describeProjectContents(contents: { lists: number; tasks: number }): string {
   if (contents.lists === 0) return 'an empty project';
   if (contents.tasks === 0) return `${plural(contents.lists, 'list')}, with no tasks in them,`;
@@ -169,8 +168,9 @@ export const createProject: ToolDef = defineTool({
   mutates: true,
   description:
     'Create projects, each with the lists inside it, in ONE call — "make a project for the launch with Research, ' +
-    'Design and Ship" is one call, not four. Send description or color only when the user gave one. Refuses a name ' +
-    'that is already a project: add lists to that one with create_list instead of making a second.',
+    'Design and Ship" is one call, not four. Send description only when the user gave one. Refuses a name ' +
+    'that is already a project: add lists to that one with create_list instead of making a second. Projects nest: ' +
+    'send inside to create one within another project.',
   parametersSchema: {
     type: 'object',
     properties: {
@@ -183,10 +183,7 @@ export const createProject: ToolDef = defineTool({
             name: { type: 'string', description: 'The project name.' },
             lists: { type: 'array', items: { type: 'string' }, description: 'Names of the lists to create inside it, in order.' },
             description: { type: 'string', description: 'One line about the project, only if the user gave one.' },
-            color: {
-              type: 'string',
-              description: `One of ${PROJECT_HUES.map((hue) => hue.id).join(', ')}, or a hex colour. Defaults to emerald.`,
-            },
+            inside: { type: 'string', description: 'The project to create it in (id or exact name). Omit for the top level.' },
           },
           required: ['name'],
         },
@@ -209,16 +206,21 @@ export const createProject: ToolDef = defineTool({
         const item = wanted[index] as ToolArgs;
 
         let name: string | undefined;
-        let fields: { description?: string; color: string; lists: string[] };
+        let fields: { description?: string; lists: string[]; parent: Project | null };
         try {
           name = requiredString(item, 'name');
           const description = optionalString(item, 'description')?.trim();
-          const colorRef = optionalString(item, 'color');
           fields = {
             ...(description ? { description } : {}),
-            color: colorRef === undefined || colorRef.trim() === '' ? DEFAULT_PROJECT_COLOR : readColor(colorRef),
             lists: readTitles(item.lists, 'lists'),
+            parent: null,
           };
+          const insideRef = optionalString(item, 'inside');
+          if (insideRef !== undefined) {
+            const inside = readInside(state, insideRef);
+            if ('reason' in inside) throw new ToolArgError(`"inside": ${inside.reason}`);
+            fields.parent = inside.found;
+          }
         } catch (err) {
           return { ok: false as const, title: name, reason: err instanceof Error ? err.message : String(err) };
         }
@@ -236,14 +238,17 @@ export const createProject: ToolDef = defineTool({
         // not exist" and a Revert deletes it rather than leaving it standing.
         const projectId = crypto.randomUUID();
         ctx.snapshots.captureProject(ctx.snapshotHandle, projectId);
+        const parent = fields.parent;
+        // Last among the siblings it joins, as the app's own New project does.
+        const siblings = buildProjectTree(state.projects).childrenOf(parent?.id ?? null);
         ctx.store.addProject({
           id: projectId,
           name: projectName,
           ...(fields.description ? { description: fields.description } : {}),
-          color: fields.color,
           icon: DEFAULT_PROJECT_ICON,
           createdAt: ctx.now.getTime(),
-          order: state.projects.length,
+          order: siblings.reduce((max, p) => Math.max(max, p.order), -1) + 1,
+          ...(parent ? { parentId: parent.id } : {}),
         });
 
         const lists = fields.lists.map((title, order) => {
@@ -253,7 +258,7 @@ export const createProject: ToolDef = defineTool({
           return { id: list.id, name: title };
         });
 
-        return { ok: true as const, title: projectName, value: { id: projectId, name: projectName, lists } };
+        return { ok: true as const, title: projectName, value: { id: projectId, name: projectName, lists, inside: parent?.name } };
       },
     );
 
@@ -261,10 +266,11 @@ export const createProject: ToolDef = defineTool({
       outcome,
       (done) => {
         if (done.length === 1) {
-          const { name, lists } = done[0].value;
+          const { name, lists, inside } = done[0].value;
+          const where = inside ? ` inside "${inside}"` : '';
           return lists.length === 0
-            ? `Created the project "${name}", with no lists in it yet.`
-            : `Created the project "${name}" with ${plural(lists.length, 'list')}: ${titleList(lists.map((list) => list.name))}.`;
+            ? `Created the project "${name}"${where}, with no lists in it yet.`
+            : `Created the project "${name}"${where} with ${plural(lists.length, 'list')}: ${titleList(lists.map((list) => list.name))}.`;
         }
         return `Created ${done.length} projects: ${done
           .map((entry) => `"${entry.value.name}" (${entry.value.lists.length === 0 ? 'no lists' : plural(entry.value.lists.length, 'list')})`)
@@ -281,16 +287,17 @@ export const updateProject: ToolDef = defineTool({
   name: 'update_project',
   mutates: true,
   description:
-    'Rename projects, or change their description or colour. Takes a list, but a new name can only go to one ' +
-    'project at a time. An empty description removes it. To add lists to a project use create_list; to rename a ' +
-    'list use update_list.',
+    'Rename projects, change their description, or move them inside another project (inside; an empty ' +
+    'string takes them back to the top level — a project moves with everything in it). Takes a list, but a new name ' +
+    'can only go to one project at a time. An empty description removes it. To add lists to a project use ' +
+    'create_list; to rename a list use update_list.',
   parametersSchema: {
     type: 'object',
     properties: {
       projectIds: { type: 'array', items: { type: 'string' }, description: 'Project ids, or exact project names.' },
       name: { type: 'string', description: 'The new name. Only with a single project.' },
       description: { type: 'string', description: 'The new one-line description. Empty removes it.' },
-      color: { type: 'string', description: `One of ${PROJECT_HUES.map((hue) => hue.id).join(', ')}, or a hex colour.` },
+      inside: { type: 'string', description: 'Move into this project (id or exact name). Empty string: the top level.' },
     },
     required: ['projectIds'],
   },
@@ -298,16 +305,15 @@ export const updateProject: ToolDef = defineTool({
     const refs = requiredStringArray(args, 'projectIds', { max: BATCH_CAP, what: 'projects' });
     const name = optionalString(args, 'name')?.trim();
     const description = optionalString(args, 'description');
-    const colorRef = optionalString(args, 'color');
+    const insideRef = optionalString(args, 'inside');
 
-    if (name === undefined && description === undefined && colorRef === undefined) {
-      throw new ToolArgError('there is nothing to change — send name, description or color.');
+    if (name === undefined && description === undefined && insideRef === undefined) {
+      throw new ToolArgError('there is nothing to change — send name, description or inside.');
     }
     if (name === '') throw new ToolArgError('"name" cannot be empty — a project needs a name.');
     if (name !== undefined && refs.length > 1) {
       throw new ToolArgError('a new name can only go to one project — two projects cannot both be renamed to the same thing.');
     }
-    const color = colorRef === undefined ? undefined : readColor(colorRef);
 
     const outcome = await runBatch(refs, async (ref) => {
       const state = ctx.store.getState();
@@ -332,9 +338,20 @@ export const updateProject: ToolDef = defineTool({
           changed.push(next === undefined ? 'removed its description' : 'changed its description');
         }
       }
-      if (color !== undefined && color.toLowerCase() !== project.color.toLowerCase()) {
-        patch.color = color;
-        changed.push('changed its colour');
+      if (insideRef !== undefined) {
+        const inside = readInside(state, insideRef);
+        if ('reason' in inside) return { ok: false as const, title: was, reason: `"inside": ${inside.reason}` };
+        const targetId = inside.found?.id ?? null;
+        if (buildProjectTree(state.projects).parentOf(project.id) !== targetId) {
+          const moved = planProjectMove(state.projects, project.id, targetId)?.find((p) => p.id === project.id);
+          if (!moved) {
+            return { ok: false as const, title: was, reason: `it cannot go inside "${inside.found?.name}" — that is ${targetId === project.id ? 'itself' : 'inside it'}.` };
+          }
+          // `undefined` takes it to the top level, the rule `description` follows.
+          patch.parentId = moved.parentId;
+          patch.order = moved.order;
+          changed.push(inside.found ? `moved it inside "${inside.found.name}"` : 'moved it to the top level');
+        }
       }
 
       if (Object.keys(patch).length > 0) {

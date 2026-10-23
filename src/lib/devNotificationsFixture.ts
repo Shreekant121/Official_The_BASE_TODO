@@ -45,6 +45,7 @@
  */
 import type { Task } from '../store/useStore';
 import type { PushLog } from './pushPlan';
+import type { BaseEvent } from './events/events';
 
 /**
  * Both variants seed the timeline; what they differ on is **the browser's
@@ -160,14 +161,30 @@ export function devFiringTasks(): Task[] {
 }
 
 /**
+ * 29-2c2: two events whose alerts ring on the frozen day, handed to the page
+ * alone like the tasks above, so `eventAlertsToday` does its real arithmetic.
+ * A birthday all day with "On the day" (rings 08:00, before the frozen now) and
+ * a call at 12:00 with "1 hour before" (rings 11:00).
+ */
+export function devFiringEvents(): BaseEvent[] {
+  if (!import.meta.env.DEV) return [];
+  return [
+    { id: 'dev-event-riya', title: "Riya's birthday", start: '2026-03-12', alerts: [0], colour: 'rose', createdAt: 0 },
+    { id: 'dev-event-call', title: 'Investor call', start: '2026-03-12T12:00', alerts: [60], location: 'Zoom', createdAt: 0 },
+  ];
+}
+
+/**
  * What the sender would have logged by the frozen 09:30, for `delivered`
  * (BUILD-5): the pitch missed and counted in the 08:12 summary, the invoice
- * sent at 08:45, the CA snoozed. Keys and instants are the sender's own
- * (`logKey`), so `withDelivery` does its real matching on them.
+ * sent at 08:45, the CA snoozed, and (29-2c2) the birthday sent at 08:00. Keys
+ * and instants are the sender's own (`logKey`), so `withDelivery` does its
+ * real matching on them.
  */
 export function devPushLog(): PushLog | null {
   if (!import.meta.env.DEV || devNotificationsFixture() !== 'delivered') return null;
   const at = (wall: string) => Date.parse(`2026-03-12T${wall}:00+05:30`);
+  const birthday = { taskId: 'event:dev-event-riya', eventId: 'dev-event-riya', minutesBefore: 0, at: at('08:00'), title: "Riya's birthday", estimateMinutes: 0 };
   const entry = (taskId: string, fire: string, title: string, estimateMinutes: number) => ({
     taskId,
     at: at(fire),
@@ -182,6 +199,7 @@ export function devPushLog(): PushLog | null {
       [`${pitch.taskId}@${pitch.at}`]: { ...pitch, outcome: 'missed', summaryAt: at('08:12') },
       [`${invoice.taskId}@${invoice.at}`]: { ...invoice, outcome: 'sent', sentAt: at('08:45') },
       [`${ca.taskId}@${ca.at}`]: { ...ca, outcome: 'sent', sentAt: at('09:20'), snoozeUntil: at('09:33') },
+      [`${birthday.taskId}@${birthday.at}`]: { ...birthday, outcome: 'sent', sentAt: at('08:00') },
     },
   };
 }

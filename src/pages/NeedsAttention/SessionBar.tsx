@@ -33,7 +33,8 @@
  * how far through you are. Emerald is not loose here — a session in progress
  * is `readme.md`'s "live", the one thing the accent is for.
  */
-import { Button, Icon, IconButton } from '../../ui';
+import { Button, Icon, RollingNumber, SoftIconButton } from '../../ui';
+import { AskAtlasBar } from '../../ui/overlay/AskAtlasBar';
 
 interface SessionBarProps {
   position: number;
@@ -41,7 +42,7 @@ interface SessionBarProps {
   remaining: number;
   onBack: () => void;
   onEndSession: () => void;
-  /** BUILD-4: whether the AI panel is open on this task, and the toggle. */
+  /** BUILD-4: whether the AI panel is open on this task, and opening it (29-1P15c: the Ask Atlas bar). */
   asking: boolean;
   onAsk: () => void;
 }
@@ -78,10 +79,10 @@ export default function SessionBar({
         animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
       }}
     >
-      {/* Round glass since V3-5, as the board's and Focus's Back. */}
-      <IconButton label="Go back" onClick={onBack}>
+      {/* Round soft since 29-1P2, as the board's and Focus's Back. */}
+      <SoftIconButton label="Go back" onClick={onBack}>
         <Icon name="arrow-left" size={18} />
-      </IconButton>
+      </SoftIconButton>
 
       {/* Capitals in V3 too (V3-5): the system voice, not a kicker — v4's
           readme keeps it uppercase, as Focus's "FOCUS". */}
@@ -102,7 +103,9 @@ export default function SessionBar({
           fontVariantNumeric: 'tabular-nums', color: 'var(--fg-3)',
         }}
       >
-        <span style={{ color: 'var(--fg-1)' }}>{position}</span>/{total}
+        {/* 29-1P4c, idea 49: the counts roll as he moves through. */}
+        <span style={{ color: 'var(--fg-1)' }}><RollingNumber value={position} /></span>
+        <span>/<RollingNumber value={total} /></span>
       </span>
 
       <div
@@ -121,8 +124,8 @@ export default function SessionBar({
           style={{
             display: 'block', height: '100%', width: `${progress}%`,
             borderRadius: 'var(--r-pill)',
-            background: 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.55), var(--accent))',
-            boxShadow: '0 0 14px -2px var(--accent)',
+            background: 'linear-gradient(90deg, oklch(0.84 0.17 130 / 0.55), var(--job-lime))',
+            boxShadow: '0 0 14px -2px var(--job-lime)',
             transition: 'width var(--dur-slow) var(--ease-glass)',
           }}
         />
@@ -134,23 +137,28 @@ export default function SessionBar({
           fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flex: '0 0 auto',
         }}
       >
-        {remaining} remaining
+        <RollingNumber value={remaining} /> remaining
       </span>
 
       {/* BUILD-4 — his #13: "AI can ask me questions and score things itself
-          based on my answers". Glass, never tint, while open: this screen's
-          emerald is spent on the progress bar, and nothing about the panel is
-          live in `readme.md`'s sense. */}
-      <Button
-        variant="glass"
-        size="sm"
-        aria-pressed={asking}
-        onClick={onAsk}
-        iconLeft={<Icon name="sparkles" size={15} />}
-        style={{ flex: '0 0 auto', minHeight: 44 }}
-      >
-        Ask AI
-      </Button>
+          based on my answers". Since 29-1P15c (idea 74, his call) the "Ask
+          AI" button that sat here is the Ask Atlas bar, which grows into the
+          panel and takes it back when it closes. Up here rather than at the
+          foot, where every other screen's bar sits: this screen's foot is its
+          Save bar and the nav, with no room for a third. Sunk into this pill
+          as a well, the shape of a field, rather than glass on glass. */}
+      <AskAtlasBar
+        open={asking}
+        onOpen={onAsk}
+        label="Ask Atlas about this task"
+        /* Out of the row while the panel is open: an empty slot pushed End
+           session onto a second line. */
+        collapse
+        style={{
+          flex: '0 1 240px', minWidth: 150, height: 44,
+          backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
+        }}
+      />
 
       <Button
         variant="ghost"

@@ -29,11 +29,20 @@
  *      alone; without it two tasks called "Call" are one row twice.
  *   5. The group kicker reads `--kicker-transform` rather than writing
  *      `uppercase`, so it follows the V3 rule on its own.
+ *   6. The lit row is one pad that glides (29-1P5c, idea 59): the arrows and
+ *      the mouse slide it from result to result instead of each row lighting
+ *      on its own. It is the selection, so it follows the keys too, and jumps
+ *      without gliding when the results change under it.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { Dialog } from './Dialog';
 import { Icon } from '../core/Icon';
+import { useGlide } from '../core/useGlide';
+import { KeyCaps } from '../core/KeyCaps';
+import { LitLine } from '../feedback/LitLine';
+import { AskGlow } from '../feedback/AtlasAtRest';
+import { litSafe } from '../feedback/litParts';
 
 export interface CommandPaletteItem {
   /** Unique across the list; the row's key. */
@@ -44,6 +53,10 @@ export interface CommandPaletteItem {
   icon?: ReactNode;
   /** Small kicker on the right, e.g. "Task". */
   group?: string;
+  /** The command's key, drawn as raised keys before the kicker (idea 18, 29-1P6a). */
+  keys?: string[];
+  /** A task's id: holding the row peeks at it (idea 22, 29-1P6b, `lib/peek.ts`). */
+  peek?: string;
 }
 
 export interface CommandPaletteProps {
@@ -56,7 +69,8 @@ export interface CommandPaletteProps {
   /** A row was chosen, by Enter or by a click. Closing is the caller's call. */
   onRun: (item: CommandPaletteItem) => void;
   placeholder?: string;
-  /** Shown when `items` is empty. */
+  /** Shown when `items` is empty; `**` lights words (`LitLine`). The default
+   *  is his approved line (29-1P14c), with what he typed lit. */
   emptyText?: string;
   /** Rung on the app's stacking ladder, as `Dialog` takes it. */
   zIndex?: number;
@@ -72,7 +86,7 @@ export function CommandPalette({
   items,
   onRun,
   placeholder = 'Search tasks and commands',
-  emptyText = 'No matches.',
+  emptyText,
   zIndex,
 }: CommandPaletteProps) {
   const [sel, setSel] = useState(0);
@@ -87,6 +101,17 @@ export function CommandPalette({
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const at = Math.min(sel, items.length - 1);
+
+  /* Note 6: the pad goes to the lit row — gliding as the selection moves,
+     jumping when the results changed or the palette has just opened. */
+  const { pad: glidePad, moveTo: glideTo } = useGlide();
+  const glidedFor = useRef<CommandPaletteItem[] | null>(null);
+  useLayoutEffect(() => {
+    if (!open) { glidedFor.current = null; glideTo(null); return; }
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-index="${at}"]`) ?? null;
+    glideTo(row, { snap: glidedFor.current !== items });
+    glidedFor.current = items;
+  }, [open, at, items, glideTo]);
 
   /* Keep the lit row in view as the arrows walk past the list's edge. */
   useEffect(() => {
@@ -129,60 +154,69 @@ export function CommandPalette({
         overflow: 'hidden',
       }}
     >
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: 'var(--sp-5)',
-          padding: 'var(--sp-6) var(--sp-7)',
-          borderBottom: '1px solid var(--line-soft)',
-        }}
-      >
-        <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', color: 'var(--fg-4)' }}>
-          <Icon name="search" size={18} />
-        </span>
-        <input
-          /* The Dialog keeps focus on whatever inside it already has it, so
-             this is what the palette opens typing into. */
-          autoFocus
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          role="combobox"
-          aria-expanded="true"
-          aria-controls={LIST_ID}
-          aria-activedescendant={items[at] ? `${LIST_ID}-${at}` : undefined}
-          autoComplete="off"
-          spellCheck={false}
-          enterKeyHint="go"
+      {/* 29-1P15b, idea 88: while he types, a violet line lights along
+          the field's foot, as Atlas's ask box glows under it. */}
+      <AskGlow typed={query.trim() !== ''} line>
+        <div
           style={{
-            flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent',
-            color: 'var(--fg-1)', font: 'var(--type-body)', fontSize: 'var(--text-base)',
-          }}
-        />
-        <span
-          aria-hidden="true"
-          style={{
-            font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)',
-            padding: '3px 7px', borderRadius: 'var(--r-2xs)', boxShadow: 'inset 0 0 0 1px var(--line-soft)',
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)',
+            padding: 'var(--sp-6) var(--sp-7)',
+            borderBottom: '1px solid var(--line-soft)',
           }}
         >
-          ESC
-        </span>
-      </div>
+          <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', color: 'var(--fg-4)' }}>
+            <Icon name="search" size={18} />
+          </span>
+          <input
+            /* The Dialog keeps focus on whatever inside it already has it, so
+               this is what the palette opens typing into. */
+            autoFocus
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            aria-label={placeholder}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={LIST_ID}
+            aria-activedescendant={items[at] ? `${LIST_ID}-${at}` : undefined}
+            autoComplete="off"
+            spellCheck={false}
+            enterKeyHint="go"
+            style={{
+              flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent',
+              color: 'var(--fg-1)', font: 'var(--type-body)', fontSize: 'var(--text-base)',
+            }}
+          />
+          <span
+            aria-hidden="true"
+            style={{
+              font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)', color: 'var(--fg-4)',
+              padding: '3px 7px', borderRadius: 'var(--r-2xs)', boxShadow: 'inset 0 0 0 1px var(--line-soft)',
+            }}
+          >
+            ESC
+          </span>
+        </div>
+      </AskGlow>
 
       <div
         ref={listRef}
         id={LIST_ID}
         role="listbox"
         aria-label="Results"
-        className="ag-scroll"
-        style={{ maxHeight: 340, overflowY: 'auto', overscrollBehavior: 'contain', padding: 'var(--sp-3)' }}
+        className="ag-scroll ag-fade"
+        style={{ position: 'relative', maxHeight: 340, overflowY: 'auto', overscrollBehavior: 'contain', padding: 'var(--sp-3)' }}
       >
+        <span ref={glidePad} className="ag-glide" aria-hidden="true" />
         {items.length === 0 && (
-          <div style={{ padding: 'var(--sp-8)', textAlign: 'center', font: 'var(--type-body)', color: 'var(--fg-4)' }}>
-            {emptyText}
-          </div>
+          <LitLine
+            as="div"
+            text={emptyText ?? (query.trim() === ''
+              ? 'No matches.'
+              : `Nothing matches **“${litSafe(query.trim())}”**. Try **a project**, **a task** or **a screen**.`)}
+            style={{ padding: 'var(--sp-8)', textAlign: 'center', font: 'var(--type-body)', color: 'var(--fg-4)' }}
+          />
         )}
         {items.map((c, i) => {
           const lit = i === at;
@@ -191,6 +225,7 @@ export function CommandPalette({
               key={c.value}
               id={`${LIST_ID}-${i}`}
               data-index={i}
+              data-peek={c.peek}
               type="button"
               role="option"
               aria-selected={lit}
@@ -200,18 +235,20 @@ export function CommandPalette({
               onMouseMove={() => { if (!lit) setSel(i); }}
               onClick={() => onRun(c)}
               style={{
+                position: 'relative', zIndex: 1,
                 display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
                 width: '100%', minHeight: 46, padding: 'var(--sp-2) var(--sp-5)',
                 border: 0, textAlign: 'left', cursor: 'pointer',
                 borderRadius: 'var(--r-sm)',
-                background: lit ? 'oklch(1 0 0 / 0.10)' : 'transparent',
+                /* The lit row's fill is the gliding pad (note 6). */
+                background: 'transparent',
                 color: lit ? 'var(--fg-1)' : 'var(--fg-2)',
                 font: 'var(--type-body)',
-                transition: 'background var(--dur-instant) var(--ease-glass), color var(--dur-instant) var(--ease-glass)',
+                transition: 'color var(--dur-instant) var(--ease-glass)',
               }}
             >
               {c.icon && (
-                <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', color: lit ? 'var(--accent)' : 'var(--fg-4)' }}>
+                <span aria-hidden="true" style={{ display: 'flex', flex: '0 0 auto', color: lit ? 'var(--job-lime)' : 'var(--fg-4)' }}>
                   {c.icon}
                 </span>
               )}
@@ -228,6 +265,7 @@ export function CommandPalette({
                   </span>
                 )}
               </span>
+              {c.keys && <KeyCaps keys={c.keys} />}
               {c.group && (
                 <span
                   style={{

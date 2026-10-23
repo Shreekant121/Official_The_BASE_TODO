@@ -79,7 +79,9 @@
  * old-design select and it was UI-18's, so pointing this screen at a new one
  * would have put a second design system back on the screen that item existed
  * to finish. **UI-18 rebuilt it**, so the bar and the control inside it are
- * now one material.
+ * now one material. **29-1P6a replaced it** with one Move ▾ menu, when the
+ * bar became one pill that splits into Move, Done and Delete
+ * (`project/SelectionBar.tsx`, idea 76).
  *
  * V3 (V3-3, step 7) — THE BOARD IS ON V3. Design: `design-system/Project.dc.html`,
  * the file the bundle's README says he had open when he exported. The whole
@@ -102,12 +104,42 @@
  *     the emerald mass over this board, and V3's glass is clear enough that it
  *     needs something behind it to bend.
  * The card itself took the rest — see "V3" at the top of `project/TaskRow.tsx`.
+ *
+ * OPT-6 (his BASE list, 2026-10-06) — THE PAGE'S HEADER IS ONE FROZEN ISLAND.
+ * Much of the above is history now; his words were *"Remove the cover Image
+ * view… keep the island… make it freeze so it stays when we scroll including
+ * the back button the directory"*, and he picked the breadcrumb going INTO the
+ * island over freezing the breadcrumb alone. So, on the page only (a pane keeps
+ * its slim header and its toolbar exactly as they were):
+ *   - no cover strip — Home's card is where the picture is seen — and the glyph
+ *     tile sits beside the name instead of hanging off the cover;
+ *   - Back, `Projects / … / name`, Select and ⋯ are the island's top row, and
+ *     the whole island is `position: sticky`. The page's scroller has no top
+ *     padding for that reason (a sticky box sticks inside the padding, and rows
+ *     showed through the gap — PaneHeader's lesson); the island's margin is it;
+ *   - the ring is glowing "40% done" text in done's lime, the lists stat and
+ *     the description are gone ("that is for to be seen on home");
+ *   - Select is a round icon on the island, and the toolbar's New task is gone
+ *     ("useless and I don't use it") — `n` and each list's own + still add.
+ *
+ * 29-1P9b (his picks, 2026-10-14) — "40% done" IS A BUTTON. Beside it the day
+ * the project lands at the last two weeks' pace, against its Finish by; a
+ * press folds the milestones and the chart down inside the island
+ * (`project/ProjectForecast.tsx`, built on the first open, open or shut per
+ * project on this device). A pane's ring became "40%" in the same lime.
+ *
+ * BUILD-18 (audit D1, 2026-10-15) — THE FILTER V3 LEFT OUT IS BUILT. A Filter
+ * tasks box and All / To do / In progress / Done chips on the toolbar (a
+ * pane's line below it), narrowing the board, the table and the Backburner at
+ * once; a list with nothing matching steps off while a filter is on. The rule
+ * is `lib/boardFilter.ts`. Still no Table view and no "Review" chip.
  */
-import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode, type RefObject } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Activity, Fragment, useState, useEffect, useMemo, useRef, useCallback, type ReactNode, type RefObject } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useRememberedState } from '../lib/useRememberedState';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useStore, projectValueINR, formatINR, isTaskLocked, type Task } from '../store/useStore';
+import { useStore, projectValueINR, formatINR, isTaskLocked, type Project, type Task, type TaskList } from '../store/useStore';
+import { withoutUndo } from '../store/undoGate';
 import { useAuth } from '../contexts/AuthContext';
 import { builtInShortcut, useShortcuts } from '../contexts/ShortcutsContext';
 import { makeShareId, shareList, shareProject, shareUrl, type ShareSettings } from '../lib/publicShare';
@@ -116,27 +148,53 @@ import TaskDetailPanel from '../components/TaskDetailPanel';
 import ShareModal from '../components/ShareModal';
 import OutsourcedWorkPanel from '../components/OutsourcedWorkPanel';
 import CreateProjectModal from '../components/CreateProjectModal';
+import ProjectGrid from '../components/ProjectGrid';
+import OpenBesideDialog from '../components/OpenBesideDialog';
+import { OpenProjectContext, useOpenProject } from '../components/project/openProject';
+import { BESIDE_PARAM, closePanePath, replacePanePath, resolveSplit } from '../lib/splitView';
+import { buildProjectTree, goesWith, subtreeTasks } from '../lib/projectTree';
+import { ignoreSentence } from '../lib/ignoredWork';
+import { usePriorityScores } from '../store/usePriorityScores';
+import { IgnoredMark } from '../components/task-fields/TaskMarks';
+import { useIgnoreItems } from '../components/task-fields/ignoreMenu';
+import { useWorkedItems } from '../components/task-fields/workedMenu';
 import { isOverlayOpen } from '../lib/useOverlayDismiss';
-import CustomDropdown from '../components/CustomDropdown';
-import AppIcon from '../components/AppIcon';
+import { SelectionBar } from '../components/project/SelectionBar';
+import { cheerTick } from '../lib/tickCheer';
+import { dustSelector } from '../lib/dust';
+import ProjectIcon from '../components/ProjectIcon';
 import BulkAddInput from '../components/BulkAddInput';
 import ListColumn from '../components/project/ListColumn';
 import ListTable from '../components/project/ListTable';
 import { TaskDragGhost } from '../components/project/TaskRow';
 import { foldFinishedRepeats, minutesLabel, workLeftMinutes } from '../components/project/derive';
-import { SortableBoard, SortableRow } from '../components/SortableList';
+import { SortableBoard, SortableBoardHost, SortableRow, type SortableRowState } from '../components/SortableList';
+import { usePullForBackburner } from '../components/project/usePullForBackburner';
+import { useJumpBackRecorder } from '../components/project/jumpBack';
+import { useJumpBackStore } from '../store/useJumpBackStore';
+import { BACKBURNER_TITLE, splitParked } from '../lib/backburner';
+import { BlockWires } from '../components/project/BlockWires';
+import { DENSITIES, DensityContext, type Density } from '../components/project/density';
+import { asGroupBy, type GroupBy } from '../lib/regroup';
+import { rememberRows } from '../components/project/regroupGlide';
 import { mergeVisibleOrder } from '../lib/boardDrop';
+import { boardFilter, isFiltering, noMatchSentence, passesBoardFilter, showsFinished, STATUS_CHIPS, type StatusChip } from '../lib/boardFilter';
+import { ForecastButton, ForecastPanel } from '../components/project/ProjectForecast';
+import { useForecast } from '../components/project/useForecast';
 import { parseBulkLines } from '../lib/bulkAdd';
 import { useNavModel } from '../components/navModel';
 import { BrandMark, RailMark } from '../components/BrandMark';
 import { Z } from '../lib/zLayers';
+import { cue } from '../lib/sound';
 import AIPanelHost from '../components/AIPanelHost';
+import QuickCaptureFab from '../components/QuickCaptureFab';
 import { AIPanelDock, AI_SUBJECT_RIM } from '../ui/overlay/AIPanel';
+import { AskAtlasBar } from '../ui/overlay/AskAtlasBar';
 import type { PanelSubjectRef } from '../lib/aiPanel';
 import { devPanelFixture } from '../lib/devPanelFixture';
 import {
-  Button, CoverImage, Icon, IconButton, MiniNav, MorphMenu, ProgressRing, SegmentedControl, Switch,
-  useMedia, V3Scope, WIDE,
+  BlurAcross, Button, EmptyDrawing, GelButton, Icon, Input, Lit, LitLine, MetaKicker, MiniNav, MorphMenu, SegmentedControl, SoftButton,
+  SoftIconButton, SoftToggle, Switch, useMedia, useMotion, V3Scope, WhiteButton, WIDE, type IconName,
 } from '../ui';
 
 /** Shared by every inline add field on this screen — a line of glass, never a
@@ -156,6 +214,16 @@ const INLINE_FIELD = {
   letterSpacing: 'var(--tracking-ui)',
   color: 'var(--fg-1)',
 } as const;
+
+/** 29-1P9a (idea 158): the list view's three groupings, as the Group menu lists them. */
+const GROUP_CHOICES: readonly (readonly [GroupBy, string, IconName])[] = [
+  ['list', 'By list', 'list'],
+  ['due', 'By due date', 'calendar'],
+  ['score', 'By Score', 'flame'],
+];
+/** What the Group button says it is showing ("Group: Due date"). */
+const GROUP_SHORT: Record<GroupBy, string> = { list: 'List', due: 'Due date', score: 'Score' };
+const GROUP_NAME: Record<GroupBy, string> = { list: 'list', due: 'due date', score: 'Score' };
 
 /** The pane the quick-add strip and both new-list forms sit in. */
 const FORM_PANE = {
@@ -224,22 +292,21 @@ function InlineForm({
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-3)' }}>
         <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button
+        {/* The form's confirm: solid white since 29-1P2. */}
+        <WhiteButton
           size="sm"
-          variant="tint"
-          tone="accent"
           disabled={!value.trim()}
           onClick={() => onSubmitLines(parseBulkLines(value))}
-          iconLeft={<Icon name="plus" size={14} />}
+          icon={<Icon name="plus" size={14} />}
         >
           {commit}
-        </Button>
+        </WhiteButton>
       </div>
     </div>
   );
 }
 
-/** One reading in the masthead's stats strip: a number and what it counts. */
+/** One reading in the island's stats strip: a number and what it counts. */
 function Stat({ value, label }: { value: string; label: ReactNode }) {
   return (
     <span style={{ display: 'grid', gap: 2 }}>
@@ -253,17 +320,41 @@ function StatRule() {
   return <span aria-hidden="true" style={{ width: 1, height: 34, background: 'var(--line-faint)', flex: '0 0 auto' }} />;
 }
 
-// ─── ProjectView (main page) ──────────────────────────────────────────────────
+// ─── ProjectBoard — one project's board, as the page or as one of two ─────────
 
-export default function ProjectView() {
-  const { projectId } = useParams<{ projectId: string }>();
+interface ProjectBoardProps {
+  projectId: string;
+  /**
+   * `page` is the board as it has always been: one frozen island holding the
+   * breadcrumb and the masthead (OPT-6), and a selection bar fixed to the window. `pane` is one of
+   * two boards side by side (BIG-5): a slim one-line header in their place —
+   * his call — and a selection bar held inside the pane.
+   */
+  layout: 'page' | 'pane';
+  /** The AI panel's subject, when it is about something on this board. */
+  ask: PanelSubjectRef | null;
+  onToggleAsk: (projectId: string, ref: PanelSubjectRef) => void;
+  /** Whether `n` and `l` add to this board — only one of two can own them. */
+  shortcutsActive: boolean;
+  /** Pane only: the ✕ that closes this board and leaves the other. */
+  onClose?: () => void;
+  /** Pane only: where the ⋯ menu's archive and delete leave to. */
+  onGone?: () => void;
+  /** The left-hand pane only, on a wide window: the button that hides the side nav. */
+  navToggle?: NavToggle;
+}
+
+function ProjectBoard({ projectId, layout, ask, onToggleAsk, shortcutsActive, onClose, onGone, navToggle }: ProjectBoardProps) {
   const navigate = useNavigate();
   const wide = useMedia(WIDE);
-  const nav = useNavModel();
+  /* Where the capture + rises over the nav (`QuickCaptureFab`), so the Ask
+     Atlas bar stops short of it. */
+  const underTheBar = useMedia('(max-width: 559px)');
+  const pane = layout === 'pane';
 
   const { user } = useAuth();
   const {
-    projects, updateProject, deleteProject,
+    projects, addProject, updateProject, deleteProject,
     taskLists, backlogTasks,
     addTaskList, renameTaskList, deleteTaskList, reorderTaskLists, updateTaskList,
     addBacklogTask,
@@ -272,10 +363,57 @@ export default function ProjectView() {
   } = useStore();
 
   const project = projects.find((p) => p.id === projectId);
+
+  /* BIG-2 — where this project sits and what it holds. The path back runs
+     through its parents, and the way out of it is up one level, not Home. */
+  const tree = useMemo(() => buildProjectTree(projects), [projects]);
+  const ancestors = useMemo(() => tree.ancestorsOf(projectId), [tree, projectId]);
+  const parent = ancestors.length > 0 ? ancestors[ancestors.length - 1] : undefined;
+  const insideCount = tree.childrenOf(projectId).length;
+  const subtreeCount = tree.subtreeIds(projectId).length - 1;
+  const goUp = () => navigate(parent ? `/project/${parent.id}` : '/');
+  /* After archiving or deleting it: up one level as the page, or this board
+     closes and the other stays as a pane. */
+  const leave = onGone ?? goUp;
+  /* BIG-3 — ignored by its own switch, or by a mega project it sits in. The
+     masthead says which; the menu offers the switch only when it is this one. */
+  const ignoreReason = usePriorityScores().ignored.projectReason(projectId);
+  const ignoreItems = useIgnoreItems({ kind: 'project', id: projectId }, project?.name ?? '');
+  const workedItems = useWorkedItems({ kind: 'project', id: projectId });
+  const [creatingInside, setCreatingInside] = useState(false);
+  const [editingInsideId, setEditingInsideId] = useState<string | null>(null);
+  const [openingBeside, setOpeningBeside] = useState(false);
+  const editingInside = projects.find((p) => p.id === editingInsideId);
   const projectLists = useMemo(
     () => taskLists.filter((l) => l.projectId === projectId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [taskLists, projectId]
   );
+  /*
+   * 29-1P6c, idea 91 — THE PROJECT'S OWN BACKBURNER (his call, 2026-10-12).
+   * A list of this project named "Backburner" (`lib/backburner.ts`) is not on
+   * the board: it waits behind a pull from the top (a finger), or "Show
+   * Backburner" in the project's menu (a mouse), and then sits above the
+   * board as a board of its own in the same drag host, so a task drags in
+   * and out of it. Asking for it when there is none makes one, empty. Every
+   * count and roll-up still reads `projectLists`: a parked task is still
+   * this project's. Opens closed on every visit, as Telegram's archive does.
+   */
+  const { board: boardLists, parked: parkedLists } = useMemo(() => splitParked(projectLists), [projectLists]);
+  const [parkedOpen, setParkedOpen] = useState(false);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const toggleParked = useCallback(() => {
+    if (!parkedOpen && parkedLists.length === 0) addTaskList(BACKBURNER_TITLE, projectId);
+    setParkedOpen(!parkedOpen);
+  }, [parkedOpen, parkedLists.length, addTaskList, projectId]);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const { pill: pullPill } = usePullForBackburner(scrollerRef, pageRef, {
+    enabled: true, open: parkedOpen, onPulled: toggleParked,
+  });
+  /* 29-1P8c, idea 154: where he is here, for Home's Jump back in — and the
+     landing when he comes back by it. */
+  useJumpBackRecorder(projectId, scrollerRef);
+  const motionTokens = useMotion();
 
   // Share ids of every *outsourcing* share this project exposes (project itself,
   // its lists, and any individually-shared task in it) — the owner's approval
@@ -296,7 +434,12 @@ export default function ProjectView() {
   }, [project, projectLists, backlogTasks]);
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [editingProject, setEditingProject] = useState(false);
+  /* A task opened is where he is (Jump back in). */
+  const openedId = selectedTask?.id;
+  const openedList = selectedTask?.listId;
+  useEffect(() => {
+    if (openedId) useJumpBackStore.getState().taskTouched(projectId, { id: openedId, listId: openedList });
+  }, [openedId, openedList, projectId]);
   const [shareListId, setShareListId] = useState<string | null>(null);
   const [projectShareOpen, setProjectShareOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -315,12 +458,55 @@ export default function ProjectView() {
    * of finished work is the thing he asked to stop.
    */
   const [view, setView] = useRememberedState<'board' | 'list'>(
-    `base.project.view.${projectId ?? 'none'}`, 'board',
+    `base.project.view.${projectId}`, 'board',
   );
   const [showDone, setShowDone] = useRememberedState(
-    `base.project.showDone.${projectId ?? 'none'}`, false,
+    `base.project.showDone.${projectId}`, false,
   );
-  const [bulkMoveListId, setBulkMoveListId] = useState('');
+  /* BUILD-18 (audit D1): the Filter tasks box and the status chips. Never
+     remembered (`lib/boardFilter.ts` says why), and dropped when a pane is
+     handed another project rather than carried into it. */
+  const [filterState, setFilterState] = useState<{ projectId: string; text: string; status: StatusChip }>(
+    { projectId, text: '', status: 'all' },
+  );
+  const filterText = filterState.projectId === projectId ? filterState.text : '';
+  const filterStatus = filterState.projectId === projectId ? filterState.status : 'all';
+  const setFilterText = (text: string) => setFilterState({ projectId, text, status: filterStatus });
+  const setFilterStatus = (status: StatusChip) => setFilterState({ projectId, text: filterText, status });
+  const clearFilter = () => setFilterState({ projectId, text: '', status: 'all' });
+  const filter = useMemo(() => boardFilter(filterText, filterStatus), [filterText, filterStatus]);
+  const filtering = isFiltering(filter);
+  /* 29-1P7c (idea 159): how much each card shows, per project like the
+     view, on this device only. */
+  const [density, setDensity] = useRememberedState<Density>(
+    `base.project.density.${projectId}`, 'comfortable',
+  );
+  /* 29-1P9a (idea 158): the list view By list, By due date or By Score, and
+     (157) the lists folded into spines on the board — per project, on this
+     device, like the two above (his call, 2026-10-14). */
+  const [groupByRaw, setGroupBy] = useRememberedState<GroupBy>(
+    `base.project.groupBy.${projectId}`, 'list',
+  );
+  const groupBy = asGroupBy(groupByRaw);
+  const [foldedIds, setFoldedIds] = useRememberedState<string[]>(
+    `base.project.folded.${projectId}`, [],
+  );
+  /* 29-1P9b (his pick C): the milestones and the chart folded down behind
+     "40% done", open or shut per project on this device. Built on the first
+     open and kept (`forecastBuiltFor`), never at page load. */
+  const [forecastOpen, setForecastOpen] = useRememberedState(
+    `base.project.forecastOpen.${projectId}`, false,
+  );
+  const [forecastBuiltFor, setForecastBuiltFor] = useState<string | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const regroup = (next: GroupBy) => {
+    if (next === groupBy) return;
+    rememberRows(tableRef.current);
+    setGroupBy(next);
+  };
+  const toggleFold = (listId: string) => setFoldedIds((ids) => (
+    Array.isArray(ids) && ids.includes(listId) ? ids.filter((id) => id !== listId) : [...(Array.isArray(ids) ? ids : []), listId]
+  ));
   const [addingList, setAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [quickTaskTitle, setQuickTaskTitle] = useState('');
@@ -329,31 +515,14 @@ export default function ProjectView() {
   const newListRef = useRef<HTMLTextAreaElement>(null);
 
   /*
-   * BUILD-4 — WHAT THE AI PANEL IS ABOUT, IF IT IS OPEN.
-   *
-   * Held with the project it was opened in, because this component stays
-   * mounted when he moves from one project to another: a panel about a list
-   * in the last project must not follow him into this one. Tapping the same
-   * subject's button again closes it — the button is a toggle, and "Ask" on
-   * the thing already being asked about has no other sensible meaning.
+   * BUILD-4 — WHAT THE AI PANEL IS ABOUT, IF IT IS OPEN. The page holds it
+   * (BIG-5: with two boards, it decides which pane the panel takes), and hands
+   * each board the subject only when it is one of that board's own.
    */
-  const [askState, setAskState] = useState<{ projectId: string | undefined; ref: PanelSubjectRef } | null>(() => {
-    /* The harness's way in — `lib/devPanelFixture.ts`. */
-    if (import.meta.env.DEV) {
-      const fixture = devPanelFixture();
-      if (fixture && fixture.ref.kind !== 'score') return { projectId, ref: fixture.ref };
-    }
-    return null;
-  });
-  const ask = askState && askState.projectId === projectId ? askState.ref : null;
-  const closeAsk = useCallback(() => setAskState(null), []);
-  const toggleAsk = useCallback((ref: PanelSubjectRef) => {
-    setAskState((prev) =>
-      prev && prev.projectId === projectId && prev.ref.kind === ref.kind && prev.ref.id === ref.id
-        ? null
-        : { projectId, ref },
-    );
-  }, [projectId]);
+  const toggleAsk = useCallback(
+    (ref: PanelSubjectRef) => onToggleAsk(projectId, ref),
+    [onToggleAsk, projectId],
+  );
   const askTask = useCallback((task: Task) => toggleAsk({ kind: 'task', id: task.id }), [toggleAsk]);
   const askList = useCallback((listId: string) => toggleAsk({ kind: 'list', id: listId }), [toggleAsk]);
   const boardAsk = ask && (ask.kind === 'task' || ask.kind === 'list') ? { kind: ask.kind, id: ask.id } : null;
@@ -389,10 +558,26 @@ export default function ProjectView() {
   // into another one. They *have* to share a context rather than sit in two —
   // a task dropped on a different list has to collide with droppables that
   // list registered, and two contexts cannot see each other's.
-  const projectListIds = useMemo(() => projectLists.map((l) => l.id), [projectLists]);
+  const projectListIds = useMemo(() => boardLists.map((l) => l.id), [boardLists]);
+  /* 29-1P9a (157): only lists still on this board count; a list deleted or
+     moved away leaves its id behind in the remembered value, harmlessly. */
+  const folded = useMemo(
+    () => new Set((Array.isArray(foldedIds) ? foldedIds : []).filter((id) => projectListIds.includes(id))),
+    [foldedIds, projectListIds],
+  );
+  const anyFolded = folded.size > 0;
+  const parkedListIds = useMemo(() => parkedLists.map((l) => l.id), [parkedLists]);
+  /* `reorderTaskLists` keeps only the lists it is handed, like
+     `reorderBacklogTasks` keeps only the rows (see the note at the top). The
+     board hands it the lists it drew — never the project's own Backburner, and
+     while filtering (BUILD-18) not the lists with nothing matching — so the
+     order on screen is merged back into all of the project's lists first.
+     Before BUILD-18 a list dragged on a project with a Backburner dropped that
+     list out of the store. */
+  const allListIds = useMemo(() => projectLists.map((l) => l.id), [projectLists]);
   const reorderLists = useCallback((orderedIds: string[]) => {
-    if (projectId) reorderTaskLists(projectId, orderedIds);
-  }, [projectId, reorderTaskLists]);
+    reorderTaskLists(projectId, mergeVisibleOrder(allListIds, orderedIds));
+  }, [projectId, allListIds, reorderTaskLists]);
 
   // Each list's rows, in the order they are on screen. Hoisted out of the
   // render loop because the board needs the *whole* map, not one list at a
@@ -416,14 +601,46 @@ export default function ProjectView() {
   const { tasksByList, repeatCounts } = useMemo(() => {
     const byList: Record<string, Task[]> = {};
     const counts: Record<string, number> = {};
-    for (const [listId, listTasks] of Object.entries(tasksByListAll)) {
-      if (!showDone) { byList[listId] = listTasks.filter((t) => t.status !== 'completed'); continue; }
-      const folded = foldFinishedRepeats(listTasks);
+    const titles = new Map(projectLists.map((l) => [l.id, l.title]));
+    for (const [listId, everyRow] of Object.entries(tasksByListAll)) {
+      /* BUILD-18: the filter and the chips hide rows exactly as Show done
+         does — `mergeVisibleOrder` keeps the hidden ones' places on a drag. */
+      const title = titles.get(listId) ?? '';
+      const listTasks = everyRow.filter((t) => passesBoardFilter(t, title, filter, showDone));
+      if (!showsFinished(filter, showDone)) { byList[listId] = listTasks; continue; }
+      /* 29-1P4b, idea 55 "Lists make room" (his call, 2026-10-07): finished
+         rows sink below the open ones, in their own order, so a tick glides
+         its card to the bottom and the rest slide up — the card's `layout`
+         spring does the gliding. Only the DRAWING moves: the stored `order`
+         is untouched, so an untick glides it back to where it was. (A drag in
+         this column writes the visible order through `mergeVisibleOrder`,
+         which then keeps finished rows at the bottom — the order he saw.) */
+      const folded = foldFinishedRepeats(listTasks).sort(
+        (a, b) => Number(a.task.status === 'completed') - Number(b.task.status === 'completed'),
+      );
       byList[listId] = folded.map((r) => r.task);
       for (const r of folded) if (r.count > 1) counts[r.task.id] = r.count;
     }
     return { tasksByList: byList, repeatCounts: counts };
-  }, [tasksByListAll, showDone]);
+  }, [tasksByListAll, projectLists, filter, showDone]);
+
+  /* BUILD-18: while a filter is on, a list with nothing matching steps off the
+     board, so "only those tasks remain". Without one, every list is drawn as
+     before, empty or not. */
+  const { shownBoardLists, shownParkedLists } = useMemo(() => {
+    const keep = (lists: TaskList[]) => (filtering ? lists.filter((l) => (tasksByList[l.id]?.length ?? 0) > 0) : lists);
+    return { shownBoardLists: keep(boardLists), shownParkedLists: keep(parkedLists) };
+  }, [filtering, tasksByList, boardLists, parkedLists]);
+  const shownListIds = useMemo(() => shownBoardLists.map((l) => l.id), [shownBoardLists]);
+  const shownParkedIds = useMemo(() => shownParkedLists.map((l) => l.id), [shownParkedLists]);
+  /** How many tasks the box left, each once (a task shared into two lists is one). */
+  const matchCount = useMemo(() => {
+    const ids = new Set<string>();
+    for (const list of [...shownBoardLists, ...(parkedOpen ? shownParkedLists : [])]) {
+      for (const t of tasksByList[list.id] ?? []) ids.add(t.id);
+    }
+    return ids.size;
+  }, [shownBoardLists, shownParkedLists, parkedOpen, tasksByList]);
 
   const taskIdsByList = useMemo(() => {
     const byList: Record<string, string[]> = {};
@@ -432,6 +649,16 @@ export default function ProjectView() {
     }
     return byList;
   }, [tasksByList]);
+  /* Each of the two boards (the Backburner's and the main one) hands the
+     drag host only its own lists' rows. */
+  const { boardItems, parkedItems } = useMemo(() => {
+    const parkedSet = new Set(parkedListIds);
+    const boardItems: Record<string, string[]> = {};
+    const parkedItems: Record<string, string[]> = {};
+    for (const [listId, ids] of Object.entries(taskIdsByList)) (parkedSet.has(listId) ? parkedItems : boardItems)[listId] = ids;
+    return { boardItems, parkedItems };
+  }, [taskIdsByList, parkedListIds]);
+  const keepParkedOrder = useCallback(() => {}, []);
 
   /**
    * A reorder of the rows you can SEE, written back as a reorder of all of
@@ -507,23 +734,45 @@ export default function ProjectView() {
        there are two rows. Un-ticking is never refused: `isTaskLocked` returns
        false for a completed task, and reopening one is how you undo a mistake. */
     if (!done && isTaskLocked(backlogTasks, task)) return;
+    /* 29-1P3, 118: ticking a list's last open task lands the run of ticks on a
+       chord. The tick itself sounded in `Tick`. */
+    if (!done && backlogTasks.every((t) => t.id === task.id || t.listId !== task.listId || t.status === 'completed')) {
+      cue('cleared');
+    }
+    /* A task ticked is where he is (Jump back in); un-ticking is not. */
+    if (!done) useJumpBackStore.getState().taskTouched(projectId, { id: task.id, listId: task.listId });
     updateBacklogTask(task.id, done
       ? { status: 'needsAction', completedAt: undefined }
       : { status: 'completed', completedAt: Date.now() });
-  }, [backlogTasks, updateBacklogTask]);
+  }, [backlogTasks, updateBacklogTask, projectId]);
 
-  const handleBulkMove = () => {
-    if (!bulkMoveListId) return;
-    const targetList = taskLists.find((l) => l.id === bulkMoveListId);
+  const handleBulkMove = (listId: string) => {
+    const targetList = taskLists.find((l) => l.id === listId);
     selectedIds.forEach((id) => {
       updateBacklogTask(id, {
-        listId: bulkMoveListId,
+        listId,
         listName: targetList?.title ?? '',
       });
     });
     setSelectedIds(new Set());
     setSelectMode(false);
-    setBulkMoveListId('');
+  };
+
+  /* 29-1P6a, his call: the bar's Done ticks every picked task, each through
+     the one status path a row's own tick uses, so repeats still spawn. A
+     locked task is left as it is, as its own tick would leave it; each one
+     ticked floats its +1 from its own box, as a pressed box does. */
+  const handleBulkDone = () => {
+    const now = Date.now();
+    const ticking = backlogTasks.filter((t) => selectedIds.has(t.id) && t.status !== 'completed' && !isTaskLocked(backlogTasks, t));
+    if (ticking.length > 0) cue('done');
+    for (const t of ticking) {
+      const row = document.querySelector(dustSelector('task', t.id));
+      cheerTick(row?.querySelector('.ag-check__box') ?? row ?? null);
+      updateBacklogTask(t.id, { status: 'completed', completedAt: now });
+    }
+    setSelectedIds(new Set());
+    setSelectMode(false);
   };
 
   const handleBulkDelete = () => {
@@ -595,7 +844,6 @@ export default function ProjectView() {
 
   /** Bulk-capable: one title per line creates one list each, in order. */
   const handleAddListLines = (lines: string[]) => {
-    if (!projectId) return;
     lines.forEach((title) => addTaskList(title, projectId));
     setNewListTitle('');
     setAddingList(false);
@@ -603,11 +851,11 @@ export default function ProjectView() {
 
   /** Bulk-capable: one title per line creates one task each, in order. */
   const handleQuickAddTaskLines = (lines: string[]) => {
-    if (!projectId || lines.length === 0) { setQuickTaskActive(false); setQuickTaskTitle(''); return; }
+    if (lines.length === 0) { setQuickTaskActive(false); setQuickTaskTitle(''); return; }
 
     let targetListId: string;
-    if (projectLists.length > 0) {
-      targetListId = projectLists[0].id;
+    if (boardLists.length > 0) {
+      targetListId = boardLists[0].id;
     } else {
       const newList = addTaskList('Tasks', projectId);
       targetListId = newList.id;
@@ -627,88 +875,239 @@ export default function ProjectView() {
     setTimeout(() => newListRef.current?.focus(), 50);
   };
 
-  useShortcuts('project-view', [
+  useShortcuts('project-view', shortcutsActive ? [
     { ...builtInShortcut('new-task'), handler: openQuickAdd },
     { ...builtInShortcut('new-list'), handler: openAddList },
-  ]);
+  ] : []);
 
-  // What the masthead's stats strip reads out. Derived exactly the way
-  // `ProjectCard` derives it on Home, cross-links included, so the two agree
-  // about how big a project is.
+  // The tasks on this board, cross-links included — what Select picks from.
   const projectTasks = useMemo(() => {
     const listIdSet = new Set(projectLists.map((l) => l.id));
     return backlogTasks.filter(
       (t) => !t.parent && (listIdSet.has(t.listId ?? '') || (t.sharedListIds ?? []).some((id) => listIdSet.has(id)))
     );
   }, [projectLists, backlogTasks]);
-  const completedCount = projectTasks.filter((t) => t.status === 'completed').length;
-  const progress = projectTasks.length > 0 ? Math.round((completedCount / projectTasks.length) * 100) : 0;
-  const projectINR = project ? projectValueINR(taskLists, backlogTasks, project.id) : 0;
-  const minutesLeft = workLeftMinutes(projectTasks);
+  // What the masthead's stats strip reads out: the whole tree's, derived
+  // exactly the way `ProjectCard` derives it on Home (BIG-2), so the two agree
+  // about how big a project is. For a project with nothing inside it this is
+  // `projectTasks` again.
+  const treeTasks = useMemo(
+    () => subtreeTasks(tree, taskLists, backlogTasks, projectId),
+    [tree, taskLists, backlogTasks, projectId],
+  );
+  const completedCount = treeTasks.filter((t) => t.status === 'completed').length;
+  const progress = treeTasks.length > 0 ? Math.round((completedCount / treeTasks.length) * 100) : 0;
+  const projectINR = tree.subtreeIds(projectId).reduce((sum, id) => sum + projectValueINR(taskLists, backlogTasks, id), 0);
+  const minutesLeft = workLeftMinutes(treeTasks);
+  const forecast = useForecast(project?.finishBy, treeTasks);
 
   const picked = useMemo(
     () => projectTasks.filter((t) => selectedIds.has(t.id)),
     [projectTasks, selectedIds]
   );
 
-  if (!project) {
-    return (
-      <V3Scope>
-      <div
-        className="ag-page"
-        /* The gutter is on the inner block rather than here, because an inline
-           `padding` on a `.ag-page` overrides the system-bar inset
-           `screens.css` puts on every screen root (APP-2) and this was the one
-           screen that carried one. */
-        style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}
-      >
-        <div style={{ display: 'grid', gap: 'var(--sp-6)', justifyItems: 'center', textAlign: 'center', padding: 'var(--gutter-page-sm)' }}>
-          <p style={{ font: 'var(--type-body)', color: 'var(--fg-3)' }}>Project not found.</p>
-          <Button onClick={() => navigate('/')} iconLeft={<Icon name="arrow-left" size={16} />}>
-            Go home
-          </Button>
-        </div>
+  if (!project) return null;
+
+  /* The project's own menu, which this screen never had — sharing
+     and deleting a project could only be reached from Home's card.
+     Delete arms in place, as everywhere else in the app. */
+  const projectMenu = (
+    <MorphMenu
+      align="end"
+      width={256}
+      portal
+      zIndex={Z.dropdown}
+      trigger={
+        <SoftIconButton label={`Actions for ${project.name}`}>
+          <Icon name="ellipsis" size={18} />
+        </SoftIconButton>
+      }
+      header={{
+        title: project.name,
+        meta: [
+          ...(subtreeCount > 0 ? [`${subtreeCount} project${subtreeCount === 1 ? '' : 's'}`] : []),
+          `${projectLists.length} list${projectLists.length === 1 ? '' : 's'}`,
+          `${treeTasks.length} task${treeTasks.length === 1 ? '' : 's'}`,
+          projectINR > 0 ? formatINR(projectINR) : 'no value',
+        ].join('  ·  '),
+      }}
+      items={[
+        /* BIG-5 — the masthead's Ask button, which a pane has no room for. */
+        ...(pane ? [{
+          value: 'ask',
+          label: askingProject ? 'Close the AI panel' : 'Ask AI about this project',
+          icon: <Icon name="sparkles" size={18} />,
+          onSelect: () => toggleAsk({ kind: 'project', id: project.id }),
+        }] : []),
+        {
+          value: 'share',
+          label: 'Share project',
+          icon: <Icon name="share-2" size={18} />,
+          meta: project.shortUrlKeyword ? <Icon name="link" size={14} /> : undefined,
+          onSelect: () => { void handleShareProject(); },
+        },
+        /* 29-1P6c, idea 91: the pull-down's laptop door. */
+        {
+          value: 'backburner',
+          label: parkedOpen ? 'Hide Backburner' : 'Show Backburner',
+          icon: <Icon name={parkedOpen ? 'chevron-up' : 'archive-restore'} size={18} />,
+          onSelect: toggleParked,
+        },
+        /* 29-1P7c (idea 159): a pane's densities, which its toolbar has no
+           room for (the page's are the switch beside Board / List). */
+        ...(pane ? [
+          { section: 'Cards show' },
+          ...([
+            ['comfortable', 'Everything', 'rows-2'],
+            ['compact', 'One line', 'align-justify'],
+            ['minimal', 'Titles only', 'equal'],
+          ] as const).map(([value, label, icon]) => ({
+            value: `density-${value}`,
+            label,
+            icon: <Icon name={icon} size={18} />,
+            meta: density === value ? <Icon name="check" size={14} /> : undefined,
+            onSelect: () => setDensity(value),
+          })),
+          /* 29-1P9a (158): the same reason, the list view's grouping. */
+          ...(view === 'list' ? [
+            { section: 'Group' },
+            ...GROUP_CHOICES.map(([value, label, icon]) => ({
+              value: `group-${value}`,
+              label,
+              icon: <Icon name={icon} size={18} />,
+              meta: groupBy === value ? <Icon name="check" size={14} /> : undefined,
+              onSelect: () => regroup(value),
+            })),
+          ] : []),
+          { divider: true as const },
+        ] : []),
+        /* No Edit project, New project inside or Move into… here (his BASE
+           list, 2026-10-06). Home's card menu still edits; nesting is a drag
+           on Home, and a mega project's row of cards keeps its dashed tile. */
+        /* BIG-5 — another board beside this one. A pane is already one
+           of two; closing its partner is how to pick another. */
+        ...(pane ? [] : [{
+          value: 'beside',
+          label: 'Open beside…',
+          icon: <Icon name="panel-right-open" size={18} />,
+          onSelect: () => setOpeningBeside(true),
+        }]),
+        ...ignoreItems,
+        ...workedItems,
+        { divider: true },
+        /* BUILD-11 — the card menu's pair, as `Archive.dc.html` asks. */
+        {
+          value: 'archive',
+          label: 'Archive project',
+          icon: <Icon name="archive" size={18} />,
+          confirm: {
+            label: `Archive ${project.name}?`,
+            hint: treeTasks.length === 0 && subtreeCount === 0
+              ? 'It leaves every board, count, queue, search and Atlas. Nothing ever purges it.'
+              : `It leaves every board, count, queue, search and Atlas. ${goesWith(subtreeCount, treeTasks.length)} go with it. Nothing ever purges it.`,
+            action: 'Archive',
+            onConfirm: () => { if (archiveProject(project.id)) leave(); },
+          },
+        },
+        {
+          value: 'delete',
+          label: 'Delete project',
+          icon: <Icon name="trash-2" size={18} />,
+          tone: 'danger',
+          confirm: {
+            label: `Delete ${project.name}?`,
+            hint: subtreeCount > 0
+              ? `${goesWith(subtreeCount, treeTasks.length)} go with it. Recoverable from Trash for 30 days.`
+              : projectLists.length === 0
+                ? 'Nothing in it yet.'
+                : `${projectLists.length} list${projectLists.length === 1 ? '' : 's'} and ${projectTasks.length} task${projectTasks.length === 1 ? '' : 's'} go with it. Recoverable from Trash for 30 days.`,
+            onConfirm: () => { deleteProject(project.id); leave(); },
+            /* A whole project and its tree: held, never tapped (29-1P2, his queue). */
+            hold: true,
+          },
+        },
+      ]}
+    />
+  );
+
+  /* BUILD-18 (audit D1) — the Filter tasks box and the status chips. The
+     design's Table view is not here (the list view is one) and nor is its
+     "Review", which is not a status BASE has. Escape in the box empties it. */
+  const filterBar = (
+    <>
+      <div style={{ flex: '1 1 200px', minWidth: 180, maxWidth: 300 }}>
+        <Input
+          size="sm"
+          block
+          type="search"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && filterText !== '') { e.stopPropagation(); setFilterText(''); }
+          }}
+          placeholder="Filter tasks"
+          aria-label={`Filter ${project.name}'s tasks`}
+          iconLeft={<Icon name="search" size={16} />}
+          suffix={filterText.trim() ? <MetaKicker tone="var(--fg-4)">{matchCount} match</MetaKicker> : undefined}
+        />
       </div>
-      </V3Scope>
-    );
-  }
+      <SegmentedControl
+        size="sm"
+        look="soft"
+        aria-label="Show tasks by status"
+        value={filterStatus}
+        onChange={(v) => { const chip = STATUS_CHIPS.find(([value]) => value === v); if (chip) setFilterStatus(chip[0]); }}
+        options={STATUS_CHIPS.map(([value, label]) => ({ value, label }))}
+      />
+    </>
+  );
+
+  /** One list's card on a board — the main one, or the Backburner's (`onTuck`), folded or open (157). */
+  const column = (list: TaskList, { isAnyDragging, isReceivingItem, handleProps }: SortableRowState, onTuck?: () => void, isFolded = false) => (
+    <ListColumn
+      listId={list.id}
+      listTitle={list.title}
+      taskLists={taskLists}
+      tasks={tasksByList[list.id] ?? []}
+      repeatCounts={repeatCounts}
+      selectedIds={selectedIds}
+      selectMode={selectMode}
+      onSelectTask={handleSelectTask}
+      onOpenTask={setSelectedTask}
+      onDeleteTask={handleDeleteTask}
+      onToggleTaskDone={handleToggleTaskDone}
+      onAddTask={(lid, titles, beforeTaskId) => titles.forEach((title) => {
+        const id = addBacklogTask(title, lid);
+        /* 29-1c1: dropped there by the floating +, so it lands there — in the
+           note's order, each in front of the same row. Placing a task he just
+           made is part of making it, not a move to undo. */
+        if (beforeTaskId) withoutUndo(() => moveTaskToList(id, lid, beforeTaskId));
+      })}
+      onDeleteList={(lid) => deleteTaskList(lid)}
+      onRenameList={(lid, title) => renameTaskList(lid, title)}
+      onShareList={(lid) => void handleShareList(lid)}
+      hasShortLink={!!list.shortUrlKeyword}
+      hidden={list.hiddenFromShare}
+      onToggleHidden={(lid) => updateTaskList(lid, { hiddenFromShare: !list.hiddenFromShare })}
+      listDragHandleProps={handleProps}
+      isListDragActive={isAnyDragging}
+      isReceivingDrop={isReceivingItem}
+      onAskTask={askTask}
+      onAskList={askList}
+      askSubject={boardAsk}
+      onTuck={onTuck}
+      folded={isFolded}
+      onToggleFold={onTuck ? undefined : toggleFold}
+    />
+  );
 
   return (
-    <V3Scope>
-    {/* `ag-page` rather than the old opaque `#050505` wrapper, so the grid
-       backdrop shows through and every pane above it has something to refract.
-
-       It was `ag-page--calm` until V3-3 — `project.html`'s own body class,
-       keeping `.ag-page`'s emerald pool off a dense board of columns (UI-29,
-       made visible at UI-36/37). `Project.dc.html` draws that pool over this
-       very board, and V3's glass needs something behind it to bend, so the
-       screen takes the full field exactly as Home did at V3-2.
-
-       The window itself never scrolls — the content column does, which is also
-       the ancestor dnd-kit auto-scrolls while a row is dragged. */}
-    <div className="ag-page" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
-      {wide && (
-        <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
-          <MiniNav
-            orientation="vertical"
-            items={nav.items}
-            value={nav.current}
-            onChange={nav.go}
-            lead={<RailMark />}
-          />
-        </div>
-      )}
-
-      {/* BUILD-4: the AI panel docks, it never covers. The board column is the
-          grid's first track and shrinks — to the top 44% on a narrow window,
-          to everything left of a 404px column on a wide one. */}
-      <AIPanelDock
-        dock={wide ? 'right' : 'bottom'}
-        panel={ask && (
-          <AIPanelHost subject={ask} dock={wide ? 'right' : 'bottom'} onClose={closeAsk} />
-        )}
-      >
+    <DensityContext.Provider value={density}>
       <div
+        ref={scrollerRef}
+        /* Two boards side by side hide their scrollbars (his ask, 2026-09-30):
+           two tracks down the middle of the screen read as a third column. */
+        className={pane ? 'ag-scroll' : undefined}
         style={{
           minWidth: 0,
           minHeight: 0,
@@ -717,28 +1116,69 @@ export default function ProjectView() {
           /* 112px on a narrow window is the floating nav bar's lane; the extra
              on both is the selection bar's. The nav steps aside while the AI
              panel is docked at the bottom, so the lane goes with it. */
-          padding: wide
-            ? 'var(--sp-9) var(--gutter-page) var(--sp-13)'
-            : `var(--sp-8) var(--gutter-page-sm) ${ask ? 'var(--sp-8)' : '112px'}`,
+          padding: pane
+            /* No top padding on a pane: a sticky header sticks inside the
+               padding, and the rows scrolling under it showed through the gap
+               above it. The header carries that space as a margin instead. */
+            ? `0 var(--sp-6) ${wide ? 'var(--sp-13)' : '112px'}`
+            /* Nor on the page since OPT-6, for the same reason: its island is
+               sticky too, and carries the top space as a margin. */
+            /* 29-1P15c: the page's last row also clears the Ask Atlas bar —
+               bottom-right on the laptop (24px up, 48px tall), and on a
+               narrow window in the lane over the nav, 48px more. */
+            : wide
+              ? '0 var(--gutter-page) calc(var(--sp-7) + 48px + var(--sp-7))'
+              : `0 var(--gutter-page-sm) ${ask ? 'var(--sp-8)' : 'calc(112px + 48px + var(--sp-5))'}`,
+          /* What the frozen island covers (140px on a tablet, measured), so a
+             card scrolled into view — the AI panel's subject, a row reached by
+             Tab — stops below it rather than under it. */
+          scrollPaddingTop: pane ? undefined : 156,
         }}
       >
-        <div style={{ width: '100%', maxWidth: 1320, margin: '0 auto' }}>
-          {/* ── Breadcrumb bar ─────────────────────────────────────────── */}
+        {pullPill}
+        <div ref={pageRef} style={{ width: '100%', maxWidth: 1320, margin: '0 auto' }}>
+          {pane ? (
+            <PaneHeader
+              project={project}
+              progress={progress}
+              parent={parent}
+              asking={askingProject}
+              ignoreNote={ignoreReason ? ignoreSentence(ignoreReason, { kind: 'project', id: project.id }) : null}
+              menu={projectMenu}
+              onClose={onClose}
+              navToggle={navToggle}
+            />
+          ) : (
+          /* ── The island (OPT-6) ──────────────────────────────────────── */
+          /* The breadcrumb and the masthead in one pane, frozen at the top of
+             the page's scroller — see OPT-6 at the top of this file. */
           <header
+            data-ai-subject={askingProject ? 'true' : undefined}
             style={{
-              display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
-              marginBottom: 'var(--sp-9)',
+              position: 'sticky', top: 0, zIndex: 5,
+              display: 'grid', gap: 'var(--sp-5)', minWidth: 0,
+              margin: `${wide ? 'var(--sp-9)' : 'var(--sp-8)'} 0 var(--gap-section)`,
+              padding: 'var(--sp-5) var(--sp-7) var(--sp-6) var(--sp-5)',
+              borderRadius: 'var(--r-lg)',
+              backgroundImage: 'var(--glass-fill-2)',
+              backdropFilter: 'var(--glass-bd-lg-refract)',
+              WebkitBackdropFilter: 'var(--glass-bd-lg)',
+              boxShadow: askingProject
+                ? `${AI_SUBJECT_RIM}, var(--glass-inner-1)`
+                : 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+              animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
             }}
           >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
             {/* The way out of a project, in the header rather than floating
                 over the page in the old design system. Home is where projects
                 live, and it is the rail's lit entry for the same reason. A
                 round glass button since V3-3 — the design's phone header
                 draws its Back exactly so, and Home's header buttons are the
-                same object. */}
-            <IconButton label="Back to projects" onClick={() => navigate('/')}>
+                same object. A round soft button since 29-1P2, as Home's. */}
+            <SoftIconButton label={parent ? `Back to ${parent.name}` : 'Back to projects'} onClick={goUp} style={{ flex: '0 0 auto' }}>
               <Icon name="arrow-left" size={18} />
-            </IconButton>
+            </SoftIconButton>
             {/* The rail carries the mark on a wide window (V3-3, as Home). */}
             {!wide && <BrandMark />}
             <button
@@ -752,6 +1192,23 @@ export default function ProjectView() {
               Projects
             </button>
             <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>/</span>
+            {/* BIG-2 — every project above this one, each a way back to it. */}
+            {ancestors.map((a) => (
+              <Fragment key={a.id}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/project/${a.id}`)}
+                  style={{
+                    border: 0, background: 'transparent', padding: 0, cursor: 'pointer',
+                    font: 'var(--type-label)', color: 'var(--fg-3)',
+                    minWidth: 0, maxWidth: '16ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {a.name}
+                </button>
+                <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>/</span>
+              </Fragment>
+            ))}
             <span
               style={{
                 font: 'var(--type-label)', color: 'var(--fg-1)',
@@ -763,240 +1220,122 @@ export default function ProjectView() {
 
             <span style={{ flex: 1 }} />
 
-            {/* The project's own menu, which this screen never had — sharing
-                and deleting a project could only be reached from Home's card.
-                Delete arms in place, as everywhere else in the app. */}
-            <MorphMenu
-              align="end"
-              width={256}
-              portal
-              zIndex={Z.dropdown}
-              trigger={
-                <IconButton label={`Actions for ${project.name}`}>
-                  <Icon name="ellipsis" size={18} />
-                </IconButton>
-              }
-              header={{
-                title: project.name,
-                meta: [
-                  `${projectLists.length} list${projectLists.length === 1 ? '' : 's'}`,
-                  `${projectTasks.length} task${projectTasks.length === 1 ? '' : 's'}`,
-                  projectINR > 0 ? formatINR(projectINR) : 'no value',
-                ].join('  ·  '),
-                badge: (
-                  <span
-                    style={{
-                      width: 7, height: 7, borderRadius: '50%', flex: '0 0 auto',
-                      background: project.color,
-                    }}
-                  />
-                ),
-              }}
-              items={[
-                {
-                  value: 'edit',
-                  label: 'Edit project',
-                  icon: <Icon name="square-pen" size={18} />,
-                  meta: <Icon name="chevron-right" size={16} />,
-                  onSelect: () => setEditingProject(true),
-                },
-                {
-                  value: 'share',
-                  label: 'Share project',
-                  icon: <Icon name="share-2" size={18} />,
-                  meta: project.shortUrlKeyword ? <Icon name="link" size={14} /> : undefined,
-                  onSelect: () => { void handleShareProject(); },
-                },
-                { divider: true },
-                /* BUILD-11 — the card menu's pair, as `Archive.dc.html` asks. */
-                {
-                  value: 'archive',
-                  label: 'Archive project',
-                  icon: <Icon name="archive" size={18} />,
-                  confirm: {
-                    label: `Archive ${project.name}?`,
-                    hint: projectTasks.length === 0
-                      ? 'It leaves every board, count, queue, search and Atlas. Nothing ever purges it.'
-                      : `It leaves every board, count, queue, search and Atlas. Its ${projectTasks.length} task${projectTasks.length === 1 ? '' : 's'} go with it. Nothing ever purges it.`,
-                    action: 'Archive',
-                    onConfirm: () => { if (archiveProject(project.id)) navigate('/'); },
-                  },
-                },
-                {
-                  value: 'delete',
-                  label: 'Delete project',
-                  icon: <Icon name="trash-2" size={18} />,
-                  tone: 'danger',
-                  confirm: {
-                    label: `Delete ${project.name}?`,
-                    hint: projectLists.length === 0
-                      ? 'Nothing in it yet.'
-                      : `${projectLists.length} list${projectLists.length === 1 ? '' : 's'} and ${projectTasks.length} task${projectTasks.length === 1 ? '' : 's'} go with it. Recoverable from Trash for 30 days.`,
-                    onConfirm: () => { deleteProject(project.id); navigate('/'); },
-                  },
-                },
-              ]}
-            />
-          </header>
+            {/* His ask: Select as an icon, up here on the island, rather than
+                a labelled button over the board. Pressed in while selecting. */}
+            <SoftToggle
+              round
+              aria-label="Select"
+              title={selectMode ? 'Stop selecting' : 'Select tasks'}
+              pressed={selectMode}
+              onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
+              style={{ flex: '0 0 auto' }}
+            >
+              <Icon name={selectMode ? 'check-check' : 'list-checks'} size={18} />
+            </SoftToggle>
+            {projectMenu}
+          </div>
 
-          <div style={{ display: 'grid', gap: 'var(--gap-section)' }}>
-            {/* ── Masthead ─────────────────────────────────────────────── */}
-            <section
-              data-ai-subject={askingProject ? 'true' : undefined}
+          {/* The name, and the facts beside it. They wrap under the name when
+              there is not room beside it. */}
+          <div
+            style={{
+              display: 'flex', flexWrap: 'wrap', alignItems: 'center',
+              columnGap: 'var(--sp-8)', rowGap: 'var(--sp-5)', minWidth: 0,
+              paddingLeft: 'var(--sp-2)',
+            }}
+          >
+            <div style={{ flex: '1 1 200px', display: 'grid', gap: 'var(--sp-3)', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
+                {/* The project's own icon, as on its card: white on frosted
+                    glass, the cover's colour behind (29-1P8a2, idea 150). It
+                    hung off the cover's bottom edge until OPT-6 took the
+                    cover away. */}
+                <ProjectIcon project={project} size={44} />
+                {/* May shorten on an upright tablet: the path above it always
+                    carries the whole name. */}
+                <h1
+                  title={project.name}
+                  style={{
+                    minWidth: 0,
+                    font: 'var(--type-metric)', letterSpacing: 'var(--tracking-display)',
+                    color: 'var(--fg-1)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {project.name}
+                </h1>
+                {/* The ✦ that sat here (BUILD-4) is the Ask Atlas bar at the
+                    foot of the board since 29-1P15c, his call. The island's
+                    rim still says when the panel is about the project. */}
+              </div>
+              {ignoreReason && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap', minWidth: 0 }}>
+                  <IgnoredMark title="Nothing on this board is scored, offered by Smart Start or Needs Attention, or has its deadline pushed." />
+                  <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-4)' }}>
+                    {ignoreSentence(ignoreReason, { kind: 'project', id: project.id })}
+                  </span>
+                </span>
+              )}
+            </div>
+
+            <div
               style={{
-                display: 'grid', gap: 'var(--sp-8)', padding: 'var(--pad-card-lg)',
-                borderRadius: 'var(--r-card-lg)',
-                backgroundImage: 'var(--glass-fill-2)',
-                backdropFilter: 'var(--glass-bd-lg-refract)',
-                WebkitBackdropFilter: 'var(--glass-bd-lg)',
-                boxShadow: askingProject
-                  ? `${AI_SUBJECT_RIM}, var(--glass-inner-1)`
-                  : 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
-                animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
+                /* May be narrower than its readings, so on a phone they wrap
+                   inside it rather than run off the island's edge. */
+                flex: '0 1 auto', minWidth: 0, display: 'flex', alignItems: 'center',
+                gap: 'var(--sp-6)', flexWrap: 'wrap',
               }}
             >
-              {/* The cover sits BEHIND the glass and renders at full colour.
-                  `.ag-cover`'s hairlines are what shows when there is no image
-                  — the same treatment `ProjectCard` gives an uncovered project,
-                  and the masthead and the card must stay in step or one cover
-                  looks like two different pictures. It was desaturated until
-                  FIX-3; see `ProjectCard.tsx` for why it no longer is, and do
-                  not reinstate the filter here alone. */}
-              <div style={{ position: 'relative' }}>
-                <div
-                  className="ag-cover"
-                  style={{
-                    /* 216px with a picture, 116 without (Shreekant,
-                       2026-09-23: "increase by 100"). It took Home's card shape
-                       for one commit (`27e26fe`, 3:1 — ~376px on a laptop) and
-                       he found that too big. The picture is cropped to fill
-                       it. With no picture the hatching stays at the old strip:
-                       a tall empty box only pushes the board down. */
-                    position: 'relative', height: project.imageUrl ? 216 : 116,
-                    overflow: 'hidden', borderRadius: 'var(--r-lg)',
-                    boxShadow: 'var(--glass-well-shadow), inset 0 0 0 1px var(--line-faint)',
-                  }}
-                >
-                  {/* Cropped to fill the strip, centred — his call over
-                      showing it whole with blurred sides. Home's card is
-                      where the whole picture is seen. */}
-                  {project.imageUrl && <CoverImage src={project.imageUrl} fit="crop" />}
-                </div>
-
-                {/* The project's own glyph — the one place an emoji is allowed
-                    to be an identity rather than a label. `ProjectCard`'s tile,
-                    hung over the cover's bottom edge as the mockup hangs it. */}
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: 'absolute', left: 'var(--sp-6)', bottom: -22,
-                    display: 'grid', placeItems: 'center', width: 56, height: 56,
-                    borderRadius: 'var(--r-md)',
-                    backgroundImage: 'var(--glass-fill-3)',
-                    backdropFilter: 'var(--glass-bd-md)',
-                    WebkitBackdropFilter: 'var(--glass-bd-md)',
-                    boxShadow: 'var(--glass-rim-2), var(--glass-cast-2)',
-                  }}
-                >
-                  <AppIcon icon={project.icon} size={26} />
-                </span>
-
-                {/* No "Change cover" here since FIX-9: Shreekant moved it into
-                    the edit sheet (⋯ → Edit project → Cover image), which
-                    already held it. A button on the photograph sat over the
-                    one picture he asked to see whole. */}
-              </div>
-
-              {/* The "PROJECT · 3 lists" row above the name is gone
-                  (Shreekant, 2026-09-23): the list count is one of the stats
-                  now, and Ask is a glass square beside the name. One row
-                  fewer in the masthead. */}
-              <div style={{ display: 'grid', gap: 'var(--sp-6)', minWidth: 0, paddingTop: 'var(--sp-5)' }}>
-                {/* Name and description on the left, the stats strip beside
-                    them on the right (Shreekant, 2026-09-23) — it used to be a
-                    row of its own under a hairline, which made the masthead a
-                    band taller for four numbers. It wraps under the name when
-                    there is not room beside it. */}
-                <div
-                  style={{
-                    display: 'flex', flexWrap: 'wrap', alignItems: 'center',
-                    columnGap: 'var(--sp-9)', rowGap: 'var(--sp-6)', minWidth: 0,
-                  }}
-                >
-                <div style={{ flex: '1 1 320px', display: 'grid', gap: 'var(--sp-4)', minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', minWidth: 0 }}>
-                  <h1
-                    style={{
-                      minWidth: 0,
-                      font: 'var(--type-metric)', letterSpacing: 'var(--tracking-display)',
-                      color: 'var(--fg-1)',
-                      overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {project.name}
-                  </h1>
-                  {/* BUILD-4's masthead opener, as a glass square beside the
-                      name (his call, 2026-09-23) rather than a labelled
-                      button on a row of its own. Never tinted while open:
-                      tint is emerald, and emerald means running. The
-                      masthead's rim is what says "this". */}
-                  <IconButton
-                    size="md"
-                    variant="glass"
-                    label="Ask AI about this project"
-                    title="Ask AI about this project"
-                    aria-pressed={askingProject}
-                    onClick={() => toggleAsk({ kind: 'project', id: project.id })}
-                    style={{ flex: '0 0 auto', borderRadius: 'var(--r-sm)' }}
-                  >
-                    <Icon name="sparkles" size={18} />
-                  </IconButton>
-                  </div>
-                  {project.description && (
-                    <p style={{ font: 'var(--type-body)', color: 'var(--fg-3)', maxWidth: '48ch', textWrap: 'pretty' }}>
-                      {project.description}
-                    </p>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    flex: '0 0 auto', display: 'flex', alignItems: 'center',
-                    gap: 'var(--sp-7)', flexWrap: 'wrap',
-                  }}
-                >
-                  <ProgressRing value={progress} size={54} thickness={5} showValue />
-                  {/* What the kicker row above the name used to say, first
-                      after the ring (Shreekant, 2026-09-23). The identity
-                      hue, rationed to a 4px dot — never a glow, because
-                      emerald has to stay the only colour that means anything.
-                      Same dot every list header below carries. */}
-                  <Stat
-                    value={`${projectLists.length} ${projectLists.length === 1 ? 'list' : 'lists'}`}
-                    label={(
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
-                        <span
-                          aria-hidden="true"
-                          style={{ width: 4, height: 4, borderRadius: '50%', background: project.color }}
-                        />
-                        project
-                      </span>
-                    )}
-                  />
+              {/* The ring, as words (his ask): "simply saying glowing text".
+                  Lime, done's colour job. Since 29-1P9b a button, his pick C:
+                  the day it lands beside it, the milestones and the chart
+                  folded down behind it. */}
+              <ForecastButton
+                progress={progress}
+                model={forecast}
+                open={forecastOpen}
+                onToggle={() => { setForecastBuiltFor(projectId); setForecastOpen((v) => !v); }}
+              />
+              <StatRule />
+              <Stat value={`${completedCount} of ${treeTasks.length}`} label="tasks done" />
+              <StatRule />
+              <Stat value={minutesLabel(minutesLeft)} label="work left" />
+              {projectINR > 0 && (
+                <>
                   <StatRule />
-                  <Stat value={`${completedCount} of ${projectTasks.length}`} label="tasks done" />
-                  <StatRule />
-                  <Stat value={minutesLabel(minutesLeft)} label="work left" />
-                  {projectINR > 0 && (
-                    <>
-                      <StatRule />
-                      <Stat value={formatINR(projectINR)} label="value" />
-                    </>
-                  )}
-                </div>
-                </div>
-              </div>
-            </section>
+                  <Stat value={formatINR(projectINR)} label="value" />
+                </>
+              )}
+            </div>
+          </div>
+          {(forecastOpen || forecastBuiltFor === projectId) && (
+            <ForecastPanel
+              finishBy={project.finishBy}
+              onFinishBy={(finishBy) => updateProject(project.id, { finishBy })}
+              model={forecast}
+              open={forecastOpen}
+              onOpenTask={setSelectedTask}
+            />
+          )}
+          </header>
+          )}
+
+          <div style={{ display: 'grid', gap: 'var(--gap-section)' }}>
+            {/* ── Projects inside (BIG-2) ─────────────────────────────── */}
+            {/* Home's grid, one level down: the same cards, the same drag —
+                reorder, or drop one onto another to nest it deeper. */}
+            {insideCount > 0 && (
+              <section style={{ display: 'grid', gap: 'var(--sp-6)' }}>
+                <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-lg)', color: 'var(--fg-1)' }}>
+                  Projects inside
+                </h2>
+                <ProjectGrid
+                  parentId={project.id}
+                  onEdit={setEditingInsideId}
+                  onNewProject={() => setCreatingInside(true)}
+                />
+              </section>
+            )}
 
             <section style={{ display: 'grid', gap: 'var(--sp-7)' }}>
               {/* ── Toolbar ────────────────────────────────────────────── */}
@@ -1004,6 +1343,7 @@ export default function ProjectView() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
                 <SegmentedControl
                   size="sm"
+                  look="soft"
                   value={view}
                   onChange={(v) => setView(v as 'board' | 'list')}
                   options={[
@@ -1011,29 +1351,92 @@ export default function ProjectView() {
                     { value: 'list', label: 'List', icon: <Icon name="list" size={16} /> },
                   ]}
                 />
-                <Switch checked={showDone} onChange={setShowDone} size="sm" label="Show done" />
+                {/* 29-1P7c (idea 159): how much each card shows. Icons, with
+                    their names as tooltips, so the toolbar stays one line. Not
+                    in a pane: its toolbar has ~40px to spare, and the switch
+                    pushed New task onto a line of its own (measured, the split
+                    shot) — a pane's ⋯ carries the three instead. */}
+                {!pane && (
+                <SegmentedControl
+                  size="sm"
+                  look="soft"
+                  aria-label="Card density"
+                  value={density}
+                  onChange={(v) => { if ((DENSITIES as readonly string[]).includes(v)) setDensity(v as Density); }}
+                  options={[
+                    { value: 'comfortable', label: null, ariaLabel: 'Comfortable: everything on each card', icon: <Icon name="rows-2" size={16} /> },
+                    { value: 'compact', label: null, ariaLabel: 'Compact: one line with badges', icon: <Icon name="align-justify" size={16} /> },
+                    { value: 'minimal', label: null, ariaLabel: 'Minimal: titles only', icon: <Icon name="equal" size={16} /> },
+                  ]}
+                />
+                )}
+                {/* 29-1P9a (idea 158): one soft "Group: List" button with a
+                    small menu, his pick (E) — it says what the table is
+                    showing, and the toolbar stays short. The list view only;
+                    a pane's is in its ⋯, like the densities. */}
+                {!pane && view === 'list' && boardLists.length > 0 && (
+                  <MorphMenu
+                    align="start"
+                    width={220}
+                    open={groupMenuOpen}
+                    onOpenChange={setGroupMenuOpen}
+                    portal
+                    zIndex={Z.dropdown}
+                    trigger={
+                      <SoftButton
+                        size="sm"
+                        aria-label={`Group tasks: by ${GROUP_NAME[groupBy]}`}
+                        icon={<Icon name={GROUP_CHOICES.find(([v]) => v === groupBy)?.[2] ?? 'list'} size={15} />}
+                      >
+                        <span style={{ color: 'var(--fg-3)' }}>Group:</span>
+                        {GROUP_SHORT[groupBy]}
+                        <Icon name="chevron-down" size={14} style={{ color: 'var(--fg-3)' }} />
+                      </SoftButton>
+                    }
+                    items={GROUP_CHOICES.map(([value, label, icon]) => ({
+                      value,
+                      label,
+                      icon: <Icon name={icon} size={18} />,
+                      meta: groupBy === value ? <Icon name="check" size={14} /> : undefined,
+                      onSelect: () => regroup(value),
+                    }))}
+                  />
+                )}
+                {/* Greyed while a chip is on (BUILD-18): a chip asks for one
+                    status outright, so the switch has nothing to decide. */}
+                <Switch checked={showDone} onChange={setShowDone} size="sm" label="Show done" disabled={filterStatus !== 'all'} />
+                {/* BUILD-18 (audit D1): on the page's toolbar line, wrapping
+                    when the window is narrow; a pane's toolbar has no room, so
+                    there it is the next line. */}
+                {!pane && filterBar}
 
+                {/* A pane only since OPT-6: the page's Select is a round icon
+                    on its island, and its New task is gone (his BASE list). A
+                    pane is unchanged. */}
+                {pane && (<>
                 <span style={{ flex: 1 }} />
 
-                {/* `frost` while it is on — the white pane the old pill had, and
-                    the header's one primary. Never emerald: nothing about
+                {/* Soft raised, pressed in while selecting (29-1P2): an
+                    everyday second action. Never emerald: nothing about
                     picking rows is live. */}
-                <Button
+                <SoftToggle
                   size="sm"
-                  variant={selectMode ? 'frost' : 'glass'}
-                  aria-pressed={selectMode}
+                  pressed={selectMode}
                   onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
-                  iconLeft={<Icon name={selectMode ? 'check-check' : 'list-checks'} size={15} />}
+                  icon={<Icon name={selectMode ? 'check-check' : 'list-checks'} size={15} />}
                 >
                   {selectMode ? 'Selecting' : 'Select'}
-                </Button>
-                {/* The design's "Add task", a gel button: V3's one primary,
-                    and adding work is this screen's primary act. The name is
-                    ours and stays — the `n` shortcut is listed as "New task". */}
-                <Button size="sm" variant="gel" onClick={openQuickAdd} iconLeft={<Icon name="plus" size={15} />}>
+                </SoftToggle>
+                {/* The design's "Add task": a plain gel (29-1P2), the board's
+                    one lit button, as adding work is this screen's primary
+                    act. Emerald, the brand's own, as it was. The name is ours
+                    and stays — the `n` shortcut is listed as "New task". */}
+                <GelButton colour="emerald" tile={false} size="md" onClick={openQuickAdd} icon={<Icon name="plus" size={15} />} style={{ height: 36 }}>
                   New task
-                </Button>
+                </GelButton>
+                </>)}
               </div>
+              {pane && <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>{filterBar}</div>}
 
               {/* ── Quick-add ──────────────────────────────────────────── */}
               <AnimatePresence>
@@ -1056,7 +1459,7 @@ export default function ProjectView() {
                         placeholder="Task title… paste multiple lines to bulk-add"
                         commit="Add task"
                       />
-                      {projectLists.length === 0 && (
+                      {boardLists.length === 0 && (
                         <p className="ag-kicker" style={{ marginTop: 'var(--sp-4)' }}>
                           A default “Tasks” list will be created automatically
                         </p>
@@ -1068,10 +1471,63 @@ export default function ProjectView() {
 
               {outsourceShareIds.length > 0 && <OutsourcedWorkPanel shareIds={outsourceShareIds} />}
 
+              {/* ── The Backburner, pulled down (29-1P6c, idea 91) ─────── */}
+              <AnimatePresence initial={false}>
+                {parkedOpen && shownParkedLists.length > 0 && (
+                  <motion.div
+                    key="parked"
+                    aria-label={`${project.name}'s Backburner`}
+                    role="region"
+                    initial={{ opacity: 0, height: 0, y: -14 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0, transitionEnd: { overflow: 'visible' } }}
+                    exit={{ opacity: 0, height: 0, y: -14, overflow: 'hidden' }}
+                    transition={{ duration: motionTokens.dur.slow * 1.4, ease: motionTokens.ease.glide }}
+                    style={{ overflow: 'hidden', minWidth: 0 }}
+                  >
+                    {view === 'list' ? (
+                      <ListTable
+                        lists={shownParkedLists}
+                        tasksByList={tasksByList}
+                        repeatCounts={repeatCounts}
+                        selectedIds={selectedIds}
+                        selectMode={selectMode}
+                        onSelectTask={handleSelectTask}
+                        onOpenTask={setSelectedTask}
+                        onDeleteTask={handleDeleteTask}
+                        onToggleTaskDone={handleToggleTaskDone}
+                        onAskTask={askTask}
+                        onAskList={askList}
+                        askSubject={boardAsk}
+                        onTuck={toggleParked}
+                      />
+                    ) : (
+                      <SortableBoard
+                        containerIds={shownParkedIds}
+                        itemsByContainer={parkedItems}
+                        onReorderContainers={keepParkedOrder}
+                        onReorderItems={handleReorderItems}
+                        onMoveItem={moveTaskToList}
+                        renderItemOverlay={renderTaskGhost}
+                        className={pane ? 'ag-board-grid ag-board-grid--pane' : 'ag-board-grid'}
+                      >
+                        {shownParkedLists.map((list) => (
+                          <SortableRow key={list.id} id={list.id} handle>
+                            {(state) => column(list, state, toggleParked)}
+                          </SortableRow>
+                        ))}
+                      </SortableBoard>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* ── The board, or the table ────────────────────────────── */}
-              {projectLists.length === 0 ? (
+              {/* 29-1P5c, idea 60: Board ⇄ List blurs across, sliding the way you went. */}
+              <BlurAcross value={view} index={view === 'board' ? 0 : 1} style={{ minWidth: 0 }}>
+              {boardLists.length === 0 ? (
                 /* An empty project gets a sentence and one door, not a grid of
-                   dashed placeholders. */
+                   dashed placeholders. Since 29-1P14c the calm empty (idea 113):
+                   the paper plane, and his approved lit sentence. */
                 <motion.div
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -1080,29 +1536,30 @@ export default function ProjectView() {
                     gap: 'var(--sp-5)', padding: 'var(--sp-13) 0',
                   }}
                 >
-                  <AppIcon icon={project.icon} size={44} />
+                  <EmptyDrawing art="plane" />
                   <h2 style={{ font: 'var(--type-title)', fontSize: 'var(--text-xl)', color: 'var(--fg-1)' }}>
-                    No tasks yet
+                    A clean board.
                   </h2>
-                  <p
+                  <LitLine
+                    as="p"
                     style={{
                       maxWidth: '42ch',
                       font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)',
                     }}
                   >
-                    Add your first task, or create a list to organise tasks into sections.
-                  </p>
+                    <Lit>Add the first task</Lit>, or make <Lit>a list</Lit> to sort tasks into sections.
+                  </LitLine>
 
                   {!addingList ? (
                     <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap', justifyContent: 'center' }}>
                       {/* The screen's one primary while it is empty — gel since
-                          V3-3, the same object as the toolbar's New task. */}
-                      <Button variant="gel" onClick={openQuickAdd} iconLeft={<Icon name="plus" size={16} />}>
+                          V3-3. The toolbar's New task went at OPT-6; this stayed. */}
+                      <GelButton colour="emerald" tile={false} size="md" onClick={openQuickAdd} icon={<Icon name="plus" size={16} />}>
                         Add first task
-                      </Button>
-                      <Button onClick={openAddList} iconLeft={<Icon name="plus-circle" size={16} />}>
+                      </GelButton>
+                      <SoftButton onClick={openAddList} icon={<Icon name="plus-circle" size={16} />}>
                         New list
-                      </Button>
+                      </SoftButton>
                     </div>
                   ) : (
                     <div style={{ ...FORM_PANE, width: '100%', maxWidth: 420, textAlign: 'left' }}>
@@ -1121,9 +1578,29 @@ export default function ProjectView() {
                     </div>
                   )}
                 </motion.div>
+              ) : filtering && shownBoardLists.length === 0 ? (
+                /* BUILD-18: nothing on the board matches. One sentence and the
+                   way back, rather than a board with every list gone. */
+                <div
+                  role="status"
+                  style={{
+                    display: 'grid', justifyItems: 'center', textAlign: 'center',
+                    gap: 'var(--sp-5)', padding: 'var(--sp-11) 0',
+                  }}
+                >
+                  <EmptyDrawing art="search" />
+                  <LitLine
+                    as="p"
+                    text={noMatchSentence(filterText, filterStatus)}
+                    style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', maxWidth: '42ch' }}
+                  />
+                  <SoftButton size="sm" onClick={clearFilter} icon={<Icon name="x" size={14} />}>
+                    Clear filter
+                  </SoftButton>
+                </div>
               ) : view === 'list' ? (
                 <ListTable
-                  lists={projectLists}
+                  lists={shownBoardLists}
                   tasksByList={tasksByList}
                   repeatCounts={repeatCounts}
                   selectedIds={selectedIds}
@@ -1135,60 +1612,37 @@ export default function ProjectView() {
                   onAskTask={askTask}
                   onAskList={askList}
                   askSubject={boardAsk}
+                  groupBy={groupBy}
+                  rootRef={tableRef}
                 />
               ) : (
                 <SortableBoard
-                  containerIds={projectListIds}
-                  itemsByContainer={taskIdsByList}
+                  containerIds={shownListIds}
+                  itemsByContainer={boardItems}
                   onReorderContainers={reorderLists}
                   onReorderItems={handleReorderItems}
                   onMoveItem={moveTaskToList}
                   renderItemOverlay={renderTaskGhost}
-                  className="ag-board-grid"
+                  /* 29-1P9a (157): a board with a list folded lays out as a
+                     wrapping row, so a spine can be thin and the lists
+                     beside it widen (`screens.css`). */
+                  className={[
+                    'ag-board-grid', pane && 'ag-board-grid--pane', anyFolded && 'ag-board-grid--folds',
+                  ].filter(Boolean).join(' ')}
                 >
                   <AnimatePresence>
-                    {projectLists.map((list) => {
-                      const listTasks = tasksByList[list.id] ?? [];
-
-                      return (
-                        <SortableRow key={list.id} id={list.id} handle>
-                          {({ isAnyDragging, isReceivingItem, handleProps }) => (
-                            <ListColumn
-                              listId={list.id}
-                              listTitle={list.title}
-                              listColor={project.color}
-                              taskLists={taskLists}
-                              tasks={listTasks}
-                              repeatCounts={repeatCounts}
-                              selectedIds={selectedIds}
-                              selectMode={selectMode}
-                              onSelectTask={handleSelectTask}
-                              onOpenTask={setSelectedTask}
-                              onDeleteTask={handleDeleteTask}
-                              onToggleTaskDone={handleToggleTaskDone}
-                              onAddTask={(lid, titles) => titles.forEach((title) => addBacklogTask(title, lid))}
-                              onDeleteList={(lid) => deleteTaskList(lid)}
-                              onRenameList={(lid, title) => renameTaskList(lid, title)}
-                              onShareList={(lid) => void handleShareList(lid)}
-                              hasShortLink={!!list.shortUrlKeyword}
-                              hidden={list.hiddenFromShare}
-                              onToggleHidden={(lid) => updateTaskList(lid, { hiddenFromShare: !list.hiddenFromShare })}
-                              listDragHandleProps={handleProps}
-                              isListDragActive={isAnyDragging}
-                              isReceivingDrop={isReceivingItem}
-                              onAskTask={askTask}
-                              onAskList={askList}
-                              askSubject={boardAsk}
-                            />
-                          )}
-                        </SortableRow>
-                      );
-                    })}
+                    {shownBoardLists.map((list) => (
+                      <SortableRow key={list.id} id={list.id} handle>
+                        {(state) => column(list, state, undefined, folded.has(list.id))}
+                      </SortableRow>
+                    ))}
                   </AnimatePresence>
 
                   {/* Add-list cell. Dashed, because that is how this system
                       draws an empty slot — see `ListColumn`'s header note. */}
-                  {addingList ? (
+                  {/* Not while filtering (BUILD-18): a new list matches
+                      nothing, so it would step off the board as it landed. */}
+                  {filtering ? null : addingList ? (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.97 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -1231,13 +1685,52 @@ export default function ProjectView() {
                       Add list
                     </button>
                   )}
+                  {/* 29-1P9a: four empty cells end a folded board's row, so
+                      the last line's lists keep the width of those above
+                      instead of stretching to fill it (a grid did that by
+                      itself). They take no height. */}
+                  {anyFolded && [0, 1, 2, 3].map((i) => <span key={`fill-${i}`} className="ag-board-fill" aria-hidden />)}
                 </SortableBoard>
               )}
+              </BlurAcross>
             </section>
           </div>
         </div>
       </div>
-      </AIPanelDock>
+
+      {/* ── The Ask Atlas bar (29-1P15c, idea 74) ──────────────────────── */}
+      {/* In place of the ✦ beside the project's name, his call; it grows into
+          the AI panel and the panel shrinks back into it, whichever ✦ opened
+          it. The single board only: a pair's panes keep the ⋯ menu's Ask, and
+          which of two projects a bar would ask about is not a question worth
+          a bar. Bottom-right on the laptop, where the panel docks, so it grows
+          up into its own column. On a narrow window it takes the lane over the
+          nav, and below 560px, where the capture + rises into that lane, it
+          stops short of the + and shares its row. Out of the way while
+          selecting: the selection bar has that lane. */}
+      {!pane && (
+        <AskAtlasBar
+          open={ask !== null}
+          onOpen={() => toggleAsk({ kind: 'project', id: project.id })}
+          label={`Ask Atlas about ${project.name}`}
+          hidden={selectMode}
+          reserve={!wide}
+          style={{
+            position: 'fixed', zIndex: Z.nav,
+            ...(wide
+              ? { right: 'calc(var(--sp-7) + var(--safe-r))', bottom: 'calc(var(--sp-7) + var(--safe-b))', width: 320 }
+              : underTheBar
+                ? {
+                    left: 'calc(var(--gutter-page-sm) + var(--safe-l))',
+                    /* The + is 60px, 28px in from the edge, its foot 104px up
+                       (measured at 390 wide): 12px between them, centred on it. */
+                    right: 'calc(var(--sp-8) + 60px + var(--sp-4) + var(--safe-r))',
+                    bottom: 'calc(var(--sp-6) + 90px + var(--safe-b))',
+                  }
+                : { left: 0, right: 0, margin: '0 auto', bottom: 'calc(112px + var(--safe-b))', width: 320 }),
+          }}
+        />
+      )}
 
       {/* ── Selection bar ──────────────────────────────────────────────── */}
       {/* The bridge out of this view. A pill fixed to the bottom of the window
@@ -1248,104 +1741,26 @@ export default function ProjectView() {
       <div
         style={{
           /* Centred over the board, not the window, while the AI panel holds
-             the right-hand column. */
-          position: 'fixed', left: 0, right: ask && wide ? 404 : 0,
-          bottom: wide ? 'calc(var(--sp-9) + var(--safe-b))' : 'calc(96px + var(--safe-b))',
+             the right-hand column. A pane holds its own, at its own foot
+             (BIG-5) — two boards each have a selection. */
+          position: pane ? 'absolute' : 'fixed', left: 0, right: !pane && ask && wide ? 404 : 0,
+          bottom: wide
+            ? (pane ? 'var(--sp-7)' : 'calc(var(--sp-9) + var(--safe-b))')
+            : 'calc(96px + var(--safe-b))',
           display: 'grid', placeItems: 'center', zIndex: Z.nav, pointerEvents: 'none',
           padding: '0 var(--gutter-page-sm)',
         }}
       >
-        <div
-          /* `inert`, not `aria-hidden`: the bar stays mounted so it can morph
-             in and out, and a hidden container full of focusable buttons is
-             exactly the a11y bug `aria-hidden` alone would leave behind — Tab
-             would still land in it. React 19 passes this straight through. */
-          inert={picked.length === 0}
-          style={{
-            pointerEvents: picked.length ? 'auto' : 'none',
-            display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap',
-            justifyContent: 'center',
-            minHeight: 60, padding: 'var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-8)',
-            borderRadius: 'var(--r-pill)',
-            backgroundImage: 'var(--glass-fill-3)',
-            backdropFilter: 'var(--glass-bd-lg)',
-            WebkitBackdropFilter: 'var(--glass-bd-lg)',
-            boxShadow: 'var(--glass-shadow-pane)',
-            opacity: picked.length ? 1 : 0,
-            transform: picked.length ? 'translateY(0) scale(1)' : 'translateY(14px) scale(0.96)',
-            transition: 'opacity var(--dur-base) var(--ease-glass), transform var(--dur-base) var(--ease-spring)',
-          }}
-        >
-          <span style={{ display: 'grid', gap: 1 }}>
-            <span style={{ ...MONO, fontSize: 'var(--text-sm)', color: 'var(--fg-1)' }}>
-              {picked.length} selected
-            </span>
-            <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
-              {minutesLabel(workLeftMinutes(picked))} of work
-            </span>
-          </span>
-
-          {/* `size="sm"` so it matches the buttons beside it rather than the
-              46px form height it defaults to. */}
-          <CustomDropdown
-            ariaLabel="Move selected tasks to list"
-            value={bulkMoveListId}
-            onChange={setBulkMoveListId}
-            placeholder="Move to list… (any project)"
-            size="sm"
-            width={260}
-            className="w-64"
-            options={taskLists.map((l) => {
-              const owningProject = projects.find((p) => p.id === l.projectId);
-              return {
-                value: l.id,
-                label: owningProject ? `${owningProject.icon ?? '📋'} ${l.title} · ${owningProject.name}` : l.title,
-              };
-            })}
-          />
-
-          <Button
-            size="sm"
-            variant="tint"
-            tone="accent"
-            disabled={!bulkMoveListId}
-            onClick={handleBulkMove}
-            iconLeft={<Icon name="corner-down-right" size={14} />}
-          >
-            Move
-          </Button>
-
-          <Button
-            size="sm"
-            variant="tint"
-            tone="rose"
-            onClick={handleBulkDelete}
-            title="Move the selected tasks to the Trash — recoverable for 30 days"
-            iconLeft={<Icon name="trash-2" size={14} />}
-          >
-            Delete
-          </Button>
-
-          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Clear</Button>
-        </div>
+        <SelectionBar
+          picked={picked}
+          lists={taskLists}
+          projects={projects}
+          onMove={handleBulkMove}
+          onDone={handleBulkDone}
+          onDelete={handleBulkDelete}
+          onClear={() => setSelectedIds(new Set())}
+        />
       </div>
-
-      {/* The floating bar, on a narrow window only — the rail above replaces it
-          on a wide one. `Z.nav` is the rung the global `FloatingNav` this
-          screen now hides from was on. */}
-      {/* Stepped aside while the AI panel holds the bottom of the window: the
-          bar would sit on its message box, and the panel's own ✕ and handle
-          are the way back. */}
-      {!wide && !ask && (
-        <div
-          style={{
-            position: 'fixed', left: '50%', bottom: 'calc(var(--sp-7) + var(--safe-b))',
-            transform: 'translateX(-50%)', zIndex: Z.nav,
-          }}
-        >
-          <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
-        </div>
-      )}
 
       {/* Task Detail Panel (floating) */}
       <AnimatePresence>
@@ -1365,13 +1780,22 @@ export default function ProjectView() {
         )}
       </AnimatePresence>
 
-      {/* Edit project modal */}
+      {/* BIG-2 — a new project made here is made inside this one. */}
       <CreateProjectModal
-        isOpen={editingProject}
-        onClose={() => setEditingProject(false)}
-        onSave={(data) => updateProject(project.id, data)}
-        project={project}
+        isOpen={creatingInside}
+        onClose={() => setCreatingInside(false)}
+        onSave={(data) => addProject({ ...data, parentId: project.id })}
+        insideName={project.name}
       />
+      {editingInside && (
+        <CreateProjectModal
+          isOpen
+          onClose={() => setEditingInsideId(null)}
+          onSave={(data) => updateProject(editingInside.id, data)}
+          project={editingInside}
+        />
+      )}
+      {openingBeside && <OpenBesideDialog projectId={project.id} onClose={() => setOpeningBeside(false)} />}
 
       {/* Share list modal */}
       <AnimatePresence>
@@ -1404,7 +1828,477 @@ export default function ProjectView() {
           />
         )}
       </AnimatePresence>
+    </DensityContext.Provider>
+  );
+}
 
+// ─── PaneHeader — a board's name when it shares the screen ───────────────────
+
+/**
+ * One line, his call (BIG-5): the project's glyph and name, how much is done
+ * (a ring until 29-1P9b; "40%" in glowing lime since, his pick A),
+ * its ⋯ menu and a ✕. It stands in for the breadcrumb and the masthead, whose
+ * cover alone would take half a landscape tablet's height, and it is sticky,
+ * so the board it names is never in doubt while its lists scroll under it.
+ * A project opened from inside a mega project has a way back up, in its pane.
+ */
+/** Hides and shows the side nav while two boards share the screen. */
+interface NavToggle {
+  hidden: boolean;
+  onToggle: () => void;
+}
+
+function PaneHeader({ project, progress, parent, asking, ignoreNote, menu, onClose, navToggle }: {
+  project: Project;
+  progress: number;
+  parent: Project | undefined;
+  asking: boolean;
+  ignoreNote: string | null;
+  menu: ReactNode;
+  onClose?: () => void;
+  navToggle?: NavToggle;
+}) {
+  const openProject = useOpenProject();
+  return (
+    <header
+      data-ai-subject={asking ? 'true' : undefined}
+      style={{
+        position: 'sticky', top: 0, zIndex: 5,
+        display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
+        minHeight: 56, margin: 'var(--sp-5) 0 var(--sp-7)',
+        padding: 'var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4)',
+        /* A top bar is a rounded rectangle, never a pill (his call on Focus
+           and Deadlines). */
+        borderRadius: 'var(--r-md)',
+        backgroundImage: 'var(--glass-fill-3)',
+        backdropFilter: 'var(--glass-bd-md)',
+        WebkitBackdropFilter: 'var(--glass-bd-md)',
+        boxShadow: asking
+          ? `${AI_SUBJECT_RIM}, var(--glass-inner-1)`
+          : 'var(--glass-rim-2), var(--glass-inner-1), var(--glass-cast-2)',
+      }}
+    >
+      {/* His ask (2026-09-30): on the left-hand board, the switch for the
+          side nav, so two boards can have the whole width. */}
+      {navToggle && (
+        <SoftToggle
+          round
+          aria-label={navToggle.hidden ? 'Show the side nav' : 'Hide the side nav'}
+          title={navToggle.hidden ? 'Show the side nav' : 'Hide the side nav'}
+          pressed={navToggle.hidden}
+          onClick={navToggle.onToggle}
+        >
+          <Icon name="panel-left" size={18} />
+        </SoftToggle>
+      )}
+      {parent && (
+        <SoftIconButton label={`Back to ${parent.name}`} onClick={() => openProject(parent.id)}>
+          <Icon name="arrow-left" size={16} />
+        </SoftIconButton>
+      )}
+      <ProjectIcon project={project} size={34} />
+      <h2
+        title={project.name}
+        style={{
+          flex: '1 1 auto', minWidth: 0,
+          font: 'var(--type-title)', fontSize: 'var(--text-lg)', color: 'var(--fg-1)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+      >
+        {project.name}
+      </h2>
+      {ignoreNote && <IgnoredMark title={ignoreNote} />}
+      {/* 29-1P9b, his pick A: the page's glowing words, shortened to fit. */}
+      <span
+        aria-label={`${progress}% done`}
+        style={{
+          flex: '0 0 auto', font: 'var(--type-numeric)', fontVariantNumeric: 'tabular-nums',
+          fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--job-lime)', textShadow: 'var(--text-glow-lime)',
+        }}
+      >
+        {progress}%
+      </span>
+      {menu}
+      {onClose && (
+        <SoftIconButton label={`Close ${project.name}`} title="Close this board" onClick={onClose}>
+          <Icon name="x" size={18} />
+        </SoftIconButton>
+      )}
+    </header>
+  );
+}
+
+// ─── ProjectView — the page: one board, or two side by side ──────────────────
+
+/** The pair's three tracks — a board, the divider, a board — at `ratio` for the first. */
+function splitTracks(ratio: number): string {
+  return `minmax(0, ${ratio}fr) auto minmax(0, ${1 - ratio}fr)`;
+}
+
+/** No board narrower (or shorter) than this while the divider is dragged (px). */
+const MIN_PANE_PX = 300;
+
+/**
+ * THE LINE BETWEEN TWO BOARDS, which drags (his ask, 2026-09-30).
+ *
+ * While it is held, the new split is written straight onto the grid, once a
+ * frame, and React hears of it only on release: a state update per pointer
+ * move would re-render both boards sixty times a second for nothing. A double
+ * click puts it back to half and half; the arrow keys move it when focused.
+ * No board is made narrower than `MIN_PANE_PX`, and never past a quarter.
+ */
+function SplitDivider({ axis, ratio, containerRef, onChange }: {
+  axis: 'x' | 'y';
+  ratio: number;
+  containerRef: RefObject<HTMLDivElement | null>;
+  onChange: (ratio: number) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const live = useRef(ratio);
+  const frame = useRef(0);
+
+  const clampFor = (box: DOMRect, r: number) => {
+    const size = axis === 'x' ? box.width : box.height;
+    const least = Math.min(0.5, Math.max(0.25, MIN_PANE_PX / Math.max(size, 1)));
+    return Math.min(1 - least, Math.max(least, r));
+  };
+  const paint = (r: number) => {
+    const grid = containerRef.current;
+    if (!grid) return;
+    if (axis === 'x') grid.style.gridTemplateColumns = splitTracks(r);
+    else grid.style.gridTemplateRows = splitTracks(r);
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-orientation={axis === 'x' ? 'vertical' : 'horizontal'}
+      aria-label="Resize the two boards"
+      aria-valuemin={25}
+      aria-valuemax={75}
+      aria-valuenow={Math.round(ratio * 100)}
+      tabIndex={0}
+      className="ag-split-divider"
+      data-axis={axis}
+      data-dragging={dragging ? '' : undefined}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        live.current = ratio;
+        setDragging(true);
+      }}
+      onPointerMove={(e) => {
+        if (!dragging) return;
+        const grid = containerRef.current;
+        if (!grid) return;
+        const box = grid.getBoundingClientRect();
+        live.current = clampFor(box, axis === 'x'
+          ? (e.clientX - box.left) / box.width
+          : (e.clientY - box.top) / box.height);
+        if (!frame.current) {
+          frame.current = window.requestAnimationFrame(() => {
+            frame.current = 0;
+            paint(live.current);
+          });
+        }
+      }}
+      onPointerUp={() => {
+        if (!dragging) return;
+        setDragging(false);
+        window.cancelAnimationFrame(frame.current);
+        frame.current = 0;
+        onChange(live.current);
+      }}
+      onPointerCancel={() => {
+        setDragging(false);
+        window.cancelAnimationFrame(frame.current);
+        frame.current = 0;
+        paint(ratio);
+      }}
+      onDoubleClick={() => onChange(0.5)}
+      onKeyDown={(e) => {
+        const step = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -0.05
+          : e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 0.05 : 0;
+        if (!step) return;
+        e.preventDefault();
+        const grid = containerRef.current;
+        onChange(grid ? clampFor(grid.getBoundingClientRect(), ratio + step) : ratio);
+      }}
+    />
+  );
+}
+
+/**
+ * Two boards sit side by side from this width, and stack one above the other
+ * below it (BIG-5 — his call for a tablet turned upright). The landscape
+ * tablet is 1180 wide and a laptop window wider; upright, the tablet is 820.
+ */
+const SIDE_BY_SIDE = '(min-width: 1024px)';
+
+/** The AI panel's subject, held with the project it was opened in. */
+type AskState = { projectId: string; ref: PanelSubjectRef };
+
+/**
+ * `/project/:projectId`, and since BIG-5 `?beside=` a second one.
+ *
+ * The page owns what the boards share: the rail and the floating nav, the AI
+ * panel (one at a time, whichever board asked), which board `n` and `l` add
+ * to, and — for a pair — the one drag both boards sit in, so a task dragged
+ * onto the other board's list moves to that project (his call).
+ */
+export default function ProjectView() {
+  const { projectId } = useParams<{ projectId: string }>();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const wide = useMedia(WIDE);
+  const sideBySide = useMedia(SIDE_BY_SIDE);
+  const nav = useNavModel();
+  const projects = useStore((s) => s.projects);
+
+  const beside = params.get(BESIDE_PARAM);
+  const { left, right } = useMemo(() => {
+    const ids = new Set(projects.map((p) => p.id));
+    return resolveSplit((id) => ids.has(id), projectId, beside);
+  }, [projects, projectId, beside]);
+
+  /*
+   * BUILD-4 — WHAT THE AI PANEL IS ABOUT, IF IT IS OPEN.
+   *
+   * Held with the project it was opened in, because this page stays mounted
+   * when he moves from one project to another: a panel about a list in the
+   * last project must not follow him into this one. Tapping the same
+   * subject's button again closes it — the button is a toggle, and "Ask" on
+   * the thing already being asked about has no other sensible meaning.
+   */
+  const [askState, setAskState] = useState<AskState | null>(() => {
+    /* The harness's way in — `lib/devPanelFixture.ts`. */
+    if (import.meta.env.DEV && projectId) {
+      const fixture = devPanelFixture();
+      if (fixture && fixture.ref.kind !== 'score') return { projectId, ref: fixture.ref };
+    }
+    return null;
+  });
+  const ask = askState && (askState.projectId === left || askState.projectId === right) ? askState : null;
+  const closeAsk = useCallback(() => setAskState(null), []);
+  const toggleAsk = useCallback((onProject: string, ref: PanelSubjectRef) => {
+    setAskState((prev) =>
+      prev && prev.projectId === onProject && prev.ref.kind === ref.kind && prev.ref.id === ref.id
+        ? null
+        : { projectId: onProject, ref },
+    );
+  }, []);
+
+  /* Of two boards, the one last touched owns `n` and `l`. */
+  const [activePane, setActivePane] = useState<0 | 1>(0);
+  /* How the pair shares the screen, and whether the side nav is hidden — both
+     remembered on this device only (his ask, 2026-09-30), like a list/board
+     choice: a split that suits the laptop is wrong for the tablet. One ratio
+     per direction, because side by side and stacked are different shapes. */
+  const [colRatio, setColRatio] = useRememberedState('base.split.ratio.cols', 0.5);
+  const [rowRatio, setRowRatio] = useRememberedState('base.split.ratio.rows', 0.5);
+  const [navHidden, setNavHidden] = useRememberedState('base.split.navHidden', false);
+  const splitRef = useRef<HTMLDivElement>(null);
+
+  /* A project opened from inside a pane (a mega project's cards, the way back
+     up) replaces that pane and keeps the other. */
+  const openIn = useMemo(() => {
+    if (!left || !right) return null;
+    const pair = { left, right };
+    return [
+      (id: string) => navigate(replacePanePath(pair, 0, id)),
+      (id: string) => navigate(replacePanePath(pair, 1, id)),
+    ] as const;
+  }, [navigate, left, right]);
+
+  if (!left) {
+    return (
+      <V3Scope>
+      <div
+        className="ag-page"
+        /* The gutter is on the inner block rather than here, because an inline
+           `padding` on a `.ag-page` overrides the system-bar inset
+           `screens.css` puts on every screen root (APP-2) and this was the one
+           screen that carried one. */
+        style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}
+      >
+        <div style={{ display: 'grid', gap: 'var(--sp-6)', justifyItems: 'center', textAlign: 'center', padding: 'var(--gutter-page-sm)' }}>
+          <p style={{ font: 'var(--type-body)', color: 'var(--fg-3)' }}>Project not found.</p>
+          <SoftButton onClick={() => navigate('/')} icon={<Icon name="arrow-left" size={16} />}>
+            Go home
+          </SoftButton>
+        </div>
+      </div>
+      </V3Scope>
+    );
+  }
+
+  const rail = wide && (
+    <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
+      <MiniNav
+        orientation="vertical"
+        items={nav.items}
+        value={nav.current}
+        onChange={nav.go} screenLit
+        lead={<RailMark />}
+      />
+    </div>
+  );
+
+  /* The floating bar, on a narrow window only — the rail above replaces it
+     on a wide one. `Z.nav` is the rung the global `FloatingNav` this screen
+     now hides from was on. Stepped aside while the AI panel is open: on a
+     narrow window it holds the bottom of the screen, and the bar would sit on
+     its message box; the panel's own ✕ and handle are the way back. The
+     floating + for quick capture goes with it (29-1P2, his call). */
+  const floatingNav = !wide && !ask && (
+    <>
+      <div
+        style={{
+          position: 'fixed', left: '50%', bottom: 'calc(var(--sp-7) + var(--safe-b))',
+          transform: 'translateX(-50%)', zIndex: Z.nav,
+        }}
+      >
+        <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
+      </div>
+      <QuickCaptureFab />
+    </>
+  );
+
+  if (!right || !openIn) {
+    return (
+      <V3Scope>
+      {/* 29-1P7c (idea 164): the wires between blocked tasks. */}
+      <BlockWires />
+      {/* `ag-page` rather than the old opaque `#050505` wrapper, so the grid
+         backdrop shows through and every pane above it has something to refract.
+
+         It was `ag-page--calm` until V3-3 — `project.html`'s own body class,
+         keeping `.ag-page`'s emerald pool off a dense board of columns (UI-29,
+         made visible at UI-36/37). `Project.dc.html` draws that pool over this
+         very board, and V3's glass needs something behind it to bend, so the
+         screen takes the full field exactly as Home did at V3-2.
+
+         The window itself never scrolls — the content column does, which is also
+         the ancestor dnd-kit auto-scrolls while a row is dragged. */}
+      <div className="ag-page" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
+        {rail}
+
+        {/* BUILD-4: the AI panel docks, it never covers. The board column is the
+            grid's first track and shrinks — to the top 44% on a narrow window,
+            to everything left of a 404px column on a wide one. */}
+        <AIPanelDock
+          dock={wide ? 'right' : 'bottom'}
+          panel={ask && (
+            <AIPanelHost subject={ask.ref} dock={wide ? 'right' : 'bottom'} onClose={closeAsk} />
+          )}
+        >
+          {/* One drag for the board and its Backburner above it (29-1P6c),
+              as a pair of boards shares one below. */}
+          <SortableBoardHost>
+            <ProjectBoard
+              key={left}
+              projectId={left}
+              layout="page"
+              ask={ask?.ref ?? null}
+              onToggleAsk={toggleAsk}
+              shortcutsActive
+            />
+          </SortableBoardHost>
+        </AIPanelDock>
+
+        {floatingNav}
+      </div>
+      </V3Scope>
+    );
+  }
+
+  const pair = { left, right };
+  const askPane = ask ? (ask.projectId === left ? 0 : 1) : null;
+  const ratio = sideBySide ? colRatio : rowRatio;
+  const setRatio = sideBySide ? setColRatio : setRowRatio;
+  const navToggle = wide ? { hidden: navHidden, onToggle: () => setNavHidden((h) => !h) } : undefined;
+
+  return (
+    <V3Scope>
+    {/* One wire layer for both boards, so a wire crosses from one to the other. */}
+    <BlockWires />
+    <div className="ag-page" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
+      {!navHidden && rail}
+
+      {/* BIG-5 — two boards, and ONE drag around both of them, so a row can
+          land on a list of the other board (`SortableBoardHost`). */}
+      <SortableBoardHost>
+        <div
+          ref={splitRef}
+          style={{
+            flex: 1, minWidth: 0, minHeight: 0, display: 'grid',
+            gridTemplateColumns: sideBySide ? splitTracks(ratio) : 'minmax(0,1fr)',
+            gridTemplateRows: sideBySide ? 'minmax(0,1fr)' : splitTracks(ratio),
+          }}
+        >
+          {([left, right] as const).map((id, i) => {
+            const index = i as 0 | 1;
+            const project = projects.find((p) => p.id === id);
+            /* His call: the AI panel takes the OTHER board's place, so what it
+               is about stays in view; closing it brings that board back. */
+            const coveredByPanel = ask !== null && askPane !== index;
+            const close = () => navigate(closePanePath(pair, index));
+            return (
+              <Fragment key={id}>
+              {index === 1 && (
+                <SplitDivider
+                  axis={sideBySide ? 'x' : 'y'}
+                  ratio={ratio}
+                  containerRef={splitRef}
+                  onChange={setRatio}
+                />
+              )}
+              <section
+                aria-label={`${project?.name ?? 'Project'} board`}
+                data-split-pane={index}
+                onPointerDownCapture={() => setActivePane(index)}
+                onFocusCapture={() => setActivePane(index)}
+                style={{
+                  position: 'relative', minWidth: 0, minHeight: 0,
+                  display: 'grid', gridTemplateRows: 'minmax(0,1fr)',
+                }}
+              >
+                {coveredByPanel && (
+                  <div style={{ minWidth: 0, minHeight: 0, display: 'grid', padding: 'var(--sp-5)' }}>
+                    <AIPanelHost
+                      subject={ask.ref}
+                      dock="right"
+                      onClose={closeAsk}
+                      style={{ width: '100%', borderRadius: 'var(--r-card-lg)' }}
+                    />
+                  </div>
+                )}
+                {/* Hidden, not unmounted, while the panel stands in for it: its
+                    scroll, its selection and its open forms are there when the
+                    panel closes. A hidden board also leaves the drag. */}
+                <Activity mode={coveredByPanel ? 'hidden' : 'visible'}>
+                  <OpenProjectContext.Provider value={openIn[index]}>
+                    <ProjectBoard
+                      projectId={id}
+                      layout="pane"
+                      ask={askPane === index ? ask?.ref ?? null : null}
+                      onToggleAsk={toggleAsk}
+                      shortcutsActive={activePane === index}
+                      onClose={close}
+                      onGone={close}
+                      navToggle={index === 0 ? navToggle : undefined}
+                    />
+                  </OpenProjectContext.Provider>
+                </Activity>
+              </section>
+              </Fragment>
+            );
+          })}
+        </div>
+      </SortableBoardHost>
+
+      {floatingNav}
     </div>
     </V3Scope>
   );

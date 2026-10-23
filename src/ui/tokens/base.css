@@ -97,7 +97,7 @@ textarea[data-ag-field]:focus-visible {
   outline: none;
 }
 
-::selection { background: var(--accent-wash); color: var(--fg-1); }
+::selection { background: var(--job-lime-wash, var(--accent-wash)); color: var(--fg-1); }
 
 /* Numerals: tabular everywhere a number could change in place */
 .ag-tnum, table, [data-numeric] { font-variant-numeric: tabular-nums; }

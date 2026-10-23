@@ -35,6 +35,11 @@
  * to "app-level sync banners, and the modals that have to clear them", because
  * a banner reporting broken sync must stay readable over an open modal.
  *
+ * **It stands down while the offline pill is up (29-1P14d1, idea 114).**
+ * Losing the Wi-Fi is not a broken sync: the changes are saving on this
+ * device and will go when it is back, which `OfflinePill` says in one calm
+ * line. This card is for the cloud refusing while the internet is up.
+ *
  * ONE THING NOT TO RE-LEARN
  * -------------------------
  * `NotificationCard` arrives by condensing, which is a CSS `animation` on
@@ -47,14 +52,17 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useUIStore } from '../store/useUIStore';
 import { retryFirestoreSync } from '../lib/firestoreSync';
-import { Button, Icon, NotificationCard } from '../ui';
+import { useConnectionPill } from '../lib/connectionWatch';
+import { Icon, NotificationCard, SoftButton } from '../ui';
 
 export default function SyncStatusBanner() {
   const cloudSyncOk = useUIStore((s) => s.cloudSyncOk);
+  // 29-1P14d1: offline, or coming back, is the pill's to say — calmly.
+  const pillUp = useConnectionPill((s) => s.phase === 'offline' || s.phase === 'syncing');
 
   return (
     <AnimatePresence>
-      {!cloudSyncOk && (
+      {!cloudSyncOk && !pillUp && (
         <motion.div
           initial={{ y: -40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -70,15 +78,13 @@ export default function SyncStatusBanner() {
             defaultOpen
             style={{ animation: 'none' }}
             actions={
-              <Button
+              <SoftButton
                 size="sm"
-                variant="tint"
-                tone="rose"
                 onClick={() => retryFirestoreSync()}
-                iconLeft={<Icon name="rotate-cw" size={14} />}
+                icon={<Icon name="rotate-cw" size={14} />}
               >
                 Try reconnecting
-              </Button>
+              </SoftButton>
             }
           />
         </motion.div>

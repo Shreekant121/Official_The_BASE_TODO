@@ -101,30 +101,3 @@ export const HOST_READINGS: HostReading[] = [
 export function readingFor(model: string): HostReading | null {
   return HOST_READINGS.find((reading) => reading.model === model) ?? null;
 }
-
-/**
- * The open questions §12 says must be answered before the items that rest on
- * them, printed on the screen rather than left in a document.
- *
- * `atlas-host.html` argues for this directly and it is right: a list of
- * unproven assumptions that lives only in a design file gets quietly promoted
- * to fact by the third session that reads past it. On the host screen it is
- * beside the machine it is a claim about.
- */
-export const UNVERIFIED: { icon: 'circle-alert' | 'triangle-alert' | 'stethoscope'; question: string; why: string }[] = [
-  {
-    icon: 'stethoscope',
-    question: 'Does gemma4:e4b actually transcribe through Ollama?',
-    why: 'It declares the capability. Declared and working are different things, and this metadata has been wrong once already in this project.',
-  },
-  {
-    icon: 'circle-alert',
-    question: 'How much VRAM does Chatterbox need beside gemma at 64K?',
-    why: '5.3 GB plus Chatterbox against 8 GB is tight. Measure it before the voice item is designed, not while it is being built.',
-  },
-  {
-    icon: 'triangle-alert',
-    question: 'Does num_ctx above the maximum ever error rather than clamp?',
-    why: 'Everything observed so far clamps silently and reports success — which is why Atlas asks /api/show for each model’s real ceiling instead of trusting the number back.',
-  },
-];

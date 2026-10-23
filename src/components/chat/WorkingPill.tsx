@@ -21,6 +21,17 @@
  * this screen is allowed: `readme.md` rations it to what is live, and a turn
  * that is running is the definition.
  *
+ * Since 29-1P15a (idea 47) its words carry Atlas's thinking shimmer, a soft
+ * light running through them (`.ag-atlas-shimmer`, `ui/feedback/atlasAtWork.css`).
+ * The pill only exists while a turn runs, so the shimmer stops with it.
+ *
+ * Since 29-1P15d (idea 77) a turn that runs past five seconds lights the
+ * pill from inside: violet light drifts behind the words and the seconds it
+ * has run show at the end (`DriftGlass`). Counted from `since`, the turn's
+ * start, because this pill is mounted in two places in a turn (before
+ * anything comes back, then under the first tool's rows) and its own mount
+ * time would start the count again halfway through.
+ *
  * THE ELLIPSIS IS ANIMATED, AND IT IS THE THING A SESSION SKIPS
  * -------------------------------------------------------------
  * One → two → three dots on a **420ms** interval, not a static `…`. It is the
@@ -36,7 +47,7 @@
  * machine to stop moving things gets three steady dots.
  */
 import { useEffect, useState } from 'react';
-import { Icon, useMedia } from '../../ui';
+import { DriftGlass, Icon, LongJobSeconds, useLongJob, useMedia } from '../../ui';
 
 /** The mockup's own cadence. */
 const ELLIPSIS_MS = 420;
@@ -46,6 +57,7 @@ const STILL = '(prefers-reduced-motion: reduce)';
 export function WorkingPill({
   label,
   tool,
+  since,
 }: {
   /** What it is doing, in words. "Thinking" when there is nothing better. */
   label: string;
@@ -58,10 +70,13 @@ export function WorkingPill({
    * than four things arriving.
    */
   tool?: string;
+  /** When the turn began (`Date.now()`), for the long-job light. */
+  since?: number;
 }) {
   const [dots, setDots] = useState(0);
   const [arrived, setArrived] = useState(false);
   const still = useMedia(STILL);
+  const job = useLongJob(since);
 
   useEffect(() => {
     /*
@@ -100,7 +115,9 @@ export function WorkingPill({
     <div
       role="status"
       aria-live="polite"
+      data-long-job={job.long ? '' : undefined}
       style={{
+        position: 'relative', isolation: 'isolate',
         display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)',
         justifySelf: 'start', minHeight: 38, padding: '0 var(--sp-6) 0 var(--sp-5)',
         borderRadius: 'var(--r-pill)',
@@ -116,20 +133,21 @@ export function WorkingPill({
           ' box-shadow var(--dur-base) var(--ease-glass)',
       }}
     >
+      <DriftGlass on={job.long} />
       <span
         aria-hidden="true"
         style={{
           display: 'grid', placeItems: 'center', width: 22, height: 22, flex: '0 0 auto',
-          borderRadius: '50%', backgroundImage: 'var(--glass-tint-accent)',
-          boxShadow: 'var(--glass-rim-1), var(--glow-accent-sm)',
-          color: 'oklch(0.93 0.07 162)',
+          borderRadius: '50%', backgroundImage: 'var(--glass-tint-violet)',
+          boxShadow: 'var(--glass-rim-1), var(--job-violet-shine)',
+          color: 'var(--job-violet-text)',
           animation: 'var(--kf-pulse) 1600ms var(--ease-glass) infinite',
         }}
       >
         <Icon name={tool ? 'search' : 'sparkles'} size={12} />
       </span>
       <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', whiteSpace: 'nowrap' }}>
-        {label}
+        <span className="ag-atlas-shimmer">{label}</span>
         <span
           aria-hidden="true"
           style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)' }}
@@ -149,6 +167,7 @@ export function WorkingPill({
           {tool}
         </span>
       )}
+      {job.long && <LongJobSeconds seconds={job.seconds} />}
     </div>
   );
 }

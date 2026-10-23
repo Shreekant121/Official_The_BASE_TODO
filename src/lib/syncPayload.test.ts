@@ -88,7 +88,7 @@ describe('hydrateFromPayload', () => {
       tasks: [],
       sessionDuration: 7200,
       taskTimeMemory: { t1: 30 },
-      projects: [{ id: 'p1', name: 'Empire', color: '#7c3aed', createdAt: 0, order: 0 }],
+      projects: [{ id: 'p1', name: 'Empire', createdAt: 0, order: 0 }],
       focusLog: [],
     };
 

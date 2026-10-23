@@ -103,7 +103,7 @@ describe('planRestore', () => {
     const result = planRestore(empty, entry({
       backlogTasks: [task({ listId: 'l1' })],
       ancestors: {
-        project: { id: 'p1', name: 'Empire', color: '#fff', createdAt: 1, order: 0 },
+        project: { id: 'p1', name: 'Empire', createdAt: 1, order: 0 },
         list: { id: 'l1', title: 'Build', projectId: 'p1' },
       },
     }), ACTION);

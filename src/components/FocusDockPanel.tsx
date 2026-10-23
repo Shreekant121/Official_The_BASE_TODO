@@ -21,9 +21,10 @@
  * margin, the pane riding in from `translateX(-16px)` so it reads as growing
  * out of the stage rather than arriving from off-screen. Material is
  * `--glass-fill-2` + `--glass-bd-md` + `--glass-shadow-pane` at
- * `--r-card-lg` — a level-2 pane, one rung BELOW the sheet it replaces,
- * because a panel that no longer covers anything does not need to shout over
- * it.
+ * `--r-md` (it was `--r-card-lg` until 2026-09-30, when he asked for the
+ * panes to be rounded rectangles like the top bar) — a level-2 pane, one rung
+ * BELOW the sheet it replaces, because a panel that no longer covers anything
+ * does not need to shout over it.
  *
  * This also settles the note the old file carried about sliding. It said
  * *"`motion.css` says nothing slides in from off-screen unless it is a sheet.
@@ -109,7 +110,9 @@ export function FocusDockPanel({ open, docked, title, subtitle, onClose, footer,
         gap: 'var(--sp-6)',
         alignContent: 'start',
         padding: 'var(--pad-card)',
-        borderRadius: 'var(--r-card-lg)',
+        /* A rounded rectangle like the bar above it, not --r-card-lg's big
+           curve — his call, 2026-09-30. */
+        borderRadius: 'var(--r-md)',
         backgroundImage: 'var(--glass-fill-2)',
         backdropFilter: 'var(--glass-bd-md)',
         WebkitBackdropFilter: 'var(--glass-bd-md)',

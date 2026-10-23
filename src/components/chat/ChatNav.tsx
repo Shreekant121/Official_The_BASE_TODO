@@ -22,7 +22,7 @@ export function ChatRail({ nav }: { nav: Nav }) {
           column's. `Z.nav` so it clears the page, matching the bar. */}
       <div style={{ position: 'relative', display: 'inline-flex', zIndex: Z.nav }}>
         {/* V3-8: the mark heads the rail, as on every V3 screen with one. */}
-        <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+        <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
         {/* `pointerEvents` is not optional and was missing until Shreekant
             hit it: *"the place where the AI's mini nav opens, that part is
             unclickable even if nav is not open"*. A closed `AtlasNavPanel`
@@ -90,7 +90,7 @@ export function ChatBottomNav({ nav }: { nav: Nav }) {
             narrow
           />
         </span>
-        <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+        <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
       </span>
     </div>
   );

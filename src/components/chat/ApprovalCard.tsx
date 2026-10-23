@@ -1,6 +1,6 @@
 /* Moved out of `pages/ChatPage.tsx` when it was split (BUILD-7); BUILD-8 gave
    it the line that says a tap did not happen. */
-import { Button, Icon } from '../../ui';
+import { Button, Icon, WhiteButton } from '../../ui';
 import type { AtlasPendingApproval } from '../../lib/atlas/client';
 import { approvalCopy, readApprovalTargets } from './approvalCopy';
 
@@ -13,7 +13,8 @@ import { approvalCopy, readApprovalTargets } from './approvalCopy';
  * difference to be *visible*: *"approvals look different, so that tapping
  * through cards never becomes a habit that carries someone through a door they
  * meant to notice."* So this is near-opaque where everything else is
- * translucent, amber-rimmed where everything else is neutral, and it is the
+ * translucent, violet-rimmed (Atlas's colour since 29-1P2c3; it was amber)
+ * where everything else is neutral, and it is the
  * one surface in the conversation that cannot be dismissed by any gesture —
  * the two buttons are the only exits, and neither of them is the one a thumb
  * reaches for by habit.
@@ -80,7 +81,7 @@ export function ApprovalCard({
           animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
         }}
       >
-        <span style={{ display: 'flex', color: sent ? 'var(--accent)' : 'var(--fg-4)' }}>
+        <span style={{ display: 'flex', color: sent ? 'var(--job-lime)' : 'var(--fg-4)' }}>
           <Icon name={sent ? 'check' : 'x'} size={16} />
         </span>
         <span style={{ flex: 1, font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)' }}>
@@ -88,7 +89,7 @@ export function ApprovalCard({
             ? approval.kind === 'delete'
               ? 'You approved this. It is in the Trash, and Revert on the log puts it back.'
               : 'You approved this. It happened.'
-            : 'Discarded — nothing left the laptop.'}
+            : 'Discarded — nothing was sent.'}
         </span>
         <span className="ag-kicker" style={{ color: 'var(--fg-4)' }}>
           in the log
@@ -102,10 +103,10 @@ export function ApprovalCard({
       style={{
         display: 'grid', gap: 'var(--sp-6)', padding: 'var(--sp-7)',
         borderRadius: 'var(--r-card)',
-        backgroundColor: 'oklch(0.16 0.02 82 / 0.55)',
-        backgroundImage: 'var(--glass-tint-amber)',
+        backgroundColor: 'var(--job-violet-floor)',
+        backgroundImage: 'var(--glass-tint-violet)',
         backdropFilter: 'var(--glass-bd-lg)', WebkitBackdropFilter: 'var(--glass-bd-lg)',
-        boxShadow: 'var(--glass-rim-3), var(--glass-inner-2), var(--glass-cast-3), var(--glow-amber-md)',
+        boxShadow: 'var(--glass-rim-3), var(--glass-inner-2), var(--glass-cast-3), var(--job-violet-shine-md)',
         /* ITEM 13G — `--dur-slow`, the longest arrival on the screen. The
            mockup gives the asking card its own duration and it is the one
            piece of motion here that is a safety property: a card that
@@ -119,13 +120,13 @@ export function ApprovalCard({
           style={{
             display: 'grid', placeItems: 'center', width: 34, height: 34, flex: '0 0 auto',
             borderRadius: 'var(--r-circle)', backgroundImage: 'var(--glass-fill-2)',
-            boxShadow: 'var(--glass-rim-2)', color: 'var(--status-review)',
+            boxShadow: 'var(--glass-rim-2)', color: 'var(--job-violet)',
           }}
         >
           <Icon name={copy.icon} size={17} />
         </span>
         <div style={{ display: 'grid', gap: 1, minWidth: 0 }}>
-          <span className="ag-kicker" style={{ color: 'var(--status-review)' }}>
+          <span className="ag-kicker" style={{ color: 'var(--job-violet-tag-fg)' }}>
             {copy.kicker}
           </span>
           <span
@@ -193,14 +194,15 @@ export function ApprovalCard({
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-        <Button
-          variant="frost"
+        {/* The card's yes: solid white (29-1P2), as frost was. */}
+        <WhiteButton
           disabled={busy}
-          iconLeft={<Icon name={copy.actionIcon} size={16} />}
+          aria-busy={busy || undefined}
+          icon={<Icon name={copy.actionIcon} size={16} />}
           onClick={onApprove}
         >
           {busy ? 'Doing it…' : failure !== null ? 'Try again' : copy.action}
-        </Button>
+        </WhiteButton>
         <Button variant="ghost" disabled={busy} onClick={onDiscard}>
           Discard
         </Button>

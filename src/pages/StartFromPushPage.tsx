@@ -30,8 +30,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useStore, type Task } from '../store/useStore';
 import { useFocusRun } from '../store/useFocusRun';
 import { planStartNow } from '../lib/smartStart';
+import { ignoredWorkOf } from '../lib/ignoredWork';
 import { setAside, startQueue } from '../components/task-fields/startNowMenu';
-import { Button, Card, Icon, Kicker, TravellingTrack } from '../ui';
+import { cue } from '../lib/sound';
+import { sessionMinutes, startsBySlide } from '../lib/focusCommitment';
+import { Button, Card, GelButton, Icon, Kicker, SlideToStart, SoftButton, TravellingTrack } from '../ui';
 
 /** How long a task that is not in this device's copy is waited for. */
 const FIND_WAIT_MS = 8000;
@@ -66,7 +69,12 @@ export default function StartFromPushPage() {
   const runTitle = useFocusRun((s) => s.task?.title ?? null);
 
   const task = backlogTasks.find((t) => t.id === taskId);
-  const plan = useMemo(() => planStartNow(backlogTasks, taskId), [backlogTasks, taskId]);
+  const lists = useStore((s) => s.taskLists);
+  const projects = useStore((s) => s.projects);
+  const plan = useMemo(
+    () => planStartNow(backlogTasks, taskId, ignoredWorkOf(backlogTasks, lists, projects).ids),
+    [backlogTasks, taskId, lists, projects],
+  );
 
   const [waitedOut, setWaitedOut] = useState(false);
   useEffect(() => {
@@ -113,9 +121,9 @@ export default function StartFromPushPage() {
                 : 'It was deleted, or moved inside another task, after the notification went out.'}
             </p>
             <span style={{ display: 'flex' }}>
-              <Button variant="glass" iconLeft={<Icon name="house" size={16} />} onClick={() => go('/')}>
+              <SoftButton icon={<Icon name="house" size={16} />} onClick={() => go('/')}>
                 Go to Home
-              </Button>
+              </SoftButton>
             </span>
           </div>
         </Card>
@@ -142,16 +150,14 @@ export default function StartFromPushPage() {
               <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
                 <Kicker>Start first</Kicker>
                 {offered.map((t) => (
-                  <Button
+                  <SoftButton
                     key={t.id}
-                    variant="glass"
-                    block
-                    iconLeft={<Icon name="play" size={16} />}
+                    icon={<Icon name="play" size={16} />}
                     onClick={() => start(t)}
-                    style={{ justifyContent: 'flex-start' }}
+                    style={{ width: '100%', justifyContent: 'flex-start' }}
                   >
                     {t.title}
-                  </Button>
+                  </SoftButton>
                 ))}
               </div>
             ) : (
@@ -186,14 +192,22 @@ export default function StartFromPushPage() {
             <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>{aside?.hint}</p>
           </div>
           <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-            <Button
-              variant="gel"
-              tone="rose"
-              iconLeft={<Icon name="play" size={16} />}
-              onClick={() => plan.kind === 'start' && startQueue(plan.queue, go)}
-            >
-              Start
-            </Button>
+            {/* The screen's one Start (29-1P2): the orange gel with the tile,
+                or a slide when the session is 90 minutes or more — his rule,
+                the same line the Dashboard and Set Deadlines draw. */}
+            {plan.kind === 'start' && startsBySlide(sessionMinutes(plan.queue)) ? (
+              <div style={{ flex: '1 1 220px', maxWidth: 320 }}>
+                <SlideToStart onConfirm={() => startQueue(plan.queue, go)}>Slide to start</SlideToStart>
+              </div>
+            ) : (
+              <GelButton
+                colour="orange"
+                size="md"
+                onClick={() => { if (plan.kind === 'start') { cue('start'); startQueue(plan.queue, go); } }}
+              >
+                Start
+              </GelButton>
+            )}
             <Button variant="ghost" onClick={() => go(runId ? '/focus' : '/')}>
               {runId ? 'Keep the current session' : 'Not now'}
             </Button>

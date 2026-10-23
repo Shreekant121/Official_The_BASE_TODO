@@ -20,12 +20,10 @@
  *   variables the engine is built on are graph variables. The settled decision
  *   drops it from every subtask surface at once. The importance dial below
  *   still writes `humanOverride`; nothing reads it yet.
- * - **Priority is two hues instead of four.** Blue / amber / orange / red ran
- *   up the scale as decoration, which `colors.css` forbids for the status
- *   hues. Colour now appears only where it means something: `high` is amber —
- *   "needs a decision" — and `urgent` is rose, the hue this system spends on a
- *   live problem. Low and medium are steps on the neutral foreground ladder,
- *   which still tells them apart without claiming either is a problem.
+ * - **No Low / Medium / High / Urgent (FIX-12, audit A2).** Four chips and a
+ *   coloured dot that nothing read: not the score, Red Alert or Smart Start.
+ *   The Importance dial below is the one that counts. An old subtask's stored
+ *   `priority` is left where it is and read by nothing.
  * - **The row's own personal-score picker is gone**, replaced by the shared
  *   one. It was a hand-rolled 1–5 row in a fifth colour (`#facc15`) doing
  *   exactly what the extracted component already did — the same duplication
@@ -48,14 +46,15 @@
  * "Add subtask" field at the foot of the tree IS a real `Input`, because that
  * one is a field rather than a row.
  */
-import { useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   countSubtasksRecursive,
-  type Subtask, type TaskPriority,
+  type Subtask,
 } from '../../store/useStore';
-import { Button, Icon, IconButton, Input, Textarea } from '../../ui';
+import { Icon, IconButton, Input, SoftIconButton, Strike, Textarea, TickBox, WhiteButton, popTick } from '../../ui';
 import HumanOverridePicker from './HumanOverridePicker';
+import { cue } from '../../lib/sound';
 
 // ── Recursive tree helpers ─────────────────────────────────────────────────
 
@@ -99,27 +98,13 @@ function updateSubtaskDetailsInTree(tree: Subtask[], id: string, updates: Partia
   }));
 }
 
-// ── Priority ───────────────────────────────────────────────────────────────
-
-/**
- * Two hues, not four. See the note at the top of this file: `high` needs a
- * decision, `urgent` is a live problem, and the two below them are steps on
- * the neutral ladder rather than colours that claim anything.
- */
-const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string; fill: string }> = {
-  low:    { label: 'Low',    color: 'var(--fg-4)',           fill: 'var(--glass-fill-1)'     },
-  medium: { label: 'Medium', color: 'var(--fg-2)',           fill: 'var(--glass-fill-2)'     },
-  high:   { label: 'High',   color: 'var(--status-review)',  fill: 'var(--glass-tint-amber)' },
-  urgent: { label: 'Urgent', color: 'var(--status-overrun)', fill: 'var(--glass-tint-rose)'  },
-};
-
 /** The chromeless field a tree row is renamed in — see the note at the top. */
 const INLINE_FIELD = {
   flex: 1,
   minWidth: 0,
   padding: '0 0 2px',
   border: 0,
-  borderBottom: '1px solid var(--accent-hairline)',
+  borderBottom: '1px solid var(--job-lime-line)',
   borderRadius: 0,
   outline: 'none',
   background: 'transparent',
@@ -157,7 +142,6 @@ function SubtaskItem({ sub, depth, onToggle, onDelete, onAddChild, onRename, onU
   const [showDetails, setShowDetails] = useState(false);
   const [detailDesc, setDetailDesc] = useState(sub.description ?? '');
   const [detailDeadline, setDetailDeadline] = useState(sub.deadline ?? '');
-  const [detailPriority, setDetailPriority] = useState<TaskPriority | undefined>(sub.priority);
   const [detailOverride, setDetailOverride] = useState<number | undefined>(sub.humanOverride);
   const children = sub.subtasks ?? [];
   const indentPx = depth * 22;
@@ -171,7 +155,6 @@ function SubtaskItem({ sub, depth, onToggle, onDelete, onAddChild, onRename, onU
     setPrevSubId(sub.id);
     setDetailDesc(sub.description ?? '');
     setDetailDeadline(sub.deadline ?? '');
-    setDetailPriority(sub.priority);
     setDetailOverride(sub.humanOverride);
     setTitleValue(sub.title);
   }
@@ -194,7 +177,6 @@ function SubtaskItem({ sub, depth, onToggle, onDelete, onAddChild, onRename, onU
     onUpdateDetails(sub.id, {
       description: detailDesc.trim() || undefined,
       deadline: detailDeadline || undefined,
-      priority: detailPriority,
       humanOverride: detailOverride,
     });
     setShowDetails(false);
@@ -202,6 +184,7 @@ function SubtaskItem({ sub, depth, onToggle, onDelete, onAddChild, onRename, onU
 
   const childCounts = countSubtasksRecursive(children);
   const done = sub.status === 'completed';
+  const tickBox = useRef<HTMLSpanElement>(null);
 
   return (
     <div>
@@ -236,28 +219,21 @@ function SubtaskItem({ sub, depth, onToggle, onDelete, onAddChild, onRename, onU
           type="button"
           aria-label={done ? 'Mark not done' : 'Mark done'}
           aria-pressed={done}
-          onClick={() => onToggle(sub.id)}
+          onClick={() => {
+            cue(done ? 'untick' : 'tick');
+            /* 29-1P4b: the box pops on a tick. A subtask floats no +1 (his call). */
+            if (!done) popTick(tickBox.current);
+            onToggle(sub.id);
+          }}
           style={{
             display: 'grid', placeItems: 'center', flex: '0 0 auto',
             padding: 0, border: 0, background: 'transparent', cursor: 'pointer',
-            color: done ? 'var(--status-done)' : 'var(--fg-4)',
-            transition: 'color var(--dur-fast) var(--ease-glass)',
           }}
         >
-          <Icon name={done ? 'check-circle-2' : 'circle'} size={16} />
+          {/* The board's done box since 29-1P4b, not a round check glyph:
+              every done box in BASE is one drawing (his call). */}
+          <TickBox ref={tickBox} done={done} size={16} />
         </button>
-
-        {sub.priority && (
-          <span
-            aria-hidden="true"
-            title={`${PRIORITY_CONFIG[sub.priority].label} priority`}
-            style={{
-              width: 6, height: 6, flex: '0 0 auto',
-              borderRadius: 'var(--r-circle)',
-              background: PRIORITY_CONFIG[sub.priority].color,
-            }}
-          />
-        )}
 
         {editingTitle ? (
           <input
@@ -284,11 +260,10 @@ function SubtaskItem({ sub, depth, onToggle, onDelete, onAddChild, onRename, onU
               fontSize: 'var(--text-sm)',
               lineHeight: 'var(--leading-snug)',
               color: done ? 'var(--fg-4)' : 'var(--fg-2)',
-              textDecoration: done ? 'line-through' : undefined,
               cursor: 'pointer',
             }}
           >
-            {sub.title}
+            <Strike on={done}>{sub.title}</Strike>
           </span>
         )}
 
@@ -308,7 +283,7 @@ function SubtaskItem({ sub, depth, onToggle, onDelete, onAddChild, onRename, onU
             className="hidden sm:flex items-center"
             style={{ flex: '0 0 auto', gap: 2, font: 'var(--type-kicker)', color: 'var(--fg-4)' }}
           >
-            <Icon name="calendar" size={11} />
+            <Icon name="calendar" size={11} style={{ color: 'var(--job-sky)' }} />
             {new Date(sub.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </span>
         )}
@@ -374,41 +349,10 @@ function SubtaskItem({ sub, depth, onToggle, onDelete, onAddChild, onRename, onU
                   onChange={(e) => setDetailDeadline(e.target.value)}
                 />
 
-                <div className="flex flex-wrap" style={{ gap: 'var(--sp-2)' }}>
-                  {(Object.entries(PRIORITY_CONFIG) as [TaskPriority, typeof PRIORITY_CONFIG[TaskPriority]][]).map(([p, cfg]) => {
-                    const on = detailPriority === p;
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => setDetailPriority(on ? undefined : p)}
-                        style={{
-                          height: 24,
-                          padding: '0 var(--sp-4)',
-                          border: 0,
-                          borderRadius: 'var(--r-pill)',
-                          backgroundImage: on ? cfg.fill : 'none',
-                          boxShadow: on ? 'var(--glass-rim-1)' : 'inset 0 0 0 1px var(--line-faint)',
-                          font: 'var(--type-kicker)',
-                          letterSpacing: 'var(--tracking-kicker)',
-                          textTransform: 'var(--kicker-transform)' as CSSProperties['textTransform'],
-                          color: on ? cfg.color : 'var(--fg-4)',
-                          cursor: 'pointer',
-                          transition:
-                            'background-image var(--dur-fast) var(--ease-glass), color var(--dur-fast) var(--ease-glass)',
-                        }}
-                      >
-                        {cfg.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
                 <span style={{ flex: 1 }} />
-                <Button size="sm" variant="tint" tone="accent" onClick={saveDetails}>
+                <WhiteButton size="sm" onClick={saveDetails}>
                   Save
-                </Button>
+                </WhiteButton>
               </div>
 
               {/* Same importance dial as top-level tasks, available at every depth */}
@@ -551,9 +495,9 @@ export default function SubtaskTree({ value, onChange }: SubtaskTreeProps) {
           size="sm"
           style={{ flex: 1, minWidth: 0 }}
         />
-        <IconButton size="sm" label="Add subtask" onClick={addTopLevel}>
+        <SoftIconButton size="sm" label="Add subtask" onClick={addTopLevel}>
           <Icon name="plus" size={16} />
-        </IconButton>
+        </SoftIconButton>
       </div>
     </div>
   );

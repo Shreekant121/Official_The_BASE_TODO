@@ -2,79 +2,58 @@
  * New / Edit project.
  * Mockup: the `NewProject` function in `design-system/screens/home.html`.
  *
- * Rebuilt on Aurora Glass. Two things genuinely changed for the user, and
- * both are deliberate:
+ * Rebuilt on Aurora Glass. One thing genuinely changed for the user, and it
+ * is deliberate:
  *
- *   - **The colour picker narrowed to the system's six hues plus a hex
- *     field.** The mockup's own note says why: ten saturated presets would
- *     out-shout emerald, which in this system is the one colour that means
- *     *live*. The hex field covers the real case the old picker existed for
- *     — a project that has to match an external brand — so no colour is
- *     unreachable, and one already saved outside the six loads straight
- *     into that field and round-trips untouched.
  *   - **The cover image moved out of the header.** It used to be a 160px
  *     banner across the top of the sheet; it is now a row inside the "Cover
  *     image" section — a 108×36 proof, the file name, and a remove button.
  *     The dashed target it replaces also accepts a dropped file now.
  *
- * The glyph picker did NOT narrow. The mockup hard-codes twelve emoji
- * against fake data; the real list is `PRESET_ICONS` plus whatever the
- * custom-icon registry holds, and an existing project's glyph has to
- * survive an edit. It keeps `AppIcon` for the same reason — a custom icon
- * is an image, not a character. What it takes from the mockup is the
- * shape: the grid grows out of the tile inside a well rather than floating
- * over the sheet as a popover.
+ * **The icon is a white Phosphor glyph since 29-1P8a2** (idea 150, his
+ * call): the tile is `ProjectIcon`, the glow behind it the cover's colour —
+ * the cover chosen below, live, so picking a cover recolours the icon here
+ * before Save. Its picker (`ProjectIconPicker`) searches every Phosphor
+ * glyph and grows out of the tile inside a well, as the emoji grid it
+ * replaced did. An emoji chosen before stays until he picks an icon.
  *
- * One departure from the mockup's own state model: it keeps the chosen hue
- * and the typed hex as two separate values and derives the swatch from
- * them. Here the hex field is bound straight to `color`, the single thing
- * that gets saved, so the field always reads back exactly what will be
- * stored — which is also what makes an existing custom colour appear in it
- * on open without any loading step.
+ * **No colour picker since OPT-4** (2026-10-06, his call: *"Remove the
+ * Accent colour from the software entirely it just wastes the space"*).
+ * Projects carry no colour anywhere in the app.
  *
  * Unchanged underneath: `onSave`'s payload field for field, `compressImage`
  * on upload, `parseBulkLines` for batch mode, the reset-on-open pattern,
  * and `useOverlayDismiss` owning Escape. Batch mode still writes only name
- * + colour + icon — a description and a cover are inherently per-project,
+ * + icon — a description and a cover are inherently per-project,
  * so the sheet hides them rather than pretending they apply to ten
  * projects at once.
  */
 import { useState, useRef } from 'react';
 import type { ChangeEvent, CSSProperties, ReactNode } from 'react';
-import { Button, Dialog, Icon, IconButton, Input, Textarea } from '../ui';
-import { type Project } from '../store/useStore';
-import { CUSTOM_ICONS } from '../lib/customIcons';
+import { Button, Dialog, Icon, IconButton, Input, SoftToggle, Textarea, WhiteButton, type IconName } from '../ui';
+import { useStore, type Project } from '../store/useStore';
 import { parseBulkLines } from '../lib/bulkAdd';
-import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, PROJECT_HUES } from '../lib/projectHues';
+import { DEFAULT_PROJECT_ICON, FALLBACK_PROJECT_ICON } from '../lib/projectIcon';
 import { useOverlayDismiss } from '../lib/useOverlayDismiss';
 import { Z } from '../lib/zLayers';
-import AppIcon from './AppIcon';
+import { storeCover, useCoverSrc } from '../lib/covers/coverCache';
+import CoverPicker from './CoverPicker';
+import ProjectIcon from './ProjectIcon';
+import ProjectIconPicker from './ProjectIconPicker';
+import { hashId, type ProjectCoverStyle } from '../lib/projectCover';
 
 /**
- * The six hues, from the mockup's own `HUES` table. They live in
- * `lib/projectHues.ts` since BUILD-3, so a project Atlas creates is painted
- * from the same table as one made here.
+ * A new project's first cover, chosen here rather than left to its id's
+ * default, so the preview in this sheet is the cover it is created with —
+ * the id does not exist until Create. Rolled from how many projects there
+ * are, not `Math.random`, so each new project gets another one and the
+ * sheet's screenshot is the same every run; Shuffle is the random part.
  */
-const HUES = PROJECT_HUES;
+const freshCover = (count: number): ProjectCoverStyle => ({ seed: hashId(`new-project-${count}`) });
 
-const DEFAULT_COLOR = DEFAULT_PROJECT_COLOR;
-
-const PRESET_ICONS = [DEFAULT_PROJECT_ICON, '💡', '📋', '🎯', '⚡', '🌟', '🔥', '💎', '🧠', '🎨', '📊', '🛠️', '📌', '🏆', '🌈', '🎵'];
-
-/** All pickable icons: built-in emoji plus anything registered in the custom-icon registry (see `src/lib/customIcons.ts`). */
-const ALL_ICON_OPTIONS: string[] = [...PRESET_ICONS, ...CUSTOM_ICONS.map((c) => c.key)];
-
-/** `#rrggbb`, the `#` optional — what the hex field accepts. */
-const HEX_RE = /^#?[0-9a-f]{6}$/i;
-
-const normalizeHex = (v: string) => {
-  const t = v.trim();
-  return t.startsWith('#') ? t : '#' + t;
-};
-
-/** The id of the hue this colour *is*, or `custom` when it is none of them. */
-const hueOf = (color: string) =>
-  HUES.find((h) => h.hex.toLowerCase() === color.trim().toLowerCase())?.id ?? 'custom';
+/** What the sheet opens with: an existing project's own icon, or a new one's rocket. */
+const startIcon = (project: Project | undefined): string =>
+  project ? (project.icon || FALLBACK_PROJECT_ICON) : DEFAULT_PROJECT_ICON;
 
 async function compressImage(file: File, maxDim = 1200, quality = 0.82): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -99,7 +78,7 @@ async function compressImage(file: File, maxDim = 1200, quality = 0.82): Promise
 }
 
 /** A glyph and a label above a block — the mockup's `Section` helper. */
-function Section({ icon, label, children }: { icon: 'palette' | 'image'; label: string; children: ReactNode }) {
+function Section({ icon, label, children }: { icon: IconName; label: string; children: ReactNode }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-4)' }}>
       <span
@@ -126,14 +105,19 @@ interface CreateProjectModalProps {
   onClose: () => void;
   onSave: (data: Omit<Project, 'id' | 'createdAt' | 'order'>) => void;
   project?: Project;
+  /** Creating inside another project (BIG-2): its name, for the sentence under the title. */
+  insideName?: string;
 }
 
-export default function CreateProjectModal({ isOpen, onClose, onSave, project }: CreateProjectModalProps) {
+export default function CreateProjectModal({ isOpen, onClose, onSave, project, insideName }: CreateProjectModalProps) {
   const [name, setName] = useState(project?.name ?? '');
   const [description, setDescription] = useState(project?.description ?? '');
-  const [color, setColor] = useState(project?.color ?? DEFAULT_COLOR);
-  const [icon, setIcon] = useState(project?.icon ?? '🚀');
+  const [finishBy, setFinishBy] = useState(project?.finishBy ?? '');
+  const [icon, setIcon] = useState(() => startIcon(project));
   const [imageUrl, setImageUrl] = useState(project?.imageUrl ?? '');
+  const projectCount = useStore((s) => s.projects.length);
+  const [cover, setCover] = useState<ProjectCoverStyle | undefined>(() => project ? project.cover : freshCover(projectCount));
+  const imageSrc = useCoverSrc(imageUrl);
   const [imageName, setImageName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
@@ -150,7 +134,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
    * (only its `isOpen` prop toggles, so the sheet can play its exit) — so
    * without this, the field `useState` initializers only ever ran once on
    * the very first mount, and every subsequent open of the modal silently
-   * reused whatever name/description/color/icon/image was left over from
+   * reused whatever name/description/icon/image was left over from
    * the previous project. Re-sync from `project` (or blank defaults for
    * "create" mode) every time the modal opens.
    *
@@ -166,9 +150,10 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
     if (isOpen) {
       setName(project?.name ?? '');
       setDescription(project?.description ?? '');
-      setColor(project?.color ?? DEFAULT_COLOR);
-      setIcon(project?.icon ?? '🚀');
+      setFinishBy(project?.finishBy ?? '');
+      setIcon(startIcon(project));
       setImageUrl(project?.imageUrl ?? '');
+      setCover(project ? project.cover : freshCover(projectCount));
       setImageName('');
       setShowIconPicker(false);
       setBulkMode(false);
@@ -182,8 +167,8 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
     if (!file || !file.type.startsWith('image/')) return;
     setIsUploading(true);
     try {
-      const compressed = await compressImage(file);
-      setImageUrl(compressed);
+      // Its own document, not this project's record (`lib/covers/`).
+      setImageUrl(await storeCover(await compressImage(file)));
       setImageName(file.name);
     } catch {
       // ignore
@@ -201,24 +186,22 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
   const bulkNameLines = parseBulkLines(bulkNames);
   const valid = bulkMode ? bulkNameLines.length > 0 : name.trim().length > 0;
 
-  const hue = hueOf(color);
-  const hexValid = HEX_RE.test(color);
-
   const handleSave = () => {
     if (!valid) return;
     if (bulkMode) {
-      // Shared accent color + icon across every project created; no
-      // description/cover image since those are inherently per-project.
-      bulkNameLines.forEach((line) => onSave({ name: line, color, icon }));
+      // Shared icon across every project created; no description/cover
+      // image since those are inherently per-project.
+      bulkNameLines.forEach((line) => onSave({ name: line, icon }));
       onClose();
       return;
     }
     onSave({
       name: name.trim(),
       description: description.trim() || undefined,
-      color,
+      finishBy: finishBy || undefined,
       icon,
       imageUrl: imageUrl || undefined,
+      cover,
     });
     onClose();
   };
@@ -226,9 +209,9 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
   const title = project ? 'Edit project' : bulkMode ? 'New projects' : 'New project';
   const blurb = project
     ? 'Changes show up everywhere this project appears.'
-    : bulkMode
+    : `${insideName ? `Inside ${insideName}. ` : ''}${bulkMode
       ? 'One name per line. Lists and tasks come after.'
-      : 'Name it now. Lists and tasks come after.';
+      : 'Name it now. Lists and tasks come after.'}`;
 
   return (
     <Dialog
@@ -243,7 +226,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
       style={{ gap: 0, padding: 0, gridTemplateColumns: 'minmax(0, 1fr)' }}
     >
       <div
-        className="ag-scroll"
+        className="ag-scroll ag-fade"
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 1fr)',
@@ -279,57 +262,39 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
             add" screen would duplicate every other field here. Not offered
             while editing — there is exactly one project to rename. */}
         {!project && (
-          <button
-            type="button"
-            onClick={() => setBulkMode((v) => !v)}
-            aria-pressed={bulkMode}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 'var(--sp-3)',
-              justifySelf: 'start',
-              height: 34,
-              padding: '0 var(--sp-5)',
-              border: 0,
-              cursor: 'pointer',
-              borderRadius: 'var(--r-pill)',
-              background: bulkMode ? 'var(--glass-tint-accent)' : 'var(--glass-fill-1)',
-              boxShadow: bulkMode ? 'var(--glass-rim-2), var(--glow-accent-sm)' : 'var(--glass-rim-1)',
-              color: bulkMode ? 'oklch(0.93 0.07 162)' : 'var(--fg-3)',
-              font: 'var(--type-label)',
-              fontSize: 'var(--text-sm)',
-              transition: 'var(--t-hover)',
-            }}
+          <SoftToggle
+            size="sm"
+            pressed={bulkMode}
+            onPressedChange={setBulkMode}
+            icon={<Icon name="layers" size={15} />}
+            style={{ justifySelf: 'start' }}
           >
-            <Icon name="layers" size={15} />
             Add multiple at once
-          </button>
+          </SoftToggle>
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--sp-5)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
             <button
               type="button"
+              className="ag-licon-host"
               onClick={() => setShowIconPicker((v) => !v)}
-              aria-label="Choose project glyph"
+              aria-label="Choose project icon"
               aria-expanded={showIconPicker}
               style={{
                 flex: '0 0 auto',
                 display: 'grid',
                 placeItems: 'center',
-                width: 48,
-                height: 48,
+                padding: 0,
                 border: 0,
                 cursor: 'pointer',
                 borderRadius: 'var(--r-md)',
-                backgroundImage: 'var(--glass-fill-3)',
-                boxShadow: showIconPicker
-                  ? 'var(--glass-rim-2), 0 0 0 1px var(--accent-hairline)'
-                  : 'var(--glass-rim-2), var(--glass-cast-2)',
+                backgroundColor: 'transparent',
+                boxShadow: showIconPicker ? '0 0 0 1px var(--job-lime-line)' : 'none',
                 transition: 'var(--t-hover)',
               }}
             >
-              <AppIcon icon={icon} size={23} />
+              <ProjectIcon project={{ id: project?.id ?? 'new', icon, imageUrl, cover }} size={48} />
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               {bulkMode ? (
@@ -356,59 +321,23 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
             </div>
           </div>
 
-          {/* Grows out of the tile instead of floating over the sheet. It
-              scrolls: the registry can hold more glyphs than the mockup's
-              twelve, and a sheet that grows a third taller when you open a
-              picker is worse than one that scrolls inside it. */}
+          {/* Grows out of the tile instead of floating over the sheet, and
+              is built the first time it opens (its icons are a download of
+              their own). Picking closes it. */}
           {showIconPicker && (
-            <div
-              className="ag-scroll"
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 'var(--sp-3)',
-                padding: 'var(--sp-4)',
-                maxHeight: 200,
-                overflowY: 'auto',
-                overscrollBehavior: 'contain',
-                borderRadius: 'var(--r-lg)',
-                backgroundImage: 'var(--glass-well)',
-                boxShadow: 'var(--glass-well-shadow)',
-                animation: 'var(--kf-condense) var(--dur-base) var(--ease-morph) both',
+            <ProjectIconPicker
+              value={icon}
+              projectName={name}
+              onPick={(next) => {
+                setIcon(next);
+                setShowIconPicker(false);
               }}
-            >
-              {ALL_ICON_OPTIONS.map((em) => (
-                <button
-                  key={em}
-                  type="button"
-                  onClick={() => {
-                    setIcon(em);
-                    setShowIconPicker(false);
-                  }}
-                  aria-label={`Glyph ${em}`}
-                  aria-pressed={em === icon}
-                  style={{
-                    display: 'grid',
-                    placeItems: 'center',
-                    width: 40,
-                    height: 40,
-                    border: 0,
-                    cursor: 'pointer',
-                    borderRadius: 'var(--r-sm)',
-                    background: em === icon ? 'var(--glass-fill-3)' : 'transparent',
-                    boxShadow: em === icon ? 'var(--glass-rim-2)' : 'none',
-                    transition: 'var(--t-hover)',
-                  }}
-                >
-                  <AppIcon icon={em} size={19} />
-                </button>
-              ))}
-            </div>
+            />
           )}
 
           {bulkMode ? (
             <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
-              Every project gets the glyph and accent colour above. Descriptions and covers are
+              Every project gets the icon above. Descriptions and covers are
               per project — add those once the projects exist.
             </span>
           ) : (
@@ -421,93 +350,38 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
           )}
         </div>
 
-        <Section icon="palette" label="Accent colour">
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--sp-4)' }}>
-            {HUES.map((h) => {
-              const on = hue === h.id;
-              return (
-                <button
-                  key={h.id}
-                  type="button"
-                  onClick={() => setColor(h.hex)}
-                  aria-label={h.label}
-                  aria-pressed={on}
-                  style={{
-                    width: 30,
-                    height: 30,
-                    padding: 0,
-                    border: 0,
-                    cursor: 'pointer',
-                    borderRadius: '50%',
-                    background: h.token,
-                    boxShadow: on
-                      ? `inset 0 1px 0 oklch(1 0 0 / 0.35), 0 0 0 2px var(--void-0), 0 0 0 4px ${h.token}`
-                      : 'inset 0 1px 0 oklch(1 0 0 / 0.35), 0 1px 4px oklch(0 0 0 / 0.5)',
-                    transform: on ? 'scale(1)' : 'scale(0.94)',
-                    transition: 'var(--t-hover)',
-                  }}
-                />
-              );
-            })}
-            <span style={{ width: 1, height: 22, background: 'var(--line-soft)' }} />
-            {/* The one real case the ten-preset picker existed for: a project
-                that has to match an external brand. Typing here IS choosing
-                custom — there is no separate swatch to arm first. */}
-            <label
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--sp-3)',
-                height: 34,
-                padding: '0 var(--sp-4) 0 var(--sp-3)',
-                borderRadius: 'var(--r-pill)',
-                backgroundImage: 'var(--glass-well)',
-                boxShadow:
-                  hue === 'custom' && hexValid
-                    ? 'var(--glass-well-shadow), 0 0 0 1px var(--line-strong)'
-                    : 'var(--glass-well-shadow), 0 0 0 1px var(--line-faint)',
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: '50%',
-                  background: hexValid ? normalizeHex(color) : 'var(--void-3)',
-                  boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.3)',
-                }}
+        {/* 29-1P9b (idea 156, his pick C): the day it should be finished by,
+            the coral line on the board's "when it'll be done" chart. */}
+        {!bulkMode && (
+          <Section icon="calendar" label="Finish by">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+              <Input
+                type="date"
+                value={finishBy}
+                onChange={(e) => setFinishBy(e.target.value)}
+                aria-label="Finish by"
+                block={false}
               />
-              <input
-                className="ag-field"
-                data-ag-field=""
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                onBlur={() => {
-                  if (hexValid) setColor(normalizeHex(color));
-                }}
-                placeholder="#hex"
-                aria-label="Custom accent hex"
-                maxLength={7}
-                spellCheck={false}
-                style={{
-                  width: 74,
-                  border: 0,
-                  outline: 'none',
-                  background: 'transparent',
-                  color: 'var(--fg-1)',
-                  font: 'var(--type-numeric)',
-                  fontSize: 'var(--text-xs)',
-                  textTransform: 'lowercase',
-                }}
-              />
-            </label>
-          </div>
-        </Section>
+              {finishBy && (
+                <IconButton label="Clear the finish date" variant="ghost" size="sm" onClick={() => setFinishBy('')}>
+                  <Icon name="x" size={16} />
+                </IconButton>
+              )}
+            </div>
+          </Section>
+        )}
 
         {/* Cover image — per-project, hidden in bulk mode. */}
         {!bulkMode && (
-          <Section icon="image" label="Cover image">
+          <Section icon="image" label="Cover">
+            <CoverPicker
+              subject={{ id: project?.id ?? 'new', name: name.trim() || 'New project', icon, imageUrl, cover }}
+              onCoverChange={setCover}
+              onClearPhoto={() => {
+                setImageUrl('');
+                setImageName('');
+              }}
+            />
             {imageUrl ? (
               <div
                 style={{
@@ -525,7 +399,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
                     `brightness(0.85)`, which made this thumbnail lie about the
                     picture twice over once the real covers went full colour. */}
                 <img
-                  src={imageUrl}
+                  src={imageSrc}
                   alt=""
                   style={{
                     /* The card's 12:7 in miniature, so a 1200×700
@@ -587,15 +461,15 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
                   padding: 'var(--sp-6)',
                   cursor: isUploading ? 'default' : 'pointer',
                   borderRadius: 'var(--r-lg)',
-                  border: `1px dashed ${dropping ? 'var(--accent-hairline)' : 'var(--line-strong)'}`,
-                  background: dropping ? 'var(--accent-wash)' : 'transparent',
+                  border: `1px dashed ${dropping ? 'var(--job-lime-line)' : 'var(--line-strong)'}`,
+                  background: dropping ? 'var(--job-lime-wash)' : 'transparent',
                   color: dropping ? 'var(--fg-1)' : 'var(--fg-3)',
                   font: 'var(--type-label)',
                   transition: 'var(--t-hover)',
                 }}
               >
                 <Icon name="image-up" size={20} />
-                {isUploading ? 'Compressing…' : 'Upload cover image'}
+                {isUploading ? 'Compressing…' : 'Or upload your own photo'}
               </button>
             )}
             <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
@@ -634,18 +508,19 @@ export default function CreateProjectModal({ isOpen, onClose, onSave, project }:
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            variant="gel"
+          {/* The sheet's confirm: solid white since 29-1P2 (gel is for a
+              screen's one main action, and this is a dialog's yes). */}
+          <WhiteButton
             disabled={!valid}
             onClick={handleSave}
-            iconLeft={<Icon name={project ? 'check' : 'plus'} size={16} />}
+            icon={<Icon name={project ? 'check' : 'plus'} size={16} />}
           >
             {project
               ? 'Save changes'
               : bulkMode && bulkNameLines.length > 1
                 ? `Create ${bulkNameLines.length} projects`
                 : 'Create project'}
-          </Button>
+          </WhiteButton>
         </div>
       </div>
     </Dialog>

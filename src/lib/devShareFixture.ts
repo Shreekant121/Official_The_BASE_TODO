@@ -98,7 +98,7 @@ export function devShareFixture(shareId: string): DevShareFixture | null {
   const project: NonNullable<PublicShareDoc['project']> = {
     name: 'Shreekant Empire',
     description: 'The holding company — incorporation, compliance, and the first two revenue lines.',
-    color: '#8b5cf6',
+   
     icon: '🏛️',
     totalValueINR: 186_000,
     lists: [
@@ -118,7 +118,6 @@ export function devShareFixture(shareId: string): DevShareFixture | null {
             deadline: '2026-03-18T11:00',
             estimatedTime: 90,
             valueINR: 48_000,
-            tags: ['compliance', 'urgent'],
             subtaskDone: 1,
             subtaskTotal: 3,
             subtasks: [
@@ -145,7 +144,6 @@ export function devShareFixture(shareId: string): DevShareFixture | null {
             deadline: '2026-03-27T09:00',
             estimatedTime: 45,
             valueINR: 22_000,
-            tags: ['banking'],
             subtaskDone: 0,
             subtaskTotal: 0,
           },
@@ -187,7 +185,6 @@ export function devShareFixture(shareId: string): DevShareFixture | null {
             deadline: '2026-04-02T17:00',
             estimatedTime: 240,
             valueINR: 38_000,
-            tags: ['design'],
             subtaskDone: 0,
             subtaskTotal: 0,
           },

@@ -1,0 +1,142 @@
+/* ---------------------------------------------------------------
+   EACH SCREEN'S LIGHT (29-1P5a, ideas 62 and 14).
+
+   The page's two soft masses (`--ag-mass-a`, `--ag-mass-b` in v3.css)
+   take their colour from `--screen-light`, and this file says what it
+   is: `lib/useScreenLight.ts` writes the screen's light onto <html> as
+   `data-screen-light` (`lib/screenLight.ts` decides which), and the rules
+   below turn it into a `--job-*` colour on every `.ag-page`, and on every
+   app nav (`.ag-nav-lit`, 29-1P5b: its lit cell wears the screen's light;
+   `navigation/navLight.css`). Emerald, the default, is the colour every
+   backdrop wore before this step.
+
+   THE FADE. `--screen-light` is a registered colour, so it transitions.
+   A screen that has just appeared — mounted, or a kept screen shown again
+   out of `display: none` — has no colour to transition FROM, so
+   `@starting-style` hands it the light of the screen it came from
+   (`data-screen-light-from`) and it fades into its own. That is the only
+   time anything here moves: at rest every value is still.
+
+   Registered with `inherits: false` and set on `.ag-page` itself, so
+   changing screen restyles the pages and not the tree inside them.
+
+   THE DASHBOARD'S SKY (idea 14, the Dashboard only, his call). Its page is
+   `.ag-page--sky`: a third mass, and three colours that change four times a
+   day — morning, afternoon, evening, night, on the same hours as its
+   greeting — melting over 1.6s when the hour turns, then sitting still. The
+   sky is a sky, so its colours are not jobs; its lead colour is the
+   Dashboard's light, and the nav's lit cell takes it.
+   --------------------------------------------------------------- */
+
+@property --screen-light {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: oklch(0.7 0.16 162);
+}
+@property --screen-light-from {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: oklch(0.7 0.16 162);
+}
+@property --sky-b {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: oklch(0.7 0.16 162);
+}
+@property --sky-c {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: oklch(0.7 0.16 162);
+}
+
+[data-v3] {
+  --dur-light: 700ms;
+  --dur-sky: 1600ms;
+  /* Settings and the screens under it: a light with no colour in it. */
+  --screen-light-neutral: oklch(0.62 0.012 260);
+  --screen-light-nav-neutral: oklch(0.86 0.01 260);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-v3] { --dur-light: 1ms; --dur-sky: 1ms; }
+}
+
+/* Where the page is now. A tilting card's light (idea 25, `motionPieces.css`)
+   is the screen's too. */
+:root[data-screen-light='emerald'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-emerald); }
+:root[data-screen-light='teal'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-teal); }
+:root[data-screen-light='violet'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-violet); }
+:root[data-screen-light='sky'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-sky); }
+:root[data-screen-light='coral'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-coral); }
+:root[data-screen-light='neutral'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--screen-light-neutral); }
+:root[data-screen-light='hour-morning'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-orange); }
+:root[data-screen-light='hour-afternoon'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-sky); }
+:root[data-screen-light='hour-evening'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-rose); }
+:root[data-screen-light='hour-night'] :is(.ag-page, .ag-nav-lit, .ag-tilt-shine) { --screen-light: var(--job-indigo); }
+
+/* Where it came from — read only by @starting-style, below. */
+:root[data-screen-light-from='emerald'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-emerald); }
+:root[data-screen-light-from='teal'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-teal); }
+:root[data-screen-light-from='violet'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-violet); }
+:root[data-screen-light-from='sky'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-sky); }
+:root[data-screen-light-from='coral'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-coral); }
+:root[data-screen-light-from='neutral'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--screen-light-neutral); }
+:root[data-screen-light-from='hour-morning'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-orange); }
+:root[data-screen-light-from='hour-afternoon'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-sky); }
+:root[data-screen-light-from='hour-evening'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-rose); }
+:root[data-screen-light-from='hour-night'] :is(.ag-page, .ag-nav-lit) { --screen-light-from: var(--job-indigo); }
+
+/* The nav's lit cell on a screen with no colour (Settings, Trash, Archive,
+   Admin): silver-white, his call (29-1P5b), so it still stands apart from
+   the quiet grey icons. After the two maps above, and as specific. */
+:root[data-screen-light='neutral'] .ag-nav-lit { --screen-light: var(--screen-light-nav-neutral); }
+:root[data-screen-light-from='neutral'] .ag-nav-lit { --screen-light-from: var(--screen-light-nav-neutral); }
+
+/* EACH NAV ICON IN ITS SCREEN'S COLOUR (29-1P5b, his call: "make it so that
+   all icons have color"). `MiniNav` puts `navCellLight`'s answer on the cell
+   as `data-light`; the Dashboard's `hour` follows `data-hour` on <html>. The
+   lit cell's own rule, in `navigation/navLight.css`, comes after and wins. */
+.ag-nav-cell[data-light] .ag-licon { --licon-c: var(--cell-light); }
+.ag-nav-cell[data-light='emerald'] { --cell-light: var(--job-emerald); }
+.ag-nav-cell[data-light='teal'] { --cell-light: var(--job-teal); }
+.ag-nav-cell[data-light='violet'] { --cell-light: var(--job-violet); }
+.ag-nav-cell[data-light='sky'] { --cell-light: var(--job-sky); }
+.ag-nav-cell[data-light='coral'] { --cell-light: var(--job-coral); }
+.ag-nav-cell[data-light='neutral'] { --cell-light: var(--screen-light-nav-neutral); }
+:root[data-hour='morning'] .ag-nav-cell[data-light='hour'] { --cell-light: var(--job-orange); }
+:root[data-hour='afternoon'] .ag-nav-cell[data-light='hour'] { --cell-light: var(--job-sky); }
+:root[data-hour='evening'] .ag-nav-cell[data-light='hour'] { --cell-light: var(--job-rose); }
+:root[data-hour='night'] .ag-nav-cell[data-light='hour'] { --cell-light: var(--job-indigo); }
+
+/* The sky's other two colours. Morning and night after the ideas page;
+   evening is the page's missing dusk, between its afternoon and night. */
+:root[data-screen-light='hour-morning'] .ag-page--sky { --sky-b: var(--job-coral); --sky-c: var(--job-sky); }
+:root[data-screen-light='hour-afternoon'] .ag-page--sky { --sky-b: var(--job-teal); --sky-c: var(--job-indigo); }
+:root[data-screen-light='hour-evening'] .ag-page--sky { --sky-b: var(--job-orange); --sky-c: var(--job-violet); }
+:root[data-screen-light='hour-night'] .ag-page--sky { --sky-b: var(--job-violet); --sky-c: oklch(0.5 0.1 265); }
+
+:is([data-v3] .ag-page, .ag-page[data-v3]) {
+  transition: --screen-light var(--dur-light) var(--ease-glide);
+}
+:is([data-v3] .ag-page--sky, .ag-page--sky[data-v3]) {
+  transition:
+    --screen-light var(--dur-sky) var(--ease-in-out),
+    --sky-b var(--dur-sky) var(--ease-in-out),
+    --sky-c var(--dur-sky) var(--ease-in-out);
+}
+
+/* FOCUS IN ITS COVER'S COLOUR (29-1P11c, ideas 46 and 68). Focus writes its
+   project's main cover colour on its page as `--cover-light`; this makes it
+   the page's light, so it fades in like any screen's and from task to task.
+   As specific as the maps above (0,3,0) and after them; the starting rule
+   below is as specific and after this, so it wins while starting. The
+   nav's lit cell keeps Focus's teal. */
+:root .ag-page[data-cover-light] { --screen-light: var(--cover-light); }
+
+/* After the rules above and as specific, so it wins while starting. */
+@starting-style {
+  :root[data-screen-light] :is(.ag-page, .ag-nav-lit) { --screen-light: var(--screen-light-from); }
+  :root[data-screen-light] .ag-page--sky { --sky-b: var(--screen-light-from); --sky-c: var(--screen-light-from); }
+}
+
+/* The splash is BASE's own moment, whatever screen it opens onto. */
+.ag-page--brand { --screen-light: oklch(0.7 0.16 162) !important; }

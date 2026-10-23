@@ -61,7 +61,7 @@ function harness(entries: TrashEntry[]) {
     now: NOW,
     timezone: 'Asia/Kolkata',
     store,
-    snapshots: { captureTask: () => {}, captureList: () => {}, captureProject: () => {} },
+    snapshots: { captureTask: () => {}, captureList: () => {}, captureProject: () => {}, captureEvent: () => {} },
   };
   return { ctx };
 }

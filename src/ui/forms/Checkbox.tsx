@@ -23,6 +23,13 @@
  * it the other way — the accent means *"a running timer, a committed block, a
  * completed task"* — and this component is the design system saying the same
  * thing in code. A completed task is one of the three things emerald is FOR.
+ * **Superseded by 29-1P2c1 (2026-10-06): a tick is LIME** — the colour jobs
+ * give done, ticked and chosen to lime, and keep emerald for running now.
+ * **And by 29-1P4b (2026-10-07, his call): the box is the board's outline** —
+ * the well, a lime hairline and a lime check, no fill — drawn by the shared
+ * `TickBox`, which pops on a tick; the label's line slides through
+ * (`.ag-strike`) instead of appearing. A subtask's tick floats no +1: the
+ * tally that +1 adds to counts tasks.
  *
  * ADDED, because the prototype has no a11y: the hidden `<input>` is a sibling
  * of the box rather than a child, so `.ag-check__input:focus-visible ~
@@ -30,8 +37,12 @@
  * the same sibling-combinator trick `Slider` uses, and for the same reason.
  * A caller with no visible `label` must pass `aria-label`.
  */
-import { useState } from 'react';
-import type { CSSProperties, InputHTMLAttributes, ReactNode } from 'react';
+import { useRef, useState } from 'react';
+import type { InputHTMLAttributes, ReactNode } from 'react';
+import { cue } from '../../lib/sound';
+import { TickBox } from './TickBox';
+import { popTick } from './popTick';
+import { Strike } from './Strike';
 
 export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'size'> {
   checked?: boolean;
@@ -56,31 +67,16 @@ export function Checkbox({
 }: CheckboxProps) {
   const [internal, setInternal] = useState(defaultChecked);
   const on = checked !== undefined ? checked : internal;
-  const d = size === 'sm' ? 20 : 24;
+  const box = useRef<HTMLSpanElement>(null);
 
   const toggle = () => {
     if (disabled) return;
+    /* 29-1P3: every tick box in BASE sounds and buzzes (117, 118, 122). */
+    cue(on ? 'untick' : 'tick');
+    /* 29-1P4b: and pops, on the press that ticks it. */
+    if (!on) popTick(box.current);
     if (checked === undefined) setInternal(!on);
     onChange?.(!on);
-  };
-
-  const box: CSSProperties = {
-    position: 'relative',
-    flex: '0 0 auto',
-    width: d,
-    height: d,
-    borderRadius: size === 'sm' ? 'var(--r-2xs)' : 'var(--r-xs)',
-    display: 'grid',
-    placeItems: 'center',
-    backgroundImage: on ? 'var(--glass-tint-accent)' : 'var(--glass-well)',
-    boxShadow: on
-      ? 'var(--glass-rim-2), var(--glow-accent-sm)'
-      : 'var(--glass-well-shadow), 0 0 0 1px var(--line-soft)',
-    /* The spring is on the transform alone: `ease-spring` overshoots, and a
-       colour that overshoots lands outside the palette. */
-    transform: on ? 'scale(1)' : 'scale(0.96)',
-    transition:
-      'background var(--dur-base) var(--ease-glass), box-shadow var(--dur-base) var(--ease-glass), transform var(--dur-base) var(--ease-spring)',
   };
 
   return (
@@ -103,36 +99,16 @@ export function Checkbox({
         disabled={disabled}
         {...rest}
       />
-      <span className="ag-check__box" style={box}>
-        <svg width={d - 8} height={d - 8} viewBox="0 0 16 16" aria-hidden="true" style={{ display: 'block' }}>
-          {/* Strokes on rather than appearing — the dash is the whole length
-              of the path, so offsetting it by that much hides it exactly. */}
-          <path
-            d="M3.5 8.5 L6.5 11.5 L12.5 4.5"
-            fill="none"
-            stroke="var(--fg-1)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{
-              strokeDasharray: 16,
-              strokeDashoffset: on ? 0 : 16,
-              transition: 'stroke-dashoffset var(--dur-base) var(--ease-glass)',
-            }}
-          />
-        </svg>
-      </span>
+      <TickBox ref={box} done={on} size={size === 'sm' ? 20 : 24} />
       {label != null && (
         <span
           style={{
             font: 'var(--type-body)',
             color: on ? 'var(--fg-3)' : 'var(--fg-1)',
-            textDecorationLine: on ? 'line-through' : 'none',
-            textDecorationColor: 'var(--fg-4)',
             transition: 'color var(--dur-base) var(--ease-glass)',
           }}
         >
-          {label}
+          <Strike on={on}>{label}</Strike>
         </span>
       )}
     </label>

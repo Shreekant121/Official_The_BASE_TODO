@@ -4,8 +4,8 @@
  * `screens/session.html:857` and `screens/deadlines.html` draw the same bar,
  * token for token: an 8px `--glass-well` trough with 2px of padding, a pill
  * fill that runs from a 55%-alpha accent to solid `--accent` under a 14px
- * glow, and the whole thing flipping to the amber pair the moment the plan
- * outruns the window. It fills over `--dur-slow`, which is the reward moment
+ * glow, and the whole thing flipping to the coral pair the moment the plan
+ * outruns the window (amber until 29-1P2c2; the fill is lime since P2c1). It fills over `--dur-slow`, which is the reward moment
  * — the same duration `Stepper`'s connector takes and for the same reason.
  *
  * Both drawings are of ONE number: `sessionDuration` in the store. UI-27 built
@@ -47,10 +47,11 @@ export function BudgetTrack({ spent, budget, over }: BudgetTrackProps) {
           height: '100%',
           borderRadius: 'var(--r-pill)',
           width: `${Math.min(100, (spent / Math.max(1, budget)) * 100)}%`,
+          /* Over the day is coral (29-1P2c2: over time is coral's job). */
           background: over
-            ? 'linear-gradient(90deg, oklch(0.75 0.15 82 / 0.6), var(--hue-amber))'
-            : 'linear-gradient(90deg, oklch(0.70 0.15 162 / 0.55), var(--accent))',
-          boxShadow: over ? '0 0 14px -2px var(--hue-amber)' : '0 0 14px -2px var(--accent)',
+            ? 'linear-gradient(90deg, oklch(0.7 0.19 28 / 0.6), var(--job-coral))'
+            : 'linear-gradient(90deg, oklch(0.84 0.17 130 / 0.55), var(--job-lime))',
+          boxShadow: over ? '0 0 14px -2px var(--job-coral)' : '0 0 14px -2px var(--job-lime)',
           transition: 'width var(--dur-slow) var(--ease-glass), background var(--dur-base) var(--ease-glass)',
         }}
       />

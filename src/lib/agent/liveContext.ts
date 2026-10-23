@@ -1,10 +1,8 @@
 import { useStore, type Task } from '../../store/useStore';
 import { useTrashStore } from '../../store/useTrashStore';
 import { restoreFromTrash } from '../trash';
-import { useSnapshotStore, type TurnHandle } from '../../store/useSnapshotStore';
-import type { AgentSession } from './core';
-import { resolveUserTimeZone } from './dates';
-import type { AgentStore, AgentStoreState, SnapshotCapture, ToolContext } from './types';
+import { useSnapshotStore } from '../../store/useSnapshotStore';
+import type { AgentStore, AgentStoreState, SnapshotCapture } from './types';
 
 /**
  * Binds the tool layer to the real app. Everything in `tools/` talks to the
@@ -74,39 +72,5 @@ export const liveSnapshotCapture: SnapshotCapture = {
   captureTask: (handle, taskId) => useSnapshotStore.getState().captureTask(handle, taskId),
   captureList: (handle, listId) => useSnapshotStore.getState().captureList(handle, listId),
   captureProject: (handle, projectId) => useSnapshotStore.getState().captureProject(handle, projectId),
+  captureEvent: (handle, eventId) => useSnapshotStore.getState().captureEvent(handle, eventId),
 };
-
-/**
- * One turn's context. `now` and `timezone` are pinned here rather than read
- * inside the tools so a whole turn — however many tool calls it makes — agrees
- * on what "today" means (decision D14).
- */
-export function createLiveToolContext(options: {
-  snapshotHandle: TurnHandle;
-  now?: Date;
-  timezone?: string;
-}): ToolContext {
-  return {
-    snapshotHandle: options.snapshotHandle,
-    now: options.now ?? new Date(),
-    timezone: options.timezone ?? resolveUserTimeZone(),
-    store: liveAgentStore,
-    snapshots: liveSnapshotCapture,
-  };
-}
-
-/**
- * What `runAgentTurn` is handed in the real app: turns open and close on the
- * snapshot ring, and each one gets a context pinned to the moment it started.
- * `timezone` is resolved once per session rather than per turn — a user who
- * crosses a timezone mid-conversation is not a case worth a lookup on every
- * message.
- */
-export function createLiveSession(options: { timezone?: string } = {}): AgentSession {
-  const timezone = options.timezone ?? resolveUserTimeZone();
-  return {
-    beginTurn: (label) => useSnapshotStore.getState().beginTurn(label),
-    commitTurn: (handle) => useSnapshotStore.getState().commitTurn(handle)?.id ?? null,
-    createContext: (snapshotHandle) => createLiveToolContext({ snapshotHandle, timezone }),
-  };
-}

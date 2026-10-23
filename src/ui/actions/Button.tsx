@@ -39,18 +39,22 @@ const SIZE = {
 const TONE_SOLID = {
   accent: ['var(--accent)', 'var(--accent-lift)', 'var(--accent-sink)', 'var(--glow-accent-md)'],
   cyan:   ['var(--hue-cyan)', 'oklch(0.78 0.14 210)', 'oklch(0.60 0.13 210)', 'var(--glow-cyan-md)'],
-  violet: ['var(--hue-violet)', 'oklch(0.78 0.14 296)', 'oklch(0.60 0.13 296)', 'var(--glow-violet-md)'],
-  rose:   ['var(--hue-rose)', 'oklch(0.78 0.14 20)', 'oklch(0.60 0.13 20)', 'var(--glow-rose-md)'],
+  violet: ['var(--job-violet)', 'oklch(0.8 0.162 300)', 'oklch(0.56 0.171 300)', 'var(--job-violet-shine-md)'],
+  /* `rose` is the tone for a delete or an error, which is coral's job since
+     29-1P2c2; the name stays so no caller moves. Rose the colour (his
+     routine, hue 355) is `--job-rose`. */
+  rose:   ['var(--job-coral)', 'oklch(0.8 0.162 28)', 'oklch(0.56 0.171 28)', 'var(--job-coral-shine-md)'],
 } as const;
 
 /* v4's gel table, keyed by this file's tones: fill, cast shadow, label.
-   `cyan` takes v4's sky gel and `rose` its coral — the nearest it draws. */
+   `cyan` takes v4's sky gel and `rose` its coral — the nearest it draws.
+   Each casts its own colour, idea 64 (29-1P1), pressed or not. */
 const GEL = {
   accent: ['var(--gel-emerald)', 'var(--cast-emerald)', 'var(--fg-on-accent)'],
-  cyan:   ['var(--gel-sky)', 'var(--cast-brand)', 'var(--fg-on-brand)'],
-  violet: ['var(--gel-violet)', 'var(--cast-violet)', 'var(--fg-on-brand)'],
+  cyan:   ['var(--gel-sky)', 'var(--cast-sky)', 'var(--fg-on-brand)'],
+  violet: ['var(--job-violet-gel)', 'var(--job-violet-glow)', 'var(--job-violet-ink)'],
   amber:  ['var(--gel-amber)', 'var(--cast-amber)', 'var(--fg-on-light)'],
-  rose:   ['var(--gel-coral)', 'var(--cast-magenta)', 'var(--fg-on-brand)'],
+  rose:   ['var(--job-coral-gel)', 'var(--job-coral-glow)', 'var(--job-coral-ink)'],
 } as const;
 
 const TINT_FILL = {
@@ -58,15 +62,15 @@ const TINT_FILL = {
   cyan:   'var(--glass-tint-cyan)',
   violet: 'var(--glass-tint-violet)',
   amber:  'var(--glass-tint-amber)',
-  rose:   'var(--glass-tint-rose)',
+  rose:   'var(--glass-tint-coral)',
 } as const;
 
 const TINT_TEXT = {
   accent: 'oklch(0.93 0.07 162)',
   cyan:   'oklch(0.93 0.07 210)',
-  violet: 'oklch(0.93 0.07 296)',
+  violet: 'var(--job-violet-text)',
   amber:  'oklch(0.95 0.07 82)',
-  rose:   'oklch(0.93 0.07 20)',
+  rose:   'var(--job-coral-text)',
 } as const;
 
 /* Inside a scope the label and icons sit on their own positioned boxes, as
@@ -125,7 +129,7 @@ export function Button({
     const [g, cast, fg] = GEL[tone] ?? GEL.accent;
     fill = g;
     color = fg;
-    shadow = ['var(--gel-rim)', press ? 'var(--shadow-2)' : cast].join(', ');
+    shadow = ['var(--gel-rim)', cast].join(', ');
   } else if (variant === 'solid' || variant === 'gel') {
     // `tone` is typed wider than TONE_SOLID (it has no `amber`), so fall back.
     const [base, lift, sink, glow] = TONE_SOLID[tone as keyof typeof TONE_SOLID] ?? TONE_SOLID.accent;

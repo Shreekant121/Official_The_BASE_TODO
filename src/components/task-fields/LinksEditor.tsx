@@ -17,7 +17,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { TaskLink } from '../../store/useStore';
-import { Icon, IconButton, Input, useMotion } from '../../ui';
+import { Icon, IconButton, Input, SoftIconButton, useMotion } from '../../ui';
 
 interface LinksEditorProps {
   value: TaskLink[];
@@ -112,9 +112,9 @@ export default function LinksEditor({ value, onChange }: LinksEditorProps) {
           size="sm"
           style={{ flex: 1, minWidth: 0 }}
         />
-        <IconButton size="sm" label="Add link" onClick={addLink}>
+        <SoftIconButton size="sm" label="Add link" onClick={addLink}>
           <Icon name="plus" size={16} />
-        </IconButton>
+        </SoftIconButton>
       </div>
     </div>
   );

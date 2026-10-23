@@ -5,6 +5,9 @@ import {
   parseGeminiModels,
   parseOllamaModels,
   resolveSelection,
+  resolveChoice,
+  choiceFromLegacy,
+  parseCloudModels,
   type ModelCatalogue,
 } from './models';
 
@@ -164,13 +167,16 @@ describe('which model answers', () => {
     local: parseOllamaModels(TAGS).models,
   };
 
-  it('runs on the local default when nothing has been chosen', () => {
-    // Free, private, and nobody configured it. Item 8 changed WHICH local
-    // model that is: gemma4:e4b, not qwen3.5:4b. The old choice was made from
-    // a 9.61 GB file size; the model loads into 3.23 GB entirely on the GPU
-    // (../../../../atlas/DESIGN.md, section 2), so it costs what the 4.7B
-    // cost and knows more.
-    expect(resolveSelection(catalogue, null).id).toBe('gemma4:e4b');
+  it('runs on Gemini when nothing has been chosen — cloud is prime (BIG-1)', () => {
+    // Item 8 made the local default the out-of-the-box answer; BIG-1 reverses
+    // it at his word ("cloud is prime, local is the sub-model", 2026-09-22,
+    // confirmed 2026-09-24).
+    expect(resolveSelection(catalogue, null).id).toBe('gemini-flash-latest');
+  });
+
+  it('runs on the local default when Google listed nothing', () => {
+    // A key that cannot list models, or no network to Google at all.
+    expect(resolveSelection({ ...catalogue, hosted: [] }, null).id).toBe('gemma4:e4b');
   });
 
   it('runs on Gemini when there is no local list — which is now a sleeping laptop', () => {
@@ -194,7 +200,7 @@ describe('which model answers', () => {
   it('falls back when the stored choice has been removed from the machine', () => {
     // `ollama rm` on a model the picker still remembers. Without this every
     // turn would 404 against an id nothing can explain.
-    expect(resolveSelection(catalogue, 'ollama:qwen3.5:70b').id).toBe('gemma4:e4b');
+    expect(resolveSelection(catalogue, 'ollama:qwen3.5:70b').id).toBe('gemini-flash-latest');
   });
 
   it('answers with the hosted default when neither list arrived', () => {
@@ -202,5 +208,83 @@ describe('which model answers', () => {
     // had before the picker existed.
     expect(resolveSelection(EMPTY_CATALOGUE, null)).toStrictEqual(FALLBACK_MODEL);
     expect(resolveSelection(EMPTY_CATALOGUE, 'ollama:qwen3.5:4b')).toStrictEqual(FALLBACK_MODEL);
+  });
+});
+
+describe('Claude and ChatGPT (BIG-1)', () => {
+  const claude = parseCloudModels('anthropic', {
+    models: [
+      { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
+      { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+    ],
+  });
+
+  it('reads Atlas’s list into picker rows keyed by provider', () => {
+    expect(claude[0]).toStrictEqual({
+      key: 'anthropic:claude-sonnet-5',
+      provider: 'anthropic',
+      id: 'claude-sonnet-5',
+      label: 'Claude Sonnet 5',
+      detail: 'Claude',
+    });
+    // A dated id is worth seeing beside a name that hides it.
+    expect(claude[1].detail).toBe('Claude · claude-haiku-4-5-20251001');
+  });
+
+  it('drops malformed rows rather than inventing names', () => {
+    expect(parseCloudModels('openai', { models: [{ id: '' }, { label: 'no id' }, { id: 'gpt-5' }] }).map((m) => m.id)).toStrictEqual([
+      'gpt-5',
+    ]);
+    expect(parseCloudModels('openai', null)).toStrictEqual([]);
+  });
+
+  it('honours a stored Claude choice while the laptop lists it, and falls to Gemini when it stops', () => {
+    const awake: ModelCatalogue = { ...EMPTY_CATALOGUE, hosted: parseGeminiModels(GOOGLE).models, cloud: claude };
+    expect(resolveSelection(awake, 'anthropic:claude-sonnet-5').provider).toBe('anthropic');
+    // Laptop asleep: the list came from Atlas, so it is empty — the fallback.
+    expect(resolveSelection({ ...awake, cloud: [] }, 'anthropic:claude-sonnet-5').id).toBe('gemini-flash-latest');
+  });
+});
+
+describe('Local | Cloud and the two defaults (OPT-8)', () => {
+  const claude = parseCloudModels('anthropic', { models: [{ id: 'claude-sonnet-5', label: 'Claude Sonnet 5' }] });
+  const catalogue: ModelCatalogue = {
+    ...EMPTY_CATALOGUE,
+    hosted: parseGeminiModels(GOOGLE).models,
+    local: parseOllamaModels(TAGS).models,
+    cloud: claude,
+  };
+
+  it('reads an old single pick into the side it was on', () => {
+    expect(choiceFromLegacy(null)).toStrictEqual({ side: 'cloud', local: null, cloud: null });
+    expect(choiceFromLegacy('ollama:qwen3.5:9b')).toStrictEqual({ side: 'local', local: 'ollama:qwen3.5:9b', cloud: null });
+    expect(choiceFromLegacy('anthropic:claude-sonnet-5')).toStrictEqual({
+      side: 'cloud',
+      local: null,
+      cloud: 'anthropic:claude-sonnet-5',
+    });
+  });
+
+  it('runs each side on its own default', () => {
+    const choice = { local: 'ollama:qwen3.5:9b', cloud: 'anthropic:claude-sonnet-5' };
+    expect(resolveChoice(catalogue, { side: 'local', ...choice }).id).toBe('qwen3.5:9b');
+    expect(resolveChoice(catalogue, { side: 'cloud', ...choice }).id).toBe('claude-sonnet-5');
+  });
+
+  it('runs each side on the app default when none was picked', () => {
+    expect(resolveChoice(catalogue, { side: 'local', local: null, cloud: null }).id).toBe('gemma4:e4b');
+    expect(resolveChoice(catalogue, { side: 'cloud', local: null, cloud: null }).id).toBe('gemini-flash-latest');
+  });
+
+  it('answers Local on the cloud default while the laptop lists nothing', () => {
+    const asleep: ModelCatalogue = { ...catalogue, local: [], cloud: [] };
+    expect(resolveChoice(asleep, { side: 'local', local: 'ollama:qwen3.5:9b', cloud: null }).provider).toBe('gemini');
+  });
+
+  it('falls back on a side whose default has gone', () => {
+    expect(resolveChoice(catalogue, { side: 'local', local: 'ollama:qwen3.5:70b', cloud: null }).id).toBe('gemma4:e4b');
+    expect(
+      resolveChoice({ ...catalogue, cloud: [] }, { side: 'cloud', local: null, cloud: 'anthropic:claude-sonnet-5' }).id,
+    ).toBe('gemini-flash-latest');
   });
 });

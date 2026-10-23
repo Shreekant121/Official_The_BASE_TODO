@@ -38,12 +38,20 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button } from '../actions/Button';
+import { WhiteButton } from '../actions/WhiteButton';
 import { IconButton } from '../actions/IconButton';
 import { Icon, type IconName } from '../core/Icon';
 import { AskCard, AskReceipt } from '../data/AskCard';
+import { EdgeLight } from '../feedback/EdgeLight';
+import { DriftGlass, LongJobSeconds } from '../feedback/DriftGlass';
+import { useLongJob } from '../feedback/useLongJob';
+import { AskGlow, Remembered } from '../feedback/AtlasAtRest';
+import { useWordReveal } from '../feedback/useWordReveal';
 import { useOverlayDismiss } from '../../lib/useOverlayDismiss';
 import { useFooterReserve } from '../../lib/useFooterReserve';
 import { plainText, type DidSummary } from '../../lib/aiPanel';
+import { noteName } from '../../lib/atlas/remembered';
+import { growField } from '../../lib/growField';
 import type { PanelItem, PanelWorking, UndoState } from '../../lib/aiPanelRun';
 
 export type AIPanelDock = 'bottom' | 'right';
@@ -72,6 +80,8 @@ export interface AIPanelProps {
   undoFor: (turn: string) => UndoState | undefined;
   onUndo: (turn: string) => void;
   onDecide: (itemId: string, decision: 'approve' | 'discard') => void;
+  /** Opens a note Atlas saved, from its "Remembered" chip (29-1P15b, idea 94). */
+  onOpenNote?: (path: string) => void;
   /**
    * A control above the message box — the model picker (2026-09-17,
    * Shreekant: *"let me select the AI model at least in the AI panel"*). A
@@ -141,7 +151,13 @@ function You({ text }: { text: string }) {
 }
 
 /** What it said. Plain text on the panel, never a bubble. */
-function Reply({ text }: { text: string }) {
+/**
+ * Atlas's reply. Written a word at a time while it arrives, with the violet
+ * caret until the last word is out (29-1P15a, idea 20 — the chat's own rule,
+ * `useWordReveal`); a reply already finished when it mounts is drawn whole.
+ */
+function Reply({ text, live }: { text: string; live: boolean }) {
+  const reveal = useWordReveal(text, live);
   return (
     <div style={{ display: 'grid', gap: 'var(--sp-4)', minWidth: 0, animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both' }}>
       <p
@@ -151,7 +167,16 @@ function Reply({ text }: { text: string }) {
           whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
         }}
       >
-        {plainText(text)}
+        {plainText(reveal.shown)}
+        {(live || reveal.revealing) && (
+          <span
+            aria-hidden="true"
+            style={{
+              display: 'inline-block', width: 2, height: '1em', marginLeft: 2,
+              verticalAlign: 'text-bottom', background: 'var(--job-violet)',
+            }}
+          />
+        )}
       </p>
     </div>
   );
@@ -211,19 +236,20 @@ function Did({ did, undo, showUndo, onUndo }: { did: DidSummary; undo?: UndoStat
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', minWidth: 0 }}>
-        <span style={{ display: 'flex', color: did.ok ? 'var(--fg-3)' : 'var(--status-review)' }}>
+        {/* A call that failed is coral since 29-1P2c2 (it was amber). */}
+        <span style={{ display: 'flex', color: did.ok ? 'var(--fg-3)' : 'var(--status-overrun)' }}>
           <Icon name={did.icon} size={13} />
         </span>
         <Kicker color="var(--fg-3)">{did.tool}</Kicker>
         <span style={{ flex: 1, height: 1, background: 'var(--line-faint)' }} />
-        {did.count && <Kicker color={did.ok ? 'var(--fg-4)' : 'var(--status-review)'}>{did.count}</Kicker>}
+        {did.count && <Kicker color={did.ok ? 'var(--fg-4)' : 'var(--status-overrun)'}>{did.count}</Kicker>}
       </div>
 
       {did.rows.length > 0 && <Rows rows={did.rows} struck={undone} />}
 
       {did.ok && showUndo && undo && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 44 }}>
-          <span style={{ display: 'flex', color: undone || undo.status === 'unavailable' ? 'var(--fg-4)' : 'var(--accent)' }}>
+          <span style={{ display: 'flex', color: undone || undo.status === 'unavailable' ? 'var(--fg-4)' : 'var(--job-lime)' }}>
             <Icon name={undone ? 'rotate-ccw' : 'check'} size={14} />
           </span>
           <span style={{ flex: 1, minWidth: 0, font: 'var(--type-caption)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
@@ -252,8 +278,9 @@ function Did({ did, undo, showUndo, onUndo }: { did: DidSummary; undo?: UndoStat
 }
 
 /**
- * THE APPROVAL. Nothing irreversible happens without one tap. Amber tint,
- * amber glow, the cost stated in words, and the affirmative is the frost
+ * THE APPROVAL. Nothing irreversible happens without one tap. Violet tint,
+ * violet glow (Atlas's colour since 29-1P2c3; it was amber), the cost stated
+ * in words, and the affirmative is the frost
  * surface — the loudest thing the system owns.
  */
 function Ask({ item, onDecide }: { item: Extract<PanelItem, { kind: 'approve' }>; onDecide: (d: 'approve' | 'discard') => void }) {
@@ -270,7 +297,7 @@ function Ask({ item, onDecide }: { item: Extract<PanelItem, { kind: 'approve' }>
           animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
         }}
       >
-        <span style={{ display: 'flex', color: yes ? 'var(--accent)' : 'var(--fg-4)' }}>
+        <span style={{ display: 'flex', color: yes ? 'var(--job-lime)' : 'var(--fg-4)' }}>
           <Icon name={yes ? 'check' : 'x'} size={15} />
         </span>
         <span style={{ flex: 1, minWidth: 0, ...BODY_SM, color: 'var(--fg-2)', textWrap: 'pretty' }}>
@@ -286,16 +313,16 @@ function Ask({ item, onDecide }: { item: Extract<PanelItem, { kind: 'approve' }>
       style={{
         display: 'grid', gap: 'var(--sp-4)', padding: 'var(--sp-5)', minWidth: 0,
         borderRadius: 'var(--r-card)',
-        backgroundColor: hard ? 'oklch(0.16 0.02 82 / 0.42)' : 'transparent',
-        backgroundImage: hard ? 'var(--glass-tint-amber)' : 'var(--glass-fill-2)',
+        backgroundColor: hard ? 'var(--job-violet-floor)' : 'transparent',
+        backgroundImage: hard ? 'var(--glass-tint-violet)' : 'var(--glass-fill-2)',
         boxShadow: hard
-          ? 'var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-2), var(--glow-amber-md)'
+          ? 'var(--glass-rim-3), var(--glass-inner-1), var(--glass-cast-2), var(--job-violet-shine-md)'
           : 'var(--glass-rim-2), var(--glass-cast-1)',
         animation: 'var(--kf-condense) var(--dur-slow) var(--ease-glass) both',
       }}
     >
       <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
-        <Kicker color={hard ? 'var(--status-review)' : 'var(--fg-4)'}>
+        <Kicker color={hard ? 'var(--job-violet-tag-fg)' : 'var(--fg-4)'}>
           {hard ? 'Cannot be undone · needs your tap' : 'Needs your tap'}
         </Kicker>
         <span
@@ -315,16 +342,17 @@ function Ask({ item, onDecide }: { item: Extract<PanelItem, { kind: 'approve' }>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-        <Button
-          variant={hard ? 'frost' : 'tint'}
-          size="sm"
+        {/* The card's yes: solid white since 29-1P2, hard or not. The
+            difference between the two is still said — by the warning glyph
+            and the overrun-coloured note above — rather than by a second
+            material. */}
+        <WhiteButton
           disabled={item.state === 'deciding'}
           onClick={() => onDecide('approve')}
-          iconLeft={<Icon name={hard ? 'triangle-alert' : 'check'} size={15} />}
-          style={{ minHeight: 44 }}
+          icon={<Icon name={hard ? 'triangle-alert' : 'check'} size={15} />}
         >
           Go ahead
-        </Button>
+        </WhiteButton>
         <Button
           variant="ghost"
           size="sm"
@@ -346,11 +374,11 @@ function Filled({ field, value }: { field: string; value: string }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minHeight: 48,
         padding: 'var(--sp-3) var(--sp-5)', borderRadius: 'var(--r-lg)',
-        backgroundImage: 'var(--glass-tint-accent)', boxShadow: 'var(--glass-rim-2), var(--glow-accent-sm)',
+        backgroundImage: 'var(--glass-tint-violet)', boxShadow: 'var(--glass-rim-2), var(--job-violet-shine)',
         animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
       }}
     >
-      <span style={{ display: 'flex', color: 'oklch(0.93 0.07 162)' }}>
+      <span style={{ display: 'flex', color: 'var(--job-violet-text)' }}>
         <Icon name="check" size={15} />
       </span>
       <span style={{ display: 'grid', gap: 1, flex: 1, minWidth: 0 }}>
@@ -387,9 +415,14 @@ function Note({ text, tone }: { text: string; tone: 'error' | 'quiet' }) {
   );
 }
 
-/** WORKING. One pill, one label, named tool or nothing. Never a log. */
+/** WORKING. One pill, one label, named tool or nothing. Never a log. Its
+    words shimmer while it is up (29-1P15a, idea 47), and past five seconds
+    violet light drifts inside it with the seconds at its end (29-1P15d, idea
+    77). It stays mounted for the whole run — `working` is only cleared when
+    the run ends — so it counts from its own mount. */
 function Working({ label, tool }: PanelWorking) {
   const [dots, setDots] = useState(0);
+  const job = useLongJob();
   useEffect(() => {
     const iv = setInterval(() => setDots((n) => (n + 1) % 3), 420);
     return () => clearInterval(iv);
@@ -397,25 +430,28 @@ function Working({ label, tool }: PanelWorking) {
   return (
     <div
       role="status"
+      data-long-job={job.long ? '' : undefined}
       style={{
+        position: 'relative', isolation: 'isolate',
         display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-4)', justifySelf: 'start',
         minHeight: 36, padding: '0 var(--sp-5) 0 var(--sp-4)', borderRadius: 'var(--r-pill)',
         backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1), var(--glass-cast-1)',
         animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
       }}
     >
+      <DriftGlass on={job.long} />
       <span
         style={{
           display: 'grid', placeItems: 'center', width: 20, height: 20, flex: '0 0 auto',
-          borderRadius: '50%', backgroundImage: 'var(--glass-tint-accent)',
-          boxShadow: 'var(--glass-rim-1), var(--glow-accent-sm)', color: 'oklch(0.93 0.07 162)',
+          borderRadius: '50%', backgroundImage: 'var(--glass-tint-violet)',
+          boxShadow: 'var(--glass-rim-1), var(--job-violet-shine)', color: 'var(--job-violet-text)',
           animation: 'var(--kf-pulse) 1600ms var(--ease-glass) infinite',
         }}
       >
         <Icon name={tool ? 'wrench' : 'sparkles'} size={11} />
       </span>
       <span style={{ font: 'var(--type-caption)', color: 'var(--fg-2)', whiteSpace: 'nowrap' }}>
-        {label}
+        <span className="ag-atlas-shimmer">{label}</span>
         <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)' }}>
           {'.'.repeat(dots + 1)}
         </span>
@@ -423,6 +459,7 @@ function Working({ label, tool }: PanelWorking) {
       {tool && (
         <Kicker style={{ borderLeft: '1px solid var(--line-faint)', paddingLeft: 'var(--sp-4)' }}>{tool}</Kicker>
       )}
+      {job.long && <LongJobSeconds seconds={job.seconds} />}
     </div>
   );
 }
@@ -430,7 +467,7 @@ function Working({ label, tool }: PanelWorking) {
 export function AIPanel({
   subject, items, working, prompts = [], scope, answeredBy,
   placeholder = 'Ask about this task',
-  dock, onClose, onSend, onStop, undoFor, onUndo, onDecide, footer, style,
+  dock, onClose, onSend, onStop, undoFor, onUndo, onDecide, onOpenNote, footer, style,
 }: AIPanelProps) {
   const [draft, setDraft] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -481,27 +518,27 @@ export function AIPanel({
     return () => observer.disconnect();
   }, [items, working]);
 
-  /* Grow with the draft — `chat/Composer.tsx`'s recipe. The height is reset
-     to `auto` first because `scrollHeight` on a box already sized to its
-     content never reports a smaller number, so a deleted line would never
-     give its height back. Past the cap the box scrolls, and it is the line
-     being typed that has to stay in view. */
+  /* Grow with the draft — the composer's rule, `lib/growField.ts`: past the
+     cap the box scrolls, pinned to the bottom only while the caret is at the
+     end, and left where it was for an edit mid-draft (OPT-1). The caret is
+     put back first, so the rule reads where it really is. */
   useEffect(() => {
     const el = fieldRef.current;
     if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, FIELD_CAP_PX)}px`;
     if (caretRef.current !== null) {
       el.setSelectionRange(caretRef.current, caretRef.current);
       caretRef.current = null;
     }
-    if (el.scrollHeight > FIELD_CAP_PX && el.selectionEnd === draft.length) el.scrollTop = el.scrollHeight;
+    growField(el, FIELD_CAP_PX);
   }, [draft]);
 
   /* Undo sits on the LAST change of a turn, so a turn that wrote three things
      carries one button rather than three that all do the same thing. */
   const lastDidOfTurn = new Map<string, string>();
   for (const item of items) if (item.kind === 'did') lastDidOfTurn.set(item.turn, item.id);
+  /* The reply being written now, if any: the last one, while a turn runs. */
+  let writing: string | null = null;
+  if (busy) for (const item of items) if (item.kind === 'ai') writing = item.id;
   /* The live card is the last one asked, with nothing he said after it. */
   let liveAsk: string | null = null;
   for (const item of items) {
@@ -564,8 +601,10 @@ export function AIPanel({
           <span
             style={{
               display: 'grid', placeItems: 'center', width: 30, height: 30, flex: '0 0 auto',
-              borderRadius: '50%', backgroundImage: 'var(--glass-fill-2)', boxShadow: 'var(--glass-rim-2)',
-              color: 'var(--fg-2)',
+              /* Atlas's panel, so its mark is Atlas's violet (29-1P2c3); the
+                 glyph inside is what it is about. */
+              borderRadius: '50%', backgroundImage: 'var(--glass-tint-violet)', boxShadow: 'var(--glass-rim-2)',
+              color: 'var(--job-violet-text)',
             }}
           >
             <Icon name={subject.icon ?? 'sparkles'} size={15} />
@@ -594,7 +633,7 @@ export function AIPanel({
 
       <div
         ref={bodyRef}
-        className="ag-scroll"
+        className="ag-scroll ag-fade"
         onScroll={(e) => {
           /* Only scrolling UP stops the following. A scroll event arrives a
              frame after the write that caused it, and on the phone the font
@@ -653,7 +692,7 @@ export function AIPanel({
             case 'you':
               return <You key={item.id} text={item.text} />;
             case 'ai':
-              return <Reply key={item.id} text={item.text} />;
+              return <Reply key={item.id} text={item.text} live={item.id === writing} />;
             case 'ask':
               return answeredAsks.has(item.id) ? null : (
                 <AskCard key={item.id} card={item.card} compact live={item.id === liveAsk && !busy} onSubmit={send} />
@@ -676,11 +715,20 @@ export function AIPanel({
               return <Ask key={item.id} item={item} onDecide={(d) => onDecide(item.id, d)} />;
             case 'note':
               return <Note key={item.id} text={item.text} tone={item.tone} />;
+            case 'remembered':
+              return (
+                <Remembered key={item.id} name={noteName(item.path)} onOpen={() => onOpenNote?.(item.path)} />
+              );
           }
         })}
 
         {working && <Working label={working.label} tool={working.tool} />}
       </div>
+
+      {/* 29-1P15a, idea 67: the panel's edges glow while Atlas works. Last in
+          the panel so it is drawn over everything in it; nothing in it can
+          be pressed. */}
+      <EdgeLight on={busy} />
 
       {/* One field, one send — and, since 2026-09-17, which model answers it.
           The mockup keeps this strip to the field alone; his instruction
@@ -699,83 +747,87 @@ export function AIPanel({
             {footer}
           </div>
         )}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (draft.trim() === '' || busy) return;
-            send(draft);
-            setDraft('');
-          }}
-          style={{
-            /* Send sits on the last line as the box grows, and the radius is
-               `--r-lg` rather than a pill: 26px is exactly half of 52, so one
-               line still reads as the pill it was, and five lines read as a
-               rounded box instead of a capsule. */
-            display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-3)', minHeight: 52,
-            padding: 'var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-5)', borderRadius: 'var(--r-lg)',
-            backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
-          }}
-        >
-          <textarea
-            ref={fieldRef}
-            rows={1}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            /* FIX-11, his rule: **Enter sends, Ctrl+Enter is a new line.** It
-               was a single-line `<input>` with nowhere for a newline to go.
-               Shift+Enter makes one too, because that is what `/chat`'s
-               composer does and the hand does not know which box it is in.
-               A textarea inserts nothing on Ctrl+Enter by itself, so the
-               newline is written by hand at the caret.
-               Enter sends by hand rather than by the form's implicit
-               submission: a key event with no `keypress` behind it — which
-               is what an automated press and some soft keyboards send —
-               never reaches the form. A composing IME keeps its Enter. */
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
-              if (e.shiftKey) return;
+        {/* 29-1P15b, idea 88: while he types, a violet light rises under
+            the field and its rim lights, as on the chat's composer. */}
+        <AskGlow typed={draft.trim() !== ''} radius="var(--r-lg)">
+          <form
+            onSubmit={(e) => {
               e.preventDefault();
-              if (e.ctrlKey || e.metaKey) {
-                const el = e.currentTarget;
-                const at = el.selectionStart;
-                const next = `${draft.slice(0, at)}\n${draft.slice(el.selectionEnd)}`;
-                setDraft(next);
-                caretRef.current = at + 1;
-                return;
-              }
-              e.currentTarget.form?.requestSubmit();
+              if (draft.trim() === '' || busy) return;
+              send(draft);
+              setDraft('');
             }}
-            placeholder={placeholder}
-            aria-label={placeholder}
-            data-ag-field
-            className="ag-field ag-scroll"
             style={{
-              flex: 1, minWidth: 0, display: 'block', boxSizing: 'border-box',
-              border: 0, outline: 'none', background: 'transparent', resize: 'none',
-              ...BODY_SM, color: 'var(--fg-1)', letterSpacing: 'var(--tracking-ui)',
-              /* After `BODY_SM`, whose `font` shorthand would reset it. 44px
-                 tall on one line, as the input was: a 24px line and 10px
-                 above and below it. */
-              lineHeight: `${FIELD_LINE_PX}px`, padding: `${FIELD_PAD_PX}px 0`,
-              maxHeight: FIELD_CAP_PX, overflowY: 'auto',
+              /* Send sits on the last line as the box grows, and the radius is
+                 `--r-lg` rather than a pill: 26px is exactly half of 52, so one
+                 line still reads as the pill it was, and five lines read as a
+                 rounded box instead of a capsule. */
+              display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-3)', minHeight: 52,
+              padding: 'var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-5)', borderRadius: 'var(--r-lg)',
+              backgroundImage: 'var(--glass-well)', boxShadow: 'var(--glass-well-shadow)',
             }}
-          />
-          {busy && onStop ? (
-            <IconButton label="Stop" type="button" variant="glass" onClick={onStop}>
-              <Icon name="square" size={15} />
-            </IconButton>
-          ) : (
-            <IconButton
-              label="Send"
-              type="submit"
-              disabled={busy}
-              variant={draft.trim() ? 'tint' : 'glass'}
-              tone={draft.trim() ? 'accent' : undefined}
-            >
-              <Icon name="arrow-up" size={17} />
-            </IconButton>
-          )}
-        </form>
+          >
+            <textarea
+              ref={fieldRef}
+              rows={1}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              /* FIX-11, his rule: **Enter sends, Ctrl+Enter is a new line.** It
+                 was a single-line `<input>` with nowhere for a newline to go.
+                 Shift+Enter makes one too, because that is what `/chat`'s
+                 composer does and the hand does not know which box it is in.
+                 A textarea inserts nothing on Ctrl+Enter by itself, so the
+                 newline is written by hand at the caret.
+                 Enter sends by hand rather than by the form's implicit
+                 submission: a key event with no `keypress` behind it — which
+                 is what an automated press and some soft keyboards send —
+                 never reaches the form. A composing IME keeps its Enter. */
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+                if (e.shiftKey) return;
+                e.preventDefault();
+                if (e.ctrlKey || e.metaKey) {
+                  const el = e.currentTarget;
+                  const at = el.selectionStart;
+                  const next = `${draft.slice(0, at)}\n${draft.slice(el.selectionEnd)}`;
+                  setDraft(next);
+                  caretRef.current = at + 1;
+                  return;
+                }
+                e.currentTarget.form?.requestSubmit();
+              }}
+              placeholder={placeholder}
+              aria-label={placeholder}
+              data-ag-field
+              className="ag-field ag-scroll"
+              style={{
+                flex: 1, minWidth: 0, display: 'block', boxSizing: 'border-box',
+                border: 0, outline: 'none', background: 'transparent', resize: 'none',
+                ...BODY_SM, color: 'var(--fg-1)', letterSpacing: 'var(--tracking-ui)',
+                /* After `BODY_SM`, whose `font` shorthand would reset it. 44px
+                   tall on one line, as the input was: a 24px line and 10px
+                   above and below it. */
+                lineHeight: `${FIELD_LINE_PX}px`, padding: `${FIELD_PAD_PX}px 0`,
+                maxHeight: FIELD_CAP_PX, overflowY: 'auto',
+              }}
+            />
+            {busy && onStop ? (
+              <IconButton label="Stop" type="button" variant="glass" onClick={onStop}>
+                <Icon name="square" size={15} />
+              </IconButton>
+            ) : (
+              <IconButton
+                label="Send"
+                type="submit"
+                disabled={busy}
+                variant={draft.trim() ? 'tint' : 'glass'}
+                tone={draft.trim() ? 'violet' : undefined}
+              >
+                <Icon name="arrow-up" size={17} />
+              </IconButton>
+            )}
+          </form>
+        </AskGlow>
       </div>
     </aside>
   );
@@ -787,6 +839,11 @@ export function AIPanel({
  * 56% row; on a wide one the host column shrinks and the panel takes an
  * `auto` column 404px wide. **Never an `auto` row** — the prompt's own
  * warning; it collapses the panel to its content.
+ *
+ * While the panel is open nothing in the dock draws a scrollbar (OPT-10, his
+ * BASE list: *"When the Ai side panel is opened hide the scroll sidebar"*) —
+ * the page's own track stood between the board and the panel. It all still
+ * scrolls; `.ag-dock-asking` in `screens.css`.
  */
 export function AIPanelDock({
   dock, panel, children, style,
@@ -794,6 +851,7 @@ export function AIPanelDock({
   const bottom = dock === 'bottom';
   return (
     <div
+      className={panel ? 'ag-dock-asking' : undefined}
       style={{
         flex: 1, minWidth: 0, minHeight: 0, display: 'grid',
         gridTemplateRows: panel && bottom ? 'minmax(0,1fr) 56%' : 'minmax(0,1fr)',

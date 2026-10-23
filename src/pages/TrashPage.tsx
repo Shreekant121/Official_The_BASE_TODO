@@ -61,7 +61,8 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Button, Icon, IconButton, Input, MetaKicker, MiniNav, MorphMenu, SegmentedControl, Toast, Well,
+  BlurAcross, Button, CountChip, HoldToConfirm, Icon, IconButton, Input, Lit, LitLine, litSafe, MetaKicker, MiniNav, MorphMenu, SegmentedControl,
+  SoftButton, Toast, Well,
   useMedia, WIDE, type IconName,
 } from '../ui';
 import { RailMark } from '../components/BrandMark';
@@ -71,6 +72,7 @@ import { useStore, DEFAULT_LISTS } from '../store/useStore';
 import { emptyTrash, restoreFromTrash } from '../lib/trash';
 import { formatBytes } from '../lib/syncDocSize';
 import { Z } from '../lib/zLayers';
+import { dustAttr, turnToDust } from '../lib/dust';
 import {
   daysLeft,
   expiresAt,
@@ -87,7 +89,8 @@ const COLUMN_PX = 1000;
 const RETENTION_DAYS = Math.round(TRASH_RETENTION_MS / (24 * 60 * 60 * 1000));
 
 /**
- * Amber below this. The mockup's threshold is a week and it is the better one:
+ * A grey warning below this (amber until 29-1P2c2), coral on the last day.
+ * The mockup's threshold is a week and it is the better one:
  * `TrashSection` used ten days, which coloured a third of a full trash at rest
  * and so told you nothing. Seven is "this weekend or never".
  */
@@ -145,13 +148,15 @@ function goesOn(entry: TrashEntry): string {
  * from today's store, which is the point of snapshotting them: the project a
  * deleted list belonged to may itself have been deleted since.
  *
- * A project entry has no ancestors and needs none; it was top level.
+ * A project entry has an ancestor only when it sat inside another project
+ * (BIG-2); otherwise it was top level.
  */
 function whereItWas(entry: TrashEntry): string {
   const { project, list } = entry.ancestors;
+  if (entry.kind === 'project') return project ? `Inside ${project.name}` : 'Top level';
   const parts = [project?.name, list?.title].filter((p): p is string => Boolean(p));
   if (parts.length > 0) return parts.join(' · ');
-  return entry.kind === 'project' ? 'Top level' : 'No longer traceable';
+  return 'No longer traceable';
 }
 
 /**
@@ -176,6 +181,9 @@ function tookWithIt(entry: TrashEntry): string[] {
     const steps = entry.backlogTasks[0]?.subtasks?.length ?? 0;
     if (steps > 0) parts.push(plural(steps, 'step'));
   } else {
+    // The projects that went inside a project (BIG-2) — `projects[0]` is it.
+    const inside = entry.kind === 'project' ? entry.projects.length - 1 : 0;
+    if (inside > 0) parts.push(`${plural(inside, 'project')} inside`);
     // A list entry's own list is in `taskLists`; a project's lists are not it.
     const lists = entry.kind === 'list' ? entry.taskLists.length - 1 : entry.taskLists.length;
     if (lists > 0) parts.push(plural(lists, 'list'));
@@ -232,7 +240,10 @@ function Metric({ value, unit, label, tone }: { value: string; unit?: string; la
 function Countdown({ entry, now }: { entry: TrashEntry; now: number }) {
   const left = daysLeft(entry, now);
   const soon = left <= SOON_DAYS;
-  const ink = soon ? 'var(--status-review)' : 'var(--fg-2)';
+  /* 29-1P2c2: going today is about to be missed, coral; going within the
+     week is a warning, grey with its triangle (it was amber, gold's hue). */
+  const today = left === 0;
+  const ink = today ? 'var(--job-coral-tag-fg)' : soon ? 'var(--status-warn)' : 'var(--fg-2)';
   return (
     <span style={{ display: 'grid', gap: 1, justifyItems: 'end', flex: '0 0 auto' }}>
       <span
@@ -243,7 +254,12 @@ function Countdown({ entry, now }: { entry: TrashEntry; now: number }) {
       >
         {left === 0 ? 'today' : `${left}d`}
       </span>
-      <MetaKicker tone={soon ? 'var(--status-review)' : 'var(--fg-4)'}>goes {goesOn(entry)}</MetaKicker>
+      <MetaKicker
+        icon={soon ? 'triangle-alert' : undefined}
+        tone={today ? 'var(--job-coral-tag-fg)' : soon ? 'var(--status-warn)' : 'var(--fg-4)'}
+      >
+        goes {goesOn(entry)}
+      </MetaKicker>
     </span>
   );
 }
@@ -274,7 +290,7 @@ function TrashRow({
   const preview = open ? onPreview(entry) : null;
 
   return (
-    <motion.div layout exit={{ opacity: 0, height: 0 }} style={{ borderTop: first ? 'none' : '1px solid var(--line-faint)' }}>
+    <motion.div {...dustAttr('trash', entry.id)} layout exit={{ opacity: 0, height: 0 }} style={{ borderTop: first ? 'none' : '1px solid var(--line-faint)' }}>
       <div
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -331,14 +347,17 @@ function TrashRow({
         <Countdown entry={entry} now={now} />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flex: '0 0 auto' }}>
-          <Button
-            size="sm"
-            variant={soon ? 'frost' : 'ghost'}
-            iconLeft={<Icon name="undo-2" size={14} />}
-            onClick={onRestore}
-          >
-            Restore
-          </Button>
+          {/* Raised while its days are nearly up, quiet otherwise (29-1P2:
+              frost became the soft button, ghost stays ghost). */}
+          {soon ? (
+            <SoftButton size="sm" icon={<Icon name="undo-2" size={14} />} onClick={onRestore}>
+              Restore
+            </SoftButton>
+          ) : (
+            <Button size="sm" variant="ghost" iconLeft={<Icon name="undo-2" size={14} />} onClick={onRestore}>
+              Restore
+            </Button>
+          )}
           <MorphMenu
             align="end"
             width={288}
@@ -413,12 +432,13 @@ function TrashRow({
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)',
                   padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--r-lg)',
-                  backgroundImage: 'var(--glass-tint-amber)', boxShadow: 'var(--glass-rim-1)',
+                  /* A warning: quiet, grey with its icon (29-1P2c2). */
+                  backgroundImage: 'var(--glass-tint-warn)', boxShadow: 'var(--glass-rim-1)',
                 }}
               >
                 <span
                   aria-hidden="true"
-                  style={{ display: 'flex', color: 'var(--status-review)', flex: '0 0 auto', marginTop: 2 }}
+                  style={{ display: 'flex', color: 'var(--status-warn)', flex: '0 0 auto', marginTop: 2 }}
                 >
                   <Icon name="triangle-alert" size={15} />
                 </span>
@@ -537,6 +557,8 @@ export default function TrashPage() {
    * outliving its deletion by thirty days would be a leak, not a Trash.
    */
   const handlePurge = (entry: TrashEntry) => {
+    /* 29-1P4c: gone for good, so it goes as dust (his call). */
+    turnToDust([`trash:${entry.id}`]);
     removeEntry(entry.id);
     setToast({
       icon: 'trash-2',
@@ -548,6 +570,7 @@ export default function TrashPage() {
 
   const handleEmpty = () => {
     const count = entries.length;
+    turnToDust(entries.map((e) => `trash:${e.id}`));
     emptyTrash();
     setToast({
       icon: 'trash-2',
@@ -570,7 +593,7 @@ export default function TrashPage() {
               padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
             }}
           >
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -588,6 +611,8 @@ export default function TrashPage() {
               <div style={{ display: 'grid', gap: 'var(--sp-3)', flex: 1, minWidth: 260 }}>
                 <MetaKicker>Deleted, not gone</MetaKicker>
                 <h1
+                  /* 29-1P5c, idea 57: shrinks and fades as the page scrolls. */
+                  className="ag-tuck-title"
                   style={{
                     font: 'var(--type-display)', fontSize: 'var(--text-2xl)',
                     letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0,
@@ -606,17 +631,15 @@ export default function TrashPage() {
                 </p>
               </div>
               {entries.length > 0 && (
-                <SegmentedControl size="sm" options={SORTS} value={sort} onChange={(v) => setSort(v as SortId)} />
+                <SegmentedControl look="soft" size="sm" options={SORTS} value={sort} onChange={(v) => setSort(v as SortId)} />
               )}
             </header>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: 'var(--sp-4)' }}>
               <Metric value={String(entries.length)} label="in the trash" />
-              <Metric
-                value={String(soonCount)}
-                label="going within a week"
-                tone={soonCount > 0 ? 'var(--status-review)' : undefined}
-              />
+              {/* No colour since 29-1P2c2: it was amber, and a warning is
+                  quiet now — the rows it counts carry the triangle. */}
+              <Metric value={String(soonCount)} label="going within a week" />
               {/* The tile that would have counted Atlas's own deletions. See
                   the file header for why it counts bytes instead. */}
               <Metric value={formatBytes(bytes).split(' ')[0]} unit={formatBytes(bytes).split(' ')[1]} label="kept aside" />
@@ -643,45 +666,19 @@ export default function TrashPage() {
                   const count = entries.filter((e) => e.kind === kind).length;
                   if (count === 0) return null;
                   const on = kinds.includes(kind);
+                  /* A filter that says how many are behind it: the design
+                     system's chip with a count (29-1P2), pressed in while on. */
                   return (
-                    <button
+                    <CountChip
                       key={kind}
-                      type="button"
+                      count={count}
+                      pressed={on}
                       onClick={() => toggleKind(kind)}
-                      aria-pressed={on}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 38, flex: '0 0 auto',
-                        padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
-                        backgroundImage: on ? 'var(--glass-fill-solid)' : 'var(--glass-fill-1)',
-                        boxShadow: on ? 'var(--glass-rim-3), var(--glass-cast-1)' : 'var(--glass-rim-1)',
-                        /* WHITE on a pressed chip, not the mockup's
-                           `--fg-on-light`. `trash.html` pairs `--fg-on-light`
-                           (oklch 0.13 — near black) with `--glass-fill-solid`,
-                           which is NOT solid: it is 14–30% white, so over this
-                           page it lands mid-grey and near-black text on it is
-                           barely legible. `--fg-on-light` belongs with
-                           `--glass-frost`, which really is a light surface —
-                           that is the pairing `Button`'s frost variant uses.
-                           `SegmentedControl` is the app's own answer for "this
-                           pill is selected", it uses the same
-                           `--glass-fill-solid` + `--glass-rim-3, --glass-cast-1`
-                           this chip does, and its selected label is white. It
-                           is four inches up this same screen; the two must not
-                           disagree. */
-                        color: on ? 'oklch(1 0 0)' : 'var(--fg-2)',
-                        font: 'var(--type-label)', transition: 'var(--t-hover)',
-                      }}
+                      className="ds-soft--sm"
+                      style={{ flex: '0 0 auto' }}
                     >
                       {KIND_META[kind].plural}
-                      <span
-                        style={{
-                          font: 'var(--type-kicker)', letterSpacing: 'var(--tracking-kicker)',
-                          opacity: on ? 0.6 : 1, color: on ? 'inherit' : 'var(--fg-4)',
-                        }}
-                      >
-                        {count}
-                      </span>
-                    </button>
+                    </CountChip>
                   );
                 })}
                 {(kinds.length > 0 || q !== '') && (
@@ -723,16 +720,11 @@ export default function TrashPage() {
                   >
                     <Icon name="trash-2" size={22} />
                   </span>
-                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)' }}>Nothing in the trash.</span>
-                  <span
-                    style={{
-                      font: 'var(--type-caption)', color: 'var(--fg-4)',
-                      maxWidth: '40ch', textWrap: 'pretty',
-                    }}
-                  >
-                    Anything you or Atlas deletes lands here first, with a Restore button next to it, until its{' '}
-                    {RETENTION_DAYS} days are up.
-                  </span>
+                  {/* 29-1P14c: his approved words, the key ones lit. */}
+                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)' }}>The trash is empty.</span>
+                  <LitLine style={{ font: 'var(--type-caption)', color: 'var(--fg-4)', maxWidth: '40ch' }}>
+                    Anything deleted waits here <Lit>{RETENTION_DAYS} days</Lit>, with <Lit>Restore</Lit> beside it.
+                  </LitLine>
                 </div>
               ) : visible.length === 0 ? (
                 <div
@@ -750,11 +742,14 @@ export default function TrashPage() {
                   >
                     <Icon name="search-x" size={20} />
                   </span>
-                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', maxWidth: '32ch', textWrap: 'pretty' }}>
-                    Nothing in the trash matches that.
-                  </span>
+                  <LitLine
+                    text={query.trim() === '' ? 'Nothing in the trash matches that.' : `Nothing in the trash matches **“${litSafe(query.trim())}”**.`}
+                    style={{ font: 'var(--type-caption)', color: 'var(--fg-3)', maxWidth: '32ch' }}
+                  />
                 </div>
               ) : (
+                <BlurAcross value={sort} index={SORTS.findIndex((one) => one.value === sort)}>
+                  {/* 29-1P5c, idea 60: a new order blurs across. */}
                 <AnimatePresence initial={false}>
                   {visible.map((entry, i) => (
                     <TrashRow
@@ -768,6 +763,7 @@ export default function TrashPage() {
                     />
                   ))}
                 </AnimatePresence>
+                </BlurAcross>
               )}
             </div>
 
@@ -801,32 +797,23 @@ export default function TrashPage() {
                 ))}
               </div>
 
+              {/* Held, not tapped (29-1P2, his call): nothing brings an
+                  emptied trash back, which is exactly what `HoldToConfirm`
+                  is for. The hold is the confirm, so the menu that used to
+                  ask "Remove all?" is gone rather than held as well. */}
               {entries.length > 0 && (
-                <MorphMenu
-                  align="end"
-                  width={288}
-                  header={{ title: 'Empty the trash', meta: plural(entries.length, 'item') }}
-                  trigger={
-                    <Button size="sm" variant="ghost" iconLeft={<Icon name="trash-2" size={14} />}>
-                      Empty the trash
-                    </Button>
-                  }
-                  items={[
-                    { section: 'Careful', tone: 'danger' },
-                    {
-                      value: 'empty',
-                      label: 'Empty it now',
-                      icon: <Icon name="trash-2" size={16} />,
-                      tone: 'danger',
-                      confirm: {
-                        label: `Remove all ${plural(entries.length, 'item')}?`,
-                        hint: 'They skip their remaining days. Nothing brings any of it back.',
-                        action: 'Empty it',
-                        onConfirm: handleEmpty,
-                      },
-                    },
-                  ]}
-                />
+                <HoldToConfirm
+                  className="ds-soft--sm"
+                  onConfirm={handleEmpty}
+                  doneLabel="Emptied"
+                  title={`Removes all ${plural(entries.length, 'item')} for good. They skip their remaining days; nothing brings any of it back.`}
+                  style={{ flex: '0 0 auto' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+                    <Icon name="trash-2" size={14} />
+                    Hold to empty the trash
+                  </span>
+                </HoldToConfirm>
               )}
             </div>
           </div>
@@ -863,7 +850,7 @@ export default function TrashPage() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}

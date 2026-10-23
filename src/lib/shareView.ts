@@ -13,7 +13,7 @@
  * zone sees the owner's wall-clock deadline in their own zone's calendar,
  * which is the same trade the rest of the page has always made.
  */
-import type { PublicLiveRun, PublicShareDoc, PublicTask } from './publicShareSnapshot';
+import type { PublicList, PublicLiveRun, PublicProject, PublicShareDoc, PublicTask } from './publicShareSnapshot';
 import type { ShareSubmission } from './shareSubmissions';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -46,7 +46,7 @@ export function longDate(at: number): string {
 
 export interface DueLine {
   text: string;
-  /** Past its deadline and not done: drawn amber. */
+  /** Past its deadline and not done: drawn coral (amber until 29-1P2c2). */
   late: boolean;
 }
 
@@ -95,11 +95,27 @@ export function clockText(seconds: number): string {
   return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/**
+ * A shared project's lists, then each project inside it in order, at any depth
+ * (BIG-2). A list in a project inside is titled with the path down to it from
+ * the shared one — "Marketing › Launch" — since the page draws every list as
+ * one flat run of sections.
+ */
+export function projectListsDeep(project: PublicProject | undefined): { list: PublicList; title: string }[] {
+  const out: { list: PublicList; title: string }[] = [];
+  const walk = (p: PublicProject, path: string[]) => {
+    for (const list of p.lists) out.push({ list, title: [...path, list.title].join(' › ') });
+    for (const c of p.children ?? []) walk(c, [...path, c.name]);
+  };
+  if (project) walk(project, []);
+  return out;
+}
+
 /** Every task a share shows, in page order. */
 export function shareTasks(share: Pick<PublicShareDoc, 'task' | 'list' | 'project'>): PublicTask[] {
   if (share.task) return [share.task];
   if (share.list) return share.list.tasks;
-  return (share.project?.lists ?? []).flatMap((l) => l.tasks);
+  return projectListsDeep(share.project).flatMap(({ list }) => list.tasks);
 }
 
 /**

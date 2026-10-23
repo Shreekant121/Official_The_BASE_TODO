@@ -41,12 +41,19 @@ import { looksLikeQuestion, searchPalette, type PaletteEntry } from '../lib/pale
 import { useAccountAccess } from '../lib/accountAccess';
 import { useOpenShortcutsHelp, useShortcuts } from '../contexts/ShortcutsContext';
 import { useShortcutPrefs } from '../lib/shortcutPrefs';
+import { GO_KEYS, builtInKey, keyCap } from '../lib/shortcutBindings';
 import { NAV_ENTRIES, type NavEntry } from './navModel';
 import { paletteCommandCatalog, type PaletteCommandMeta } from './paletteCommands';
 import TaskDetailPanel from './TaskDetailPanel';
+import { buildProjectTree, projectPath } from '../lib/projectTree';
+import { useJumpRows, useJumpTo } from './project/jumpBack';
+import AppIcon from './AppIcon';
+import { useEventSheet } from '../store/useEventSheet';
 
 /** The ask row's value. No task, list, project or command id can take this shape. */
 const ASK = 'ask:';
+/** A Jump back in row's value (29-1P8c). Ids never start with it either. */
+const JUMP = 'jump-back:';
 
 interface Command extends PaletteCommandMeta {
   run: () => void;
@@ -61,6 +68,8 @@ export default function CommandPaletteHost() {
   const setTasks = useStore((s) => s.setTasks);
   const dockOpen = useUIStore((s) => s.dockOpen);
   const projects = useStore((s) => s.projects);
+  const jumpRows = useJumpRows();
+  const jumpTo = useJumpTo();
   const taskLists = useStore((s) => s.taskLists);
   const backlogTasks = useStore((s) => s.backlogTasks);
   const updateBacklogTask = useStore((s) => s.updateBacklogTask);
@@ -130,6 +139,8 @@ export default function CommandPaletteHost() {
       if (id === 'smart-start') return () => home('smart-start');
       if (id === 'new-project') return () => home('new-project');
       if (id === 'shortcuts') return openHelp;
+      /* 29-2a: the event sheet opens over whatever screen he is on. */
+      if (id === 'new-event') return () => useEventSheet.getState().openEvent();
       /* New session is the nav's session entry under its own name. */
       const value = id === 'new-session' ? 'session' : id.startsWith('go-') ? id.slice(3) : undefined;
       const entry = NAV_ENTRIES.find((e) => e.value === value);
@@ -147,7 +158,8 @@ export default function CommandPaletteHost() {
    * registry because only this file knows what a command does; the registry
    * and the sheet know the key (`lib/shortcutBindings.ts`).
    */
-  const custom = useShortcutPrefs((s) => s.prefs.custom);
+  const shortcutPrefs = useShortcutPrefs((s) => s.prefs);
+  const custom = shortcutPrefs.custom;
   useShortcuts('custom', custom.flatMap((c) => {
     const command = commands.find((cmd) => cmd.id === c.command);
     return command ? [{ key: c.key, label: command.name, handler: command.run }] : [];
@@ -172,7 +184,10 @@ export default function CommandPaletteHost() {
 
   const items = useMemo<CommandPaletteItem[]>(() => {
     if (!open) return [];
-    const projectName = new Map(projects.map((p) => [p.id, p.name]));
+    // A project is named with its path (BIG-2): two "Marketing"s inside two
+    // mega projects are otherwise the same row.
+    const tree = buildProjectTree(projects);
+    const projectName = new Map(projects.map((p) => [p.id, projectPath(tree, p)]));
     const listOf = new Map(taskLists.map((l) => [l.id, l]));
     const whereList = (listId?: string) => {
       const l = listId ? listOf.get(listId) : undefined;
@@ -181,22 +196,37 @@ export default function CommandPaletteHost() {
       return p ? `${p} · ${l.title}` : l.title;
     };
     const commandOf = new Map(commands.map((c) => [c.id, c]));
+    /* Idea 18 (29-1P6a): the key a command answers to here, drawn on its row.
+       His own key first (live everywhere), then the fixed go-to sequences, the
+       sheet's `?`, and Home's own two keys while Home is the screen. */
+    const keysOf = (id: string): string[] | undefined => {
+      const mine = custom.find((c) => c.command === id);
+      if (mine) return [keyCap(mine.key)];
+      if (id === 'shortcuts') return ['?'];
+      const go = id.startsWith('go-') ? GO_KEYS[id.slice(3) as keyof typeof GO_KEYS] : undefined;
+      if (go) return ['G', keyCap(go)];
+      if ((id === 'smart-start' || id === 'new-project') && pathname === '/') return [keyCap(builtInKey(shortcutPrefs, id))];
+      return undefined;
+    };
 
     const rows: CommandPaletteItem[] = searchPalette(entries, query).map((e) => {
       switch (e.kind) {
         case 'task': {
           const where = whereList(backlogTasks.find((t) => t.id === e.id)?.listId);
           return {
-            value: `task:${e.id}`, label: e.name, group: 'Task',
+            value: `task:${e.id}`, label: e.name, group: 'Task', peek: e.id,
             detail: e.done ? (where ? `Done · ${where}` : 'Done') : where,
             icon: <Icon name={e.done ? 'check' : 'circle'} size={16} />,
           };
         }
-        case 'project':
+        case 'project': {
+          const above = tree.ancestorsOf(e.id).map((p) => p.name).join(' › ');
           return {
-            value: `project:${e.id}`, label: e.name, group: 'Project', detail: e.description || undefined,
+            value: `project:${e.id}`, label: e.name, group: 'Project',
+            detail: above ? `Inside ${above}` : e.description || undefined,
             icon: <Icon name="folder" size={16} />,
           };
+        }
         case 'list': {
           const l = listOf.get(e.id);
           return {
@@ -210,10 +240,21 @@ export default function CommandPaletteHost() {
           return {
             value: `command:${e.id}`, label: e.name, group: c?.group, detail: c?.detail,
             icon: c ? <Icon name={c.icon} size={16} /> : undefined,
+            keys: keysOf(e.id),
           };
         }
       }
     });
+
+    /* 29-1P8c, idea 154 (his call): opened with nothing typed, Home's Jump
+       back in comes first — the same four, landing where he was. */
+    if (query.trim() === '') {
+      rows.unshift(...jumpRows.map(({ spot, project, where, when }): CommandPaletteItem => ({
+        value: `${JUMP}${spot.projectId}`, label: project.name, group: 'Jump back in',
+        detail: where ? `${where} · ${when}` : when,
+        icon: <AppIcon icon={project.icon} size={16} />,
+      })));
+    }
 
     const asked = query.trim();
     if (asked !== '') {
@@ -227,11 +268,16 @@ export default function CommandPaletteHost() {
       else rows.push(ask);
     }
     return rows;
-  }, [open, entries, query, projects, taskLists, backlogTasks, commands]);
+  }, [open, entries, query, projects, taskLists, backlogTasks, commands, custom, shortcutPrefs, pathname, jumpRows]);
 
   const run = (item: CommandPaletteItem) => {
     const v = item.value;
     close();
+    if (v.startsWith(JUMP)) {
+      const row = jumpRows.find((r) => r.spot.projectId === v.slice(JUMP.length));
+      if (row) jumpTo(row.spot);
+      return;
+    }
     if (v.startsWith(ASK)) {
       setHandoff({ kind: 'ask', text: v.slice(ASK.length) });
       if (pathname !== '/chat') navigate('/chat');

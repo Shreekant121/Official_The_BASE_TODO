@@ -21,8 +21,8 @@ import { restoreFromTrash } from './trash';
 // ─── Fixture ─────────────────────────────────────────────────────────────────
 
 const PROJECTS: Project[] = [
-  { id: 'p1', name: 'Empire', color: '#8b5cf6', createdAt: 1, order: 0, shareId: 'sh-p1' },
-  { id: 'p2', name: 'Studio', color: '#f59e0b', createdAt: 2, order: 1 },
+  { id: 'p1', name: 'Empire', createdAt: 1, order: 0, shareId: 'sh-p1' },
+  { id: 'p2', name: 'Studio', createdAt: 2, order: 1 },
 ];
 
 const LISTS: TaskList[] = [
@@ -203,6 +203,52 @@ describe('deleteProject', () => {
     expect(ids(entries[0].taskLists)).toEqual(['l1', 'l2']);
     expect(ids(entries[0].backlogTasks)).toEqual(['t1', 't2']);
   });
+
+  it('takes every project inside it, at any depth, as the same one entry (BIG-2)', () => {
+    // p2 inside p1, and a third project inside p2 with a list of its own.
+    useStore.getState().moveProject('p2', 'p1');
+    useStore.setState((s) => ({
+      projects: [...s.projects, { id: 'p3', name: 'Deep', createdAt: 3, order: 0, parentId: 'p2' }],
+      taskLists: [...s.taskLists, { id: 'l4', title: 'Deep list', projectId: 'p3', order: 0 }],
+    }));
+
+    useStore.getState().deleteProject('p1');
+
+    expect(ids(useStore.getState().projects)).toEqual([]);
+    expect(ids(useStore.getState().taskLists)).toEqual(['action', 'backburner', 'reference']);
+    expect(ids(useStore.getState().backlogTasks)).toEqual(['t4']);
+    assertNoOrphans();
+
+    const entries = useTrashStore.getState().entries;
+    expect(entries).toHaveLength(1);
+    // The one he deleted first — Trash and Archive both name the row after it.
+    expect(ids(entries[0].projects)).toEqual(['p1', 'p2', 'p3']);
+    expect(ids(entries[0].taskLists)).toEqual(['l1', 'l2', 'l3', 'l4']);
+
+    restoreFromTrash(entries[0].id);
+    const byId = new Map(useStore.getState().projects.map((p) => [p.id, p]));
+    expect(byId.get('p2')!.parentId).toBe('p1');
+    expect(byId.get('p3')!.parentId).toBe('p2');
+    assertNoOrphans();
+  });
+
+  it('leaves the project it sat inside, and that project\'s siblings, alone', () => {
+    useStore.getState().moveProject('p2', 'p1');
+    useStore.getState().deleteProject('p2');
+
+    expect(ids(useStore.getState().projects)).toEqual(['p1']);
+    expect(ids(useStore.getState().taskLists)).toContain('l1');
+    assertNoOrphans();
+
+    // It remembers where it sat, so the row can say so and a restore can
+    // rebuild that project if it has gone since — as a list does its project.
+    const entry = useTrashStore.getState().entries[0];
+    expect(entry.ancestors.project?.id).toBe('p1');
+    useStore.getState().deleteProject('p1');
+    useTrashStore.getState().remove(useTrashStore.getState().entries[0].id);
+    restoreFromTrash(entry.id);
+    expect(useStore.getState().projects.map((p) => [p.id, p.parentId])).toEqual([['p1', undefined], ['p2', 'p1']]);
+  });
 });
 
 // ─── Restoring ───────────────────────────────────────────────────────────────
@@ -266,6 +312,28 @@ describe('restoreFromTrash', () => {
 
     const byId = new Map(useStore.getState().backlogTasks.map((t) => [t.id, t]));
     expect(byId.get('t2')!.sharedListIds).toEqual(['l3']);
+    assertNoOrphans();
+  });
+
+  it('drops a restored task\'s own references to things purged since it went in', () => {
+    // t3 (in p2) depends on t1 (in p1), and is cross-linked into l2 (p1) and
+    // Action Steps. p2 goes first, so those links travel inside p2's entry
+    // uncut. Then p1 goes and is purged — t1 and l2 are gone for good, and
+    // restoring p2 must not bring t3 back pointing at either.
+    useStore.setState((s) => ({
+      backlogTasks: s.backlogTasks.map((t) => t.id === 't3' ? { ...t, sharedListIds: ['l2', 'action'] } : t),
+    }));
+    useStore.getState().deleteProject('p2');
+    const p2Entry = useTrashStore.getState().entries[0].id;
+    useStore.getState().deleteProject('p1');
+    useTrashStore.getState().remove(useTrashStore.getState().entries[0].id);
+
+    restoreFromTrash(p2Entry);
+
+    const t3 = useStore.getState().backlogTasks.find((t) => t.id === 't3')!;
+    expect(t3.listId).toBe('l3');
+    expect(t3.dependsOn).toEqual([]);
+    expect(t3.sharedListIds).toEqual(['action']);
     assertNoOrphans();
   });
 

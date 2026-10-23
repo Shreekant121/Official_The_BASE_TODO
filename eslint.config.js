@@ -12,7 +12,12 @@ export default defineConfig([
    * never builds it, but its `.d.ts` sidecars would otherwise be linted as
    * project source and held to rules they were never written against.
    */
-  globalIgnores(['dist', 'design-system']),
+  /*
+   * BIG-12: Atlas's own turn code, bundled from `../atlas` for the tablet by
+   * `scripts/build-atlas-engine.mjs`. Atlas lints its source in its own repo;
+   * this is esbuild's output of it.
+   */
+  globalIgnores(['dist', 'design-system', 'src/lib/atlas/engine/atlasEngine.generated.js']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

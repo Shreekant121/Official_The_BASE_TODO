@@ -2,8 +2,34 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { applySpeedPrefs } from './lib/speedPrefs';
+import { applyDarkTint } from './lib/darkTint';
 import { registerServiceWorker } from './lib/appUpdate';
 import { devServiceWorkerRequested } from './lib/devServiceWorker';
+import { installUndoRecorder } from './store/useUndoStore';
+import { installDust } from './lib/dust';
+import { installStoryRecorder } from './lib/taskStorySync';
+import { installMoments } from './lib/moments';
+import { installLastHere } from './lib/lastHere';
+import { installConnectionWatch } from './lib/connectionWatch';
+
+/* Settings → App → Speed's blur switch, before the first frame (lib/speedPrefs.ts). */
+applySpeedPrefs();
+/* 29-1P1 — the dark tint too, so a tinted app never opens grey for a frame. */
+applyDarkTint();
+/* 29-1P4a — his undo watches the store's actions from the first press. */
+installUndoRecorder();
+/* 29-1P4c — a deleted row turns to dust, and an undo gathers it back. After the
+   recorder, so the dust wraps the recorded delete, not the other way round. */
+installDust();
+/* 29-1P9c — the task's story records every change from the first one. */
+installStoryRecorder();
+/* 29-1P14a — confetti when his press finishes a project or a milestone. */
+installMoments();
+/* 29-1P14b — when he was last here on this device, for welcome back (idea 110). */
+installLastHere();
+/* 29-1P14d1 — the offline pill hears the connection go from the first moment. */
+installConnectionWatch();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

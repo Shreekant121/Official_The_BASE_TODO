@@ -1,4 +1,4 @@
-import { SUBTASK_PROXY_FIELDS, HUMAN_OVERRIDE_MAX, getBlockingTasks } from '../../../store/useStore';
+import { SUBTASK_PROXY_FIELDS, HUMAN_OVERRIDE_MAX, EMERGENCY_MAX, getBlockingTasks } from '../../../store/useStore';
 import type { Project, Subtask, Task, TaskLink, TaskList, TaskStatus } from '../../../store/useStore';
 import type { TaskLocation } from '../../../store/useSnapshotStore';
 import { describeRecurrenceRule, formatRRule, parseRRule } from '../../recurrence';
@@ -17,6 +17,10 @@ import {
   ToolArgError,
 } from '../toolKit';
 import { batchResult, missingIdReason, runBatch, titleList } from './batch';
+import { useEventStore } from '../../../store/useEventStore';
+import { linkedDeadline } from '../../events/eventLinks';
+import { buildProjectTree, flattenProjectTree } from '../../projectTree';
+import { ignoredWorkOf } from '../../ignoredWork';
 import type { AgentStoreState, JsonSchema, ToolArgs, ToolContext, ToolDef, ToolResult } from '../types';
 
 /**
@@ -25,7 +29,7 @@ import type { AgentStoreState, JsonSchema, ToolArgs, ToolContext, ToolDef, ToolR
  *
  * Two things every one of them obeys:
  * - `search_tasks` returns compact rows only. Full task objects carry
- *   descriptions, notes, links and whole subtask trees; twenty of those would
+ *   descriptions, links and whole subtask trees; twenty of those would
  *   cost more context than the rest of the turn put together (D5).
  * - Anything that writes captures a snapshot of what it is about to touch
  *   first, so one click undoes the turn (D6).
@@ -71,6 +75,14 @@ export interface CompactTaskRow {
    * lists are what he actually named. Absent when the list is in no project.
    */
   projectName?: string;
+  /**
+   * BIG-3 — present, and only ever `true`, on work he has set aside from the
+   * score: the task, its list or a project above it is ignored. Absent on
+   * everything else, so the ordinary row costs no extra tokens.
+   */
+  ignored?: true;
+  /** 29-2d1: the event it is due before, by name. Absent on everything else. */
+  dueBefore?: string;
 }
 
 export interface LocatedTask {
@@ -147,6 +159,8 @@ export function projectNameFor(state: AgentStoreState, listId?: string): string 
 export function compactRow(state: AgentStoreState, task: Task | Subtask, listId?: string, listName?: string): CompactTaskRow {
   const asTask = task as Task;
   const resolvedListId = listId ?? asTask.listId;
+  const ignored = ignoredWorkOf(state.backlogTasks, state.taskLists, state.projects)
+    .has({ id: task.id, listId: resolvedListId });
   return {
     id: task.id,
     title: task.title,
@@ -154,7 +168,14 @@ export function compactRow(state: AgentStoreState, task: Task | Subtask, listId?
     deadline: task.deadline,
     listName: listTitleFor(state, resolvedListId, listName ?? asTask.listName),
     projectName: projectNameFor(state, resolvedListId),
+    ...(ignored ? { ignored: true as const } : {}),
+    ...(asTask.eventId ? { dueBefore: eventTitle(asTask.eventId) } : {}),
   };
+}
+
+/** 29-2d1: an event's name for a task row; `undefined` when it has gone. */
+function eventTitle(eventId: string): string | undefined {
+  return useEventStore.getState().events.find((e) => e.id === eventId)?.title;
 }
 
 /**
@@ -370,11 +391,30 @@ function contextScore(row: CompactTaskRow, query: string): number | null {
 
 // ─── Shared field parsing for create/update ─────────────────────────────────
 
-const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+/*
+ * FIX-12 (audit B1): urgency in his words is the **Emergency** setting, the
+ * one the score reads. The old Low / Medium / High / Urgent field was saved and
+ * then read by nothing, so it is gone from both tools; a task's stored value
+ * stays where it is. Shared with `update_subtask`, since a step has the field.
+ */
+export const EMERGENCY_SCHEMA: JsonSchema = {
+  type: 'integer',
+  description:
+    `Emergency, 0 to ${EMERGENCY_MAX}: "drop everything for this". This is what urgency means in this app — when the ` +
+    'user calls it urgent, an emergency or ASAP, set it (3 if they gave no degree). It lifts the task above the ' +
+    'rest until its deadline passes. 0 takes it off. Never set it unless the user expressed urgency in words.',
+};
+
+/** Reads `emergencyBoost`, storing 0 as absent as `setEmergencyBoost` does, and says what it set. */
+export function readEmergency(args: ToolArgs, notes: string[]): number | undefined | null {
+  const level = optionalNumber(args, 'emergencyBoost', { min: 0, max: EMERGENCY_MAX, integer: true });
+  if (level === undefined) return null;
+  notes.push(level > 0 ? `Emergency set to ${level} of ${EMERGENCY_MAX}` : 'Emergency taken off');
+  return level > 0 ? level : undefined;
+}
 
 const TASK_FIELD_SCHEMAS: Record<string, JsonSchema> = {
-  description: { type: 'string', description: 'What the task involves. One or two sentences.' },
-  notes: { type: 'string', description: 'Free-form notes. Use description for the summary and notes for detail.' },
+  description: { type: 'string', description: 'What the task involves, and any detail or context worth keeping.' },
   deadline: {
     type: 'string',
     description:
@@ -382,9 +422,8 @@ const TASK_FIELD_SCHEMAS: Record<string, JsonSchema> = {
       'Resolved in the user\'s timezone, which is given to you every turn — do not compute a date yourself from a guess about today.',
   },
   startDate: { type: 'string', description: 'When work should begin. Same formats as deadline. Only set it if the user said so.' },
-  priority: { type: 'string', enum: [...PRIORITIES], description: 'Only when the user expressed urgency in words.' },
+  emergencyBoost: EMERGENCY_SCHEMA,
   estimatedTime: { type: 'integer', description: 'Expected effort in MINUTES (not hours, not seconds).' },
-  tags: { type: 'array', items: { type: 'string' }, description: 'Short labels. Replaces the existing tags wholesale.' },
   humanOverride: {
     type: 'integer',
     description:
@@ -447,6 +486,15 @@ const TASK_FIELD_SCHEMAS: Record<string, JsonSchema> = {
     type: 'boolean',
     description: 'True hides this task from the public share link its list or project is published under. It never publishes anything.',
   },
+  /* 29-2d1: the link names the event by the id every event tool calls it. */
+  eventId: {
+    type: 'string',
+    description:
+      'The event it is due before ("buy shoes before the marathon"): an eventId from list_events, in the events drawer. ' +
+      'It sets the deadline itself (the event\'s start, or 6pm the day before an all-day one) and the task follows ' +
+      'the event when its date moves. Do not send a deadline with it. A task he names may already exist: ' +
+      'search_tasks first, and if it is there use update_task with this eventId, never create_task again.',
+  },
 };
 
 interface ParsedFields {
@@ -462,9 +510,6 @@ function readTaskFields(args: ToolArgs, ctx: ToolContext): ParsedFields {
   const description = optionalString(args, 'description');
   if (description !== undefined) updates.description = description;
 
-  const taskNotes = optionalString(args, 'notes');
-  if (taskNotes !== undefined) updates.notes = taskNotes;
-
   for (const key of ['deadline', 'startDate'] as const) {
     const raw = optionalString(args, key);
     if (raw === undefined) continue;
@@ -476,14 +521,11 @@ function readTaskFields(args: ToolArgs, ctx: ToolContext): ParsedFields {
     }
   }
 
-  const priority = optionalEnum(args, 'priority', PRIORITIES);
-  if (priority !== undefined) updates.priority = priority;
+  const emergencyBoost = readEmergency(args, notes);
+  if (emergencyBoost !== null) updates.emergencyBoost = emergencyBoost;
 
   const estimatedTime = optionalNumber(args, 'estimatedTime', { min: 1, max: 10_080 });
   if (estimatedTime !== undefined) updates.estimatedTime = estimatedTime;
-
-  const tags = optionalStringArray(args, 'tags');
-  if (tags !== undefined) updates.tags = tags;
 
   const humanOverride = optionalNumber(args, 'humanOverride', { min: 0, max: HUMAN_OVERRIDE_MAX, integer: true });
   if (humanOverride !== undefined) updates.humanOverride = humanOverride;
@@ -527,6 +569,35 @@ function readTaskFields(args: ToolArgs, ctx: ToolContext): ParsedFields {
     updates.recurrenceRule = formatRRule(parsed);
     updates.recurrence = 'custom';
     notes.push(`repeats ${describeRecurrenceRule(parsed)}`);
+  }
+
+  /* 29-2d1: due before an event. The deadline is the event's, by the rule the
+     sheet uses (`linkedDeadline`), never a date the model worked out. */
+  const eventId = optionalString(args, 'eventId');
+  if (eventId !== undefined) {
+    if ('deadline' in updates) throw new ToolArgError('Send "eventId" or "deadline", not both: a task due before an event takes the event\'s date.');
+    /* The id, or a name only one event answers to: measured on gemma4:e4b
+       (29-2d1), it sent "Mumbai Marathon" and "the marathon" where the id
+       goes, two runs in nine. The exact name first, then the words of the
+       name ("the"/"my" dropped) found in exactly one title — "Goa" with two
+       Goa trips is refused, never guessed. The summary names the event. */
+    const events = useEventStore.getState().events;
+    const ref = eventId.trim();
+    const lower = ref.toLowerCase();
+    const words = lower.replace(/^(the|my|a|an)\s+/, '').trim();
+    let named = events.filter((e) => e.title.toLowerCase() === lower);
+    if (named.length === 0 && words.length >= 3) named = events.filter((e) => e.title.toLowerCase().includes(words));
+    const event = events.find((e) => e.id === ref) ?? (named.length === 1 ? named[0] : undefined);
+    if (!event) {
+      throw new ToolArgError(named.length > 1
+        ? `"eventId": ${named.length} events are called "${ref}". Get the id from list_events, in the events drawer.`
+        : '"eventId" names no event. Get ids from list_events, in the events drawer.');
+    }
+    const deadline = linkedDeadline(event, ctx.now, ctx.timezone);
+    if (!deadline) throw new ToolArgError(`"${event.title}" has a date that cannot be read.`);
+    updates.eventId = event.id;
+    updates.deadline = deadline;
+    notes.push(`due before ${event.title}, ${describeDate(deadline, ctx.timezone)}`);
   }
 
   const links = optionalObjectArray(args, 'links', (item, index) => {
@@ -597,7 +668,7 @@ export const searchTasks: ToolDef = defineTool({
     'that id. A bare project or list name works as a query and returns what is in it. Call it with no query but a ' +
     'filter to list a whole list, or everything overdue; call list_all_tasks instead when the question is about the ' +
     'whole board. Returns at most ' + SEARCH_RESULT_CAP + ' compact rows — id, title, status, deadline, list, project — ' +
-    'and never descriptions, notes or subtasks; use get_task for those. Searches top-level tasks only, not subtasks. ' +
+    'and never descriptions or subtasks; use get_task for those. Searches top-level tasks only, not subtasks. ' +
     'The ids are for your own tool calls: never print one in your reply, and name a task by its title instead. ' +
     'Do not repeat a search with the same arguments; if it returned nothing, change the query or drop a filter.',
   parametersSchema: {
@@ -854,8 +925,10 @@ export const listAllTasks: ToolDef = defineTool({
     'planning a week, connecting work into a timeline, weighing what is overdue against the time available, ' +
     'deciding what to drop, or anything phrased as "all my tasks". Prefer it over guessing at several searches: ' +
     'the whole board is small and one call answers more than five searches would. Use search_tasks instead when ' +
-    'the user named a particular thing. Top-level tasks only, not subtasks, and no descriptions or notes — ' +
-    'get_task reads those. The ids are for your own tool calls: never print one in your reply.',
+    'the user named a particular thing. Top-level tasks only, not subtasks, and no descriptions — ' +
+    'get_task reads those. The ids are for your own tool calls: never print one in your reply. ' +
+    'A row marked ignored: true is work he has set aside from his score and queue — never suggest it for today or ' +
+    'as what to do next unless he asks about it by name.',
   parametersSchema: {
     type: 'object',
     properties: {
@@ -996,7 +1069,7 @@ export const listProjects: ToolDef = defineTool({
   mutates: false,
   description:
     'The shape of the board: every project, and the lists inside it, with their ids and how many open tasks each ' +
-    'holds. No tasks — list_all_tasks and search_tasks read those. Call this when you need a project or a list ' +
+    'holds, and which project each sits inside. No tasks — list_all_tasks and search_tasks read those. Call this when you need a project or a list ' +
     'ITSELF rather than the tasks in it: publishing a share link for one, renaming or deleting one (Projects drawer), ' +
     'or working out whether a name the user ' +
     'said is a project, a list, or neither. A project id and a list id are the only ids no other tool gives you. ' +
@@ -1014,12 +1087,18 @@ export const listProjects: ToolDef = defineTool({
           (listIds.has(task.listId ?? '') || (task.sharedListIds ?? []).some((listId) => listIds.has(listId))),
       ).length;
 
-    const projects = state.projects.map((project) => {
+    // BIG-2: a project inside another names it. Each count stays the project's
+    // OWN lists, so adding them up never counts a task twice.
+    const tree = buildProjectTree(state.projects);
+    const nameOf = new Map(state.projects.map((project) => [project.id, project.name]));
+    const projects = flattenProjectTree(tree).map(({ project }) => {
       const lists = state.taskLists.filter((list) => list.projectId === project.id);
+      const parentId = tree.parentOf(project.id);
       return {
         type: 'project' as const,
         id: project.id,
         name: project.name,
+        ...(parentId ? { insideId: parentId, inside: nameOf.get(parentId) } : {}),
         published: project.shareId !== undefined,
         openTasks: openIn(new Set(lists.map((list) => list.id))),
         lists: lists.map((list) => ({
@@ -1052,7 +1131,7 @@ export const listProjects: ToolDef = defineTool({
       ok: true,
       summary:
         `${projects.length} project${projects.length === 1 ? '' : 's'} and ${listCount} list${listCount === 1 ? '' : 's'}` +
-        (projects.length === 0 ? '' : `: ${projects.map((project) => `${project.name} (${project.openTasks} open)`).join(', ')}`) +
+        (projects.length === 0 ? '' : `: ${projects.map((project) => `${project.name} (${project.inside ? `inside ${project.inside}, ` : ''}${project.openTasks} open)`).join(', ')}`) +
         '. The ids here name the project or the list itself, which is what a share link needs; task ids still come ' +
         'from search_tasks.',
       data: { projects, lists: loose },
@@ -1067,7 +1146,7 @@ export const listProjects: ToolDef = defineTool({
  *
  * Every other tool here takes fifty ids because acting on fifty tasks costs
  * fifty store writes and one sentence. This one returns whole tasks —
- * descriptions, notes, links, entire subtask trees — which is exactly what
+ * descriptions, links, entire subtask trees — which is exactly what
  * decision D5 says must not arrive twenty at a time. Ten is a person asking
  * about a handful of things at once; past that the right tool is
  * `list_all_tasks`, whose whole point is that compact rows for the entire board
@@ -1079,9 +1158,9 @@ export const getTask: ToolDef = defineTool({
   name: 'get_task',
   mutates: false,
   description:
-    'Read tasks in full: description, notes, subtasks, tags, links, scores, dates. Takes a list, so ask for every task ' +
+    'Read tasks in full: description, subtasks, links, scores, dates. Takes a list, so ask for every task ' +
     'you need in one call rather than one call each. Use it only when the compact rows from search_tasks cannot answer ' +
-    'the question — for example when the user asks what the subtasks are, or what the notes say. Do not call it on ' +
+    'the question — for example when the user asks what the subtasks are, or what the description says. Do not call it on ' +
     'every search result, and never call it to check an id you have already been given.',
   parametersSchema: {
     type: 'object',
@@ -1111,6 +1190,7 @@ export const getTask: ToolDef = defineTool({
         title: found.task.title,
         value: {
           ...found.task,
+          ...((found.task as Task).eventId ? { dueBefore: eventTitle((found.task as Task).eventId as string) } : {}),
           location: found.location,
           listName: listTitleFor(state, owner.listId, owner.listName),
           projectName: project?.name,
@@ -1157,6 +1237,10 @@ export const getTask: ToolDef = defineTool({
  * **A bare string in the list is read as a title** (`requiredRecordArray`),
  * which is the shape most of these calls actually have and three fewer chances
  * for a 4B model to mis-nest an object.
+ *
+ * **Fields sent beside the list rather than inside an entry** (FIX-13) are the
+ * one entry's when there is one, and a refusal when there are several —
+ * `liftEntryFields` in `toolKit.ts`, opted into by `entryList` below.
  */
 const CREATE_TASK_CAP = 50;
 
@@ -1166,12 +1250,14 @@ export const createTask: ToolDef = defineTool({
   description:
     'Create tasks in the backlog. Takes a list — create everything the user named in ONE call, not one call each. ' +
     'Each entry needs a title; send any other field only when the user actually stated it — never invent a deadline, ' +
-    'priority or estimate. ' +
+    'emergency or estimate. ' +
     /* BUILD-16. Measured on gemma4:e4b: with the rule only in the system
        prompt, one run in three went straight here with a bare title. This is
        the sentence it reads at the moment it chooses to create. */
     'If he gave little more than a title — no deadline, no estimate, no importance — do NOT call this yet: call ' +
     'ask_questions first for the ones he did not say, and create the task from his answers. ' +
+    /* 29-2d1, measured on gemma4:e4b: "due before my Goa trip" was asked "when should it be due?". */
+    '"Before the marathon" (an event) IS a deadline: send its eventId and never ask when. ' +
     'Omitting "list" files that task in ' + DEFAULT_LIST_TITLE + '. ' +
     'This does NOT put anything into today\'s focus queue; call add_to_today separately if the user wants to work on ' +
     'them today. Search before you create: a speculative or placeholder task is still a task the user has to deal ' +
@@ -1260,7 +1346,34 @@ export const createTask: ToolDef = defineTool({
           return { ok: false as const, title, reason: err instanceof Error ? err.message : String(err) };
         }
         const { updates, notes } = parsed;
+
+        /* 29-2d1, measured on gemma4:e4b: "Buy running shoes has to be done
+           before the marathon" made a second "Buy running shoes" six runs in
+           six, through a sentence telling it to search first. So a new task
+           due before an event, named exactly as an open task he already has,
+           IS that task: it is tied to the event, never made again. */
+        const same = updates.eventId
+          ? state.backlogTasks.find((t) => !t.parent && t.status !== 'completed' && t.title.trim().toLowerCase() === title.trim().toLowerCase())
+          : undefined;
+        if (same) {
+          ctx.snapshots.captureTask(ctx.snapshotHandle, same.id);
+          ctx.store.updateBacklogTask(same.id, { eventId: updates.eventId, deadline: updates.deadline });
+          const tied = ctx.store.getState().backlogTasks.find((t) => t.id === same.id) as Task;
+          const sameList = listTitleFor(state, same.listId, same.listName);
+          return {
+            ok: true as const,
+            title,
+            value: {
+              task: compactRow(ctx.store.getState(), tied, same.listId, sameList),
+              listTitle: sameList,
+              disclosures: [`it already existed, so that task was tied to the event instead of made again`, ...notes],
+            },
+          };
+        }
+
         if (dependsOn !== undefined) updates.dependsOn = dependsOn;
+        // An Emergency of 0 is "none", which on a new task is no key at all.
+        if (updates.emergencyBoost === undefined) delete updates.emergencyBoost;
 
         const task: Task = {
           id,
@@ -1311,16 +1424,18 @@ export const createTask: ToolDef = defineTool({
       { tasks: outcome.done.map((entry) => entry.value.task) },
     );
   },
-});
+}, { entryList: 'tasks' });
 
 // ─── update_task ────────────────────────────────────────────────────────────
 
 const CLEARABLE_FIELDS = [
-  'deadline', 'startDate', 'description', 'notes', 'priority', 'estimatedTime', 'tags',
+  'deadline', 'startDate', 'description', 'emergencyBoost', 'estimatedTime',
   // Item 9. `hiddenFromShare` is absent on purpose: it is a boolean, so
   // `false` already says what clearing it would say, and offering two spellings
   // of one intent is how a model ends up sending both.
   'assignee', 'allocatedTime', 'reminderMinutes', 'recurrenceRule', 'links', 'dependsOn',
+  // 29-2d1: no longer due before its event; the date stays.
+  'eventId',
 ] as const;
 const OPEN_STATUSES = ['needsAction', 'in-progress'] as const;
 
@@ -1333,7 +1448,7 @@ export const updateTask: ToolDef = defineTool({
     'distinct change — not once per task. Send only the fields that are actually changing; everything you omit is ' +
     'left alone. Use "clear" to remove a value the user wants gone (an unwanted deadline, a stale estimate). To mark ' +
     'a task finished use complete_task instead — "status" here only reopens or starts a task. To remove a task use ' +
-    'delete_task. Fields that take a list — tags, links, dependsOn — are REPLACED wholesale, so read the task first ' +
+    'delete_task. Fields that take a list — links, dependsOn — are REPLACED wholesale, so read the task first ' +
     'and send the existing entries alongside the new one unless the user is replacing them. To move a task ' +
     'to another list or project, or reorder it, use move_task.',
   parametersSchema: {

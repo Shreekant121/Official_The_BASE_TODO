@@ -10,7 +10,9 @@
  * Two things that moved with the design system:
  *   - The indigo `#818cf8` count badge and the amber reconnect dot are now
  *     one thing: MiniNav's status dot on `--status-overrun`. Emerald is
- *     rationed to mean "live" and was never right for an alert.
+ *     rationed to mean "live" and was never right for an alert. (Since
+ *     29-1P2 a count is a number again, in MiniNav's count chip; the
+ *     reconnect cue is still the dot.)
  *   - The active pill is emerald-tinted glass rather than white glass,
  *     because the selected destination IS the live one.
  *
@@ -56,7 +58,7 @@ import { useNavModel } from './navModel';
  * a member of the table — it is matched by prefix below (UI-17).
  */
 const HIDDEN_ROUTES = [
-  '/', '/select', '/deadlines', '/focus', '/notifications', '/chat', '/settings', '/scoring',
+  '/', '/dashboard', '/calendar', '/select', '/deadlines', '/focus', '/notifications', '/chat', '/settings', '/scoring',
   '/atlas-host', '/trash', '/archive', '/catalog', '/skills', '/log', '/admin',
 ];
 
@@ -87,7 +89,7 @@ export default function FloatingNav() {
         className="pointer-events-auto"
         style={{ pointerEvents: isHidden ? 'none' : 'auto' }}
       >
-        <MiniNav items={items} value={current} onChange={go} />
+        <MiniNav items={items} value={current} onChange={go} screenLit />
       </motion.div>
     </div>
   );

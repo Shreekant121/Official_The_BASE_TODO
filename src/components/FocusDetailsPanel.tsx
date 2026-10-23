@@ -3,7 +3,7 @@
  * `design-system/screens/focus.html`'s `DetailsBody` (UI-32).
  *
  * Everything a task carries that is useful *while working on it* —
- * description, notes, cover image and clickable reference links — so that
+ * description, cover image and clickable reference links — so that
  * re-reading the brief or opening a link never means leaving the session.
  * Deliberately not editable: "Edit" hands off to the real Task Detail panel
  * rather than duplicating its fields here.
@@ -21,7 +21,7 @@
  *
  * WHAT IS UNCHANGED. Which record is read, and the whole subtask-proxy rule
  * with it: a proxy inherits nothing but its description, so the parent task's
- * cover, notes and links are surfaced under their own labelled block, because
+ * cover and links are surfaced under their own labelled block, because
  * that is usually where the links actually are. `getListTitle`, the deadline
  * formatting and the `onEdit`-is-optional contract are all where they were.
  *
@@ -40,8 +40,9 @@
  */
 import type { ReactNode } from 'react';
 import { getListTitle, useStore, type Task, type TaskLink } from '../store/useStore';
-import { Button, FieldLabel, Icon, type IconName } from '../ui';
+import { DotArrowLink, FieldLabel, Icon, type IconName } from '../ui';
 import { FocusDockPanel } from './FocusDockPanel';
+import { useCoverSrc } from '../lib/covers/coverCache';
 
 interface FocusDetailsPanelProps {
   open: boolean;
@@ -52,7 +53,7 @@ interface FocusDetailsPanelProps {
   task: Task;
   /**
    * The root task a subtask proxy came from. A `Subtask` only carries a
-   * description, so its notes / links / cover live on this task instead and are
+   * description, so its links / cover live on this task instead and are
    * shown in their own clearly-labelled block.
    */
   parentTask?: Task | null;
@@ -75,7 +76,7 @@ function TextBlock({ text }: { text: string }) {
       className="whitespace-pre-wrap break-words"
       style={{
         padding: 'var(--sp-5) var(--sp-6)',
-        borderRadius: 'var(--r-lg)',
+        borderRadius: 'var(--r-sm)',
         background: 'var(--glass-well)',
         boxShadow: 'var(--glass-well-shadow)',
         font: 'var(--type-body)',
@@ -128,7 +129,7 @@ function LinkList({ links }: { links: TaskLink[] }) {
   );
 }
 
-function MetaChip({ icon, children }: { icon: IconName; children: ReactNode }) {
+function MetaChip({ icon, iconTone, children }: { icon: IconName; iconTone?: string; children: ReactNode }) {
   return (
     <span
       className="inline-flex items-center"
@@ -145,22 +146,24 @@ function MetaChip({ icon, children }: { icon: IconName; children: ReactNode }) {
         whiteSpace: 'nowrap',
       }}
     >
-      <Icon name={icon} size={12} />
+      <Icon name={icon} size={12} style={iconTone ? { color: iconTone } : undefined} />
       {children}
     </span>
   );
 }
 
 function Cover({ url }: { url: string }) {
+  // `url` is usually a `cover:` pointer now (lib/covers/); draw the picture.
+  const src = useCoverSrc(url);
   return (
     <a
-      href={url}
+      href={src}
       target="_blank"
       rel="noopener noreferrer"
       className="block overflow-hidden"
-      style={{ borderRadius: 'var(--r-lg)', boxShadow: 'var(--glass-rim-1), var(--glass-cast-1)' }}
+      style={{ borderRadius: 'var(--r-sm)', boxShadow: 'var(--glass-rim-1), var(--glass-cast-1)' }}
     >
-      <img src={url} alt="" className="w-full max-h-56 object-cover" />
+      <img src={src} alt="" className="w-full max-h-56 object-cover" />
     </a>
   );
 }
@@ -187,33 +190,28 @@ export function FocusDetailsBody({ task, parentTask, onEdit }: FocusDetailsBodyP
   const taskLists = useStore((s) => s.taskLists);
 
   const description = task.description?.trim();
-  const notes = task.notes?.trim();
   const links = task.links ?? [];
-  const tags = task.tags ?? [];
   const listTitle = getListTitle(taskLists, task.listId, task.listName);
 
   // A subtask proxy inherits nothing but its description, so surface the parent
   // task's reference material too — that's usually where the links actually are.
   const parentDescription = parentTask?.description?.trim();
-  const parentNotes = parentTask?.notes?.trim();
   const parentLinks = parentTask?.links ?? [];
   const parentCover = parentTask?.imageUrl;
-  const hasParentDetails = !!(parentDescription || parentNotes || parentLinks.length > 0 || parentCover);
+  const hasParentDetails = !!(parentDescription || parentLinks.length > 0 || parentCover);
 
-  const hasOwnDetails = !!(description || notes || links.length > 0 || task.imageUrl);
-  const hasMeta = !!(listTitle || task.deadline || task.estimatedTime || task.assignee || tags.length > 0);
+  const hasOwnDetails = !!(description || links.length > 0 || task.imageUrl);
+  const hasMeta = !!(listTitle || task.deadline || task.estimatedTime || task.assignee);
 
   return (
     <div style={{ display: 'grid', gap: 'var(--sp-7)' }}>
       {hasMeta && (
         <div className="flex flex-wrap items-center" style={{ gap: 'var(--sp-3)' }}>
           {listTitle && <MetaChip icon="corner-down-right">{listTitle}</MetaChip>}
-          {task.deadline && <MetaChip icon="calendar">{formatDeadline(task.deadline)}</MetaChip>}
+          {/* A date's glyph is sky (29-1P2c2). */}
+          {task.deadline && <MetaChip icon="calendar" iconTone="var(--job-sky)">{formatDeadline(task.deadline)}</MetaChip>}
           {!!task.estimatedTime && <MetaChip icon="clock">{task.estimatedTime}m</MetaChip>}
           {task.assignee && <MetaChip icon="user-circle">{task.assignee}</MetaChip>}
-          {tags.map((tag) => (
-            <MetaChip key={tag} icon="tag">{tag}</MetaChip>
-          ))}
         </div>
       )}
 
@@ -222,12 +220,6 @@ export function FocusDetailsBody({ task, parentTask, onEdit }: FocusDetailsBodyP
       {description && (
         <Section label="Description" icon="align-left">
           <TextBlock text={description} />
-        </Section>
-      )}
-
-      {notes && (
-        <Section label="Notes" icon="file-text">
-          <TextBlock text={notes} />
         </Section>
       )}
 
@@ -256,12 +248,6 @@ export function FocusDetailsBody({ task, parentTask, onEdit }: FocusDetailsBodyP
             </Section>
           )}
 
-          {parentNotes && (
-            <Section label="Parent Notes" icon="file-text">
-              <TextBlock text={parentNotes} />
-            </Section>
-          )}
-
           {parentLinks.length > 0 && (
             <Section label="Parent Reference Materials" icon="link-2">
               <LinkList links={parentLinks} />
@@ -276,7 +262,7 @@ export function FocusDetailsBody({ task, parentTask, onEdit }: FocusDetailsBodyP
           style={{
             gap: 'var(--sp-4)',
             padding: 'var(--sp-11) var(--sp-7)',
-            borderRadius: 'var(--r-lg)',
+            borderRadius: 'var(--r-sm)',
             background: 'var(--glass-well)',
             boxShadow: 'var(--glass-well-shadow)',
           }}
@@ -285,7 +271,7 @@ export function FocusDetailsBody({ task, parentTask, onEdit }: FocusDetailsBodyP
             <Icon name="file-text" size={24} />
           </span>
           <p style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-2)' }}>
-            No description, notes or links yet.
+            No description or links yet.
           </p>
           {onEdit && (
             <p style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>
@@ -298,18 +284,15 @@ export function FocusDetailsBody({ task, parentTask, onEdit }: FocusDetailsBodyP
   );
 }
 
-/** The "Open the full sheet" link — the panel's footer, and the column's too. */
+/**
+ * The "Open the full sheet" link — the panel's footer, and the column's too.
+ * The design system's dot arrow link since 29-1P2: it leads somewhere else.
+ */
 export function FocusDetailsEdit({ onEdit, parentTask }: { onEdit: () => void; parentTask?: Task | null }) {
   return (
-    <Button
-      size="sm"
-      variant="ghost"
-      onClick={onEdit}
-      title={parentTask ? 'Edit the parent task' : 'Edit this task'}
-      iconRight={<Icon name="arrow-up-right" size={15} />}
-    >
+    <DotArrowLink onClick={onEdit} title={parentTask ? 'Edit the parent task' : 'Edit this task'}>
       {parentTask ? 'Open the parent task' : 'Open the full sheet'}
-    </Button>
+    </DotArrowLink>
   );
 }
 

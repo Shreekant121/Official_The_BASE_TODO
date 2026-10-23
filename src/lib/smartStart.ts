@@ -62,9 +62,17 @@ export interface SmartQueueOptions {
    * authority.
    */
   scores?: { scoreOf: (task: Task) => number };
+  /**
+   * Ignored work (BIG-3) — `usePriorityScores().ignored.ids`. **Never offered**,
+   * his call: an ignored task is not a candidate, and a task waiting on one
+   * cannot be admitted with its chain, because admitting the chain would offer
+   * the ignored prerequisite. It is held back instead and says what it waits on.
+   */
+  ignored?: ReadonlySet<string>;
 }
 
 const NO_OVERRIDES: ReadonlySet<string> = new Set();
+const NOTHING_IGNORED: ReadonlySet<string> = new Set();
 
 /**
  * One pass over whatever this was handed, against the wall clock. Only reached
@@ -115,6 +123,7 @@ function prerequisiteChainOf(
   task: Task,
   byId: ReadonlyMap<string, Task>,
   excluded: ReadonlySet<string>,
+  ignored: ReadonlySet<string> = NOTHING_IGNORED,
 ): { chain: Task[]; schedulable: boolean } {
   const chain: Task[] = [];
   const seen = new Set<string>([task.id]);
@@ -125,7 +134,9 @@ function prerequisiteChainOf(
       if (excluded.has(id) || seen.has(id)) continue;
       const dep = byId.get(id);
       if (!dep || dep.status === 'completed') continue;
-      if (dep.parent) { schedulable = false; continue; }
+      // An ignored prerequisite is never offered (BIG-3), so it cannot come
+      // along with its dependent: the group is impossible, like a subtask's.
+      if (dep.parent || ignored.has(id)) { schedulable = false; continue; }
       seen.add(id);
       visit(dep);
       chain.push(dep);
@@ -165,18 +176,27 @@ export type StartNowPlan =
 
 const NOTHING_QUEUED: ReadonlySet<string> = new Set();
 
-export function planStartNow(backlogTasks: Task[], taskId: string): StartNowPlan {
+export function planStartNow(
+  backlogTasks: Task[],
+  taskId: string,
+  ignored: ReadonlySet<string> = NOTHING_IGNORED,
+): StartNowPlan {
   const byId = new Map(backlogTasks.map((t) => [t.id, t]));
   const task = byId.get(taskId);
   if (!task || task.status === 'completed' || task.parent) return { kind: 'unavailable' };
 
+  // "Start now" on an ignored task itself is his own press on its own row, and
+  // it starts; what is never done is *offering* one (BIG-3), so an ignored
+  // prerequisite is left out of `startable` below.
   const free = (t: Task) => {
     const { chain, schedulable } = prerequisiteChainOf(t, byId, NOTHING_QUEUED);
     return schedulable && chain.length === 0;
   };
   if (free(task)) return { kind: 'start', queue: [queueCopy(task, false)] };
 
-  const startable = prerequisiteChainOf(task, byId, NOTHING_QUEUED).chain.filter(free);
+  const startable = prerequisiteChainOf(task, byId, NOTHING_QUEUED)
+    .chain.filter((t) => !ignored.has(t.id))
+    .filter(free);
   return { kind: 'blocked', blockers: getBlockingTasks(backlogTasks, task), startable };
 }
 
@@ -184,7 +204,8 @@ export function planStartNow(backlogTasks: Task[], taskId: string): StartNowPlan
  * Builds a "cold start" focus queue that fits inside `hoursAvailable`.
  *
  * - Considers only incomplete, top-level backlog tasks (subtasks roll up
- *   through their parent, so they're never scheduled on their own here).
+ *   through their parent, so they're never scheduled on their own here) that
+ *   are not ignored (BIG-3).
  * - Ranks by the priority score descending, breaking ties by the earliest
  *   deadline (a task with a deadline always sorts ahead of one without).
  * - Greedily fills the hour budget: walks the ranked list and takes each task
@@ -214,13 +235,14 @@ export function buildSmartQueue(
   options: SmartQueueOptions = {},
 ): SmartQueue {
   const overrides = options.overrides ?? NO_OVERRIDES;
+  const ignored = options.ignored ?? NOTHING_IGNORED;
   const budgetMinutes = Math.max(0, hoursAvailable) * 60;
   const scoreOf = options.scores?.scoreOf ?? fallbackScorer(backlogTasks);
 
   const byId = new Map(backlogTasks.map((t) => [t.id, t]));
 
   const candidates = backlogTasks
-    .filter((t) => t.status !== 'completed' && !t.parent)
+    .filter((t) => t.status !== 'completed' && !t.parent && !ignored.has(t.id))
     .sort((a, b) => {
       const scoreDiff = scoreOf(b) - scoreOf(a);
       if (scoreDiff !== 0) return scoreDiff;
@@ -256,7 +278,7 @@ export function buildSmartQueue(
 
   /** `null` when the chain cannot be scheduled — see `prerequisiteChainOf`. */
   const prerequisiteChain = (task: Task): Task[] | null => {
-    const { chain, schedulable } = prerequisiteChainOf(task, byId, queuedIds);
+    const { chain, schedulable } = prerequisiteChainOf(task, byId, queuedIds, ignored);
     return schedulable ? chain : null;
   };
 

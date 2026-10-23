@@ -41,7 +41,8 @@
  *   tracking  `-0.02em` on the numerals. Not `--tracking-display`: that is
  *             the sans display step (`--tracking-kicker` is the scale's one
  *             mono entry), and mono figures are wide enough already.
- *   overrun   emission is `0 0 28px oklch(0.70 0.15 20 / 0.5)`.
+ *   overrun   emission is `0 0 28px oklch(0.70 0.15 20 / 0.5)` in the source;
+ *             coral's hue here since 29-1P2c2.
  *
  * KEPT, deliberately, over the real file:
  *   - **Two faces, `clock` and `span`** — note 1 below. The source has only
@@ -80,7 +81,9 @@ const TONE = {
   neutral: 'var(--fg-1)',
   accent: 'var(--accent)',
   amber: 'var(--hue-amber)',
-  rose: 'var(--hue-rose)',
+  /* 29-1P2c2: over time is coral's job, and a date counting down is sky's. */
+  rose: 'var(--job-coral)',
+  sky: 'var(--job-sky)',
   muted: 'var(--fg-3)',
 } as const;
 
@@ -89,7 +92,20 @@ export type CountdownSize = 'sm' | 'md' | 'lg' | 'timer';
 export type CountdownFormat = 'clock' | 'span';
 
 /** The real file's overrun emission, verbatim. */
-const OVERRUN_GLOW = '0 0 28px oklch(0.70 0.15 20 / 0.5)';
+const OVERRUN_GLOW = '0 0 28px oklch(0.7 0.19 28 / 0.5)'; /* coral, 29-1P2c2 */
+
+/**
+ * 29-1P10b, idea 102: past zero on a focus clock is not "over", it is "in
+ * flow" — gold, reward's job, counting up. `over="flow"` swaps the forced
+ * hue; everything else about an overrun (the `+`, the full rail, the glow at
+ * rest) is the same fact said kindly.
+ */
+const OVER = {
+  overrun: { hue: 'var(--status-overrun)', glow: OVERRUN_GLOW },
+  flow: { hue: 'var(--job-gold)', glow: '0 0 28px oklch(0.8 0.16 82 / 0.5)' },
+} as const;
+
+export type CountdownOver = keyof typeof OVER;
 
 /**
  * The emission each tone makes while `running`. The glow is the numeral's
@@ -101,6 +117,7 @@ const GLOW: Record<CountdownTone, string> = {
   accent: 'var(--text-glow-accent)',
   amber: '0 0 26px oklch(0.80 0.14 82 / 0.5)',
   rose: OVERRUN_GLOW,
+  sky: 'var(--text-glow-sky)',
   muted: 'none',
 };
 
@@ -123,10 +140,25 @@ export interface CountdownProps extends Omit<HTMLAttributes<HTMLDivElement>, 'ch
   tone?: CountdownTone;
   /** True only while it is genuinely counting. Adds the emission glow. */
   running?: boolean;
+  /** What past zero means: `overrun` (coral, the default) or `flow` (gold, Focus's clocks). */
+  over?: CountdownOver;
   /** Small uppercase kicker above the numerals. */
   label?: ReactNode;
   /** A line under the numerals — the "why" behind the tone. */
   note?: ReactNode;
+  /**
+   * Overrides the ladder's numeral size and weight — for a screen that sizes
+   * its clock to the room it has (Focus, 2026-09-30: as big as the card
+   * allows, and bold, his call over note 2 below). Any CSS length.
+   */
+  numeralSize?: string;
+  numeralWeight?: string;
+  /**
+   * One colour for the numerals over every tone and past-zero hue, with no
+   * glow — the StandBy clock's dim red at night (29-1P10c), a bedside light
+   * rather than a signal. Any CSS colour.
+   */
+  tint?: string;
 }
 
 /** `1:23:45`, or `23:45` under an hour. */
@@ -159,8 +191,12 @@ export function Countdown({
   size = 'md',
   tone = 'neutral',
   running = false,
+  over: overMeans = 'overrun',
   label,
   note,
+  numeralSize,
+  numeralWeight,
+  tint,
   className = '',
   style,
   ...rest
@@ -169,7 +205,8 @@ export function Countdown({
   const over = seconds < 0;
   /* The real file forces the overrun hue rather than asking the caller —
      "don't build a separate component for it" cuts both ways. */
-  const hue = over ? 'var(--status-overrun)' : (TONE[tone] ?? TONE.neutral);
+  const past = OVER[overMeans] ?? OVER.overrun;
+  const hue = tint ?? (over ? past.hue : (TONE[tone] ?? TONE.neutral));
   const elapsed = Math.abs(Math.round(seconds));
 
   const numerals: CSSProperties = {
@@ -178,8 +215,8 @@ export function Countdown({
     justifyContent: 'center',
     gap: '0.14em',
     fontFamily: 'var(--font-mono)',
-    fontSize: s.fs,
-    fontWeight: s.weight,
+    fontSize: numeralSize ?? s.fs,
+    fontWeight: numeralWeight ?? s.weight,
     lineHeight: 'var(--leading-tight)',
     letterSpacing: '-0.02em',
     fontVariantNumeric: 'tabular-nums',
@@ -187,7 +224,7 @@ export function Countdown({
     /* `elevation.css` — emission is what a live timer does and what a
        resting readout must not. An overrun emits whether or not it is
        still counting: it is the screen's problem now. */
-    textShadow: over ? OVERRUN_GLOW : running ? (GLOW[tone] ?? GLOW.neutral) : 'none',
+    textShadow: tint ? 'none' : over ? past.glow : running ? (GLOW[tone] ?? GLOW.neutral) : 'none',
     transition: 'color var(--dur-base) var(--ease-glass), text-shadow var(--dur-base) var(--ease-glass)',
   };
 
@@ -198,7 +235,9 @@ export function Countdown({
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
 
-  const spoken = `${over ? 'over by ' : ''}${spokenDuration(elapsed)}`;
+  const spoken = over
+    ? overMeans === 'flow' ? `${spokenDuration(elapsed)} in flow` : `over by ${spokenDuration(elapsed)}`
+    : spokenDuration(elapsed);
   const filled =
     total == null
       ? 0
@@ -253,8 +292,8 @@ export function Countdown({
               height: '100%',
               width: `${filled}%`,
               borderRadius: 'var(--r-pill)',
-              background: over ? 'var(--status-overrun)' : 'var(--accent)',
-              boxShadow: `0 0 12px -1px ${over ? 'var(--status-overrun)' : 'var(--accent)'}`,
+              background: over ? past.hue : 'var(--accent)',
+              boxShadow: `0 0 12px -1px ${over ? past.hue : 'var(--accent)'}`,
               /* Linear, and on the second — a clock's rail must not ease. */
               transition: 'width 1s linear, background var(--dur-base) var(--ease-glass)',
             }}

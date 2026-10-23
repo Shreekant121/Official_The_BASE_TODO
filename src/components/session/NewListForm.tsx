@@ -25,14 +25,16 @@
  * clipped by the form it belongs to. See `../pickers.tsx`, which UI-18 moved
  * up out of `session/` when `CustomDropdown` started sharing it.
  */
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BulkAddInput from '../BulkAddInput';
 import { PortalDropdown } from '../PortalDropdown';
 import { parseBulkLines } from '../../lib/bulkAdd';
-import { Button, Icon, Well } from '../../ui';
+import { Button, Icon, Well, WhiteButton } from '../../ui';
 import type { Project } from '../../store/useStore';
+import { buildProjectTree, flattenProjectTree } from '../../lib/projectTree';
 import { PickerButton, PickerEmpty, PickerList, PickerOption } from '../pickers';
+import AppIcon from '../AppIcon';
 
 /**
  * The typed line itself. No well of its own: the panel around it is already
@@ -73,6 +75,8 @@ export default function NewListForm({
   const pickerRef = useRef<HTMLButtonElement>(null);
 
   const chosen = projects.find((p) => p.id === projectId);
+  // Tree order, each project under the one it sits in (BIG-2).
+  const rows = useMemo(() => flattenProjectTree(buildProjectTree(projects)), [projects]);
 
   return (
     <AnimatePresence>
@@ -105,7 +109,7 @@ export default function NewListForm({
                 ref={pickerRef}
                 open={pickerOpen}
                 muted={!chosen}
-                glyph={chosen ? <span aria-hidden="true">{chosen.icon ?? '📋'}</span> : undefined}
+                glyph={chosen ? <AppIcon icon={chosen.icon} size={16} /> : undefined}
                 onClick={() => setPickerOpen((v) => !v)}
                 style={{ flex: 1, minWidth: 0 }}
               >
@@ -115,6 +119,7 @@ export default function NewListForm({
               <PortalDropdown
                 isOpen={pickerOpen}
                 onClose={() => setPickerOpen(false)}
+                onOpen={() => setPickerOpen(true)}
                 triggerRef={pickerRef}
                 width={280}
               >
@@ -127,27 +132,19 @@ export default function NewListForm({
                   >
                     No project
                   </PickerOption>
-                  {projects.map((p) => (
+                  {rows.map(({ project: p, depth }) => (
                     <PickerOption
                       key={p.id}
+                      depth={depth}
                       selected={projectId === p.id}
-                      glyph={<span aria-hidden="true">{p.icon ?? '📋'}</span>}
-                      meta={
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            display: 'block', width: 8, height: 8,
-                            borderRadius: 'var(--r-circle)', background: p.color,
-                          }}
-                        />
-                      }
+                      glyph={<AppIcon icon={p.icon} size={16} />}
                       onClick={() => { onProjectIdChange(p.id); setPickerOpen(false); }}
                     >
                       {p.name}
                     </PickerOption>
                   ))}
                   {projects.length === 0 && (
-                    <PickerEmpty>No projects yet — create one from the home screen.</PickerEmpty>
+                    <PickerEmpty>No projects yet. Make one on **Home**.</PickerEmpty>
                   )}
                 </PickerList>
               </PortalDropdown>
@@ -155,16 +152,15 @@ export default function NewListForm({
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-3)' }}>
               <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
-              <Button
+              {/* The form's confirm: solid white since 29-1P2. */}
+              <WhiteButton
                 size="sm"
-                variant="tint"
-                tone="accent"
                 disabled={!title.trim()}
                 onClick={() => onSubmitLines(parseBulkLines(title))}
-                iconLeft={<Icon name="plus-circle" size={14} />}
+                icon={<Icon name="plus-circle" size={14} />}
               >
                 Create list
-              </Button>
+              </WhiteButton>
             </div>
           </Well>
         </motion.div>

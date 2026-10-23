@@ -40,8 +40,8 @@
  * *"the controls it does not yet have leave visible, deliberate room rather
  * than a gap"*. Item 10 made the context slider real, item 12 the modes, the
  * thinking dial and what a turn costs, and **item 13A the last of them**: the
- * per-turn ceiling now sits in the tuning popover and its number is on the
- * cost line, exactly as `atlas.html` draws them.
+ * per-turn ceiling. (The cost and the ceiling were removed with the rest of the
+ * AI spending, OPT-4, 2026-10-06, his call.)
  *
  * So `NOT_BUILT_LINE` is gone rather than shortened. The banner slot it
  * occupied was borrowed — the mockup's own content for that row is the battery
@@ -62,12 +62,10 @@
  * covers the screen. The two header buttons are round glass, as Back is on the other
  * V3 screens.
  *
- * The rule that governed it stands and is what the ceilings were held to:
- * **no value is invented**. A ceiling Atlas does not have is left out of this
- * bar entirely rather than drawn at a plausible number.
+ * The rule that governed it stands: **no value is invented**.
  */
 import { useState } from 'react';
-import { AiPresence, Icon, IconButton } from '../../ui';
+import { AiPresence, CountChip, Icon, IconButton, MorphIcon, SoftIconButton } from '../../ui';
 import type { AtlasApproval } from '../../lib/atlas/client';
 import { useAtlasStore } from '../../lib/atlas/atlasStore';
 import { COLUMN_PX } from './chatShared';
@@ -165,13 +163,16 @@ export function ChatHeader({
             The label says which of the two it is about to do, because
             "Show chats" on a screen already showing them is a lie the
             screen reader gets told. */}
-        <IconButton
+        {/* Round soft since 29-1P2, as every header's icon button; so are
+            the two at the row's other end. */}
+        <SoftIconButton
           label={showList ? 'Hide chats' : 'Show chats'}
-          title={showList ? 'Hide chats' : 'Show chats'}
           onClick={toggleList}
         >
-          <Icon name="panel-left" size={18} />
-        </IconButton>
+          {/* 29-1P5c, idea 61: the menu folds into a back arrow while the list
+              is showing — the arrow is the way to put it away. */}
+          <MorphIcon kind="menu-back" on={showList} size={18} />
+        </SoftIconButton>
 
         {/* Hidden, not only paused, under dock mode: its stage is 97% opaque
             and a bright blue sphere showed through it as a dark blot. */}
@@ -252,45 +253,43 @@ export function ChatHeader({
             nothing on all but a handful of days is furniture teaching
             Shreekant to stop looking at it. The empty state lives inside
             the tray, where it is read by somebody who went looking. */}
+        {/* A chip with a count since 29-1P2 (the design system's "Overdue 6"),
+            its number in Atlas's violet: what waits is Atlas's to do (kept at
+            29-1P2c3, which turned the rest of Atlas-waits-on-you violet). */}
         {waiting.length > 0 && (
-          <button
-            type="button"
+          <CountChip
+            count={waiting.length}
+            colour="violet"
+            aria-label={`${waiting.length} waiting for you`}
             onClick={() => setTrayOpen(true)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 38, flex: '0 0 auto',
-              padding: '0 var(--sp-5)', border: 0, cursor: 'pointer', borderRadius: 'var(--r-pill)',
-              backgroundImage: 'var(--glass-tint-amber)',
-              boxShadow: 'var(--glass-rim-2), var(--glow-amber-md)',
-              color: 'var(--fg-1)', font: 'var(--type-label)', transition: 'var(--t-hover)',
-            }}
+            style={{ flex: '0 0 auto' }}
           >
             <Icon name="hand" size={15} />
-            {waiting.length} waiting
-          </button>
+            Waiting
+          </CountChip>
         )}
 
         {/* BUILD-12. Beside new chat because it is the same moment: this
             one has gone as far as it will go here. Not while a turn runs —
             the laptop's copy would stop short of the answer being written. */}
         {copyHandoff !== undefined && !isEmpty && (
-          <IconButton
+          <SoftIconButton
             label="Copy hand-off prompt"
             title="Copy this chat as a prompt for another AI"
             disabled={busy}
             onClick={copyHandoff}
           >
             <Icon name="copy" size={18} />
-          </IconButton>
+          </SoftIconButton>
         )}
 
         {!isEmpty && (
-          <IconButton
+          <SoftIconButton
             label="Start a new conversation"
-            title="Start a new conversation"
             onClick={newConversation}
           >
             <Icon name="message-square-plus" size={18} />
-          </IconButton>
+          </SoftIconButton>
         )}
       </div>
 
@@ -304,9 +303,11 @@ export function ChatHeader({
           one of them himself:
 
             - the **model picker** went to the foot of the chat list, as a
-              row with a glyph and a line of text like the ones above it;
-            - **customize** (context and the per-turn ceiling) went under
-              the composer, beside Mode and Thinking, where the rest of
+              row with a glyph and a line of text like the ones above it
+              (and at OPT-8 to Settings → Atlas, the chat keeping a Local |
+              Cloud switch);
+            - **customize** (the context window) went under
+              the composer, beside Mode (and Thinking, until OPT-8), where the rest of
               what decides a turn already sits;
             - the **Gemini keys** went to Settings, under SimpleURL, which
               is where every other credential in this app lives;

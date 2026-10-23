@@ -25,9 +25,10 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Icon, Input, MetaKicker, MiniNav, SegmentedControl, Toast, useMedia, useMotion, WIDE, type IconName,
+  BlurAcross, Icon, Input, Lit, LitLine, litSafe, MetaKicker, MiniNav, SegmentedControl, SoftButton, Toast, useMedia, useMotion, WIDE, type IconName,
 } from '../ui';
 import { RailMark } from '../components/BrandMark';
+import AppIcon from '../components/AppIcon';
 import { useNavModel } from '../components/navModel';
 import { useArchiveStore } from '../store/useArchiveStore';
 import { DEFAULT_LISTS } from '../store/useStore';
@@ -92,7 +93,16 @@ function Ledge({ height = 14 }: { height?: number }) {
   );
 }
 
+/* A project tile's Put back is the design system's soft button (29-1P2); a
+   loose task's row keeps its quiet outline, as a ghost button stays ghost. */
 function PutBack({ onClick, raised }: { onClick: () => void; raised: boolean }) {
+  if (raised) {
+    return (
+      <SoftButton size="sm" icon={<Icon name="archive-restore" size={15} />} onClick={onClick} style={{ flex: '0 0 auto' }}>
+        Put back
+      </SoftButton>
+    );
+  }
   return (
     <button
       type="button"
@@ -101,9 +111,7 @@ function PutBack({ onClick, raised }: { onClick: () => void; raised: boolean }) 
         display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)', height: 40,
         padding: '0 var(--sp-5)', border: 0, borderRadius: 'var(--r-pill)', cursor: 'pointer',
         font: 'var(--type-label)', transition: 'var(--t-hover)', flex: '0 0 auto',
-        ...(raised
-          ? { backgroundImage: 'var(--glass-fill-1)', boxShadow: 'var(--glass-rim-1)', color: 'var(--fg-1)' }
-          : { background: 'transparent', boxShadow: 'inset 0 0 0 1px var(--line-soft)', color: 'var(--fg-2)' }),
+        background: 'transparent', boxShadow: 'inset 0 0 0 1px var(--line-soft)', color: 'var(--fg-2)',
       }}
     >
       <Icon name="archive-restore" size={15} />
@@ -133,7 +141,7 @@ function ProjectTile({ entry, now, onPutBack }: { entry: ArchiveEntry; now: numb
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-3)' }}>
         <span style={{ ...kicker, color: 'var(--fg-4)', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
-          {project?.icon && <span aria-hidden="true" style={{ textTransform: 'none' }}>{project.icon}</span>}
+          {project?.icon && <AppIcon icon={project.icon} size={13} />}
           Project
         </span>
         <span style={{ font: 'var(--type-numeric)', fontSize: 'var(--text-xs)', color: 'var(--fg-3)', whiteSpace: 'nowrap' }}>
@@ -236,9 +244,9 @@ function EmptyShelf() {
         <span style={{ font: 'var(--type-title)', letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)' }}>
           The shelf is empty.
         </span>
-        <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', maxWidth: '42ch', textWrap: 'pretty' }}>
-          Archive a finished project to keep it without seeing it.
-        </span>
+        <LitLine style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', maxWidth: '42ch' }}>
+          Archive <Lit>a finished project</Lit> to <Lit>keep it</Lit> without seeing it.
+        </LitLine>
         <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', justifyContent: 'center', marginTop: 'var(--sp-3)' }}>
           {['Project menu · Archive project', 'Task menu · Archive task'].map((hint) => (
             <span
@@ -299,7 +307,7 @@ export default function ArchivePage() {
               padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)',
             }}
           >
-            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+            <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
           </div>
         )}
 
@@ -327,6 +335,8 @@ export default function ArchivePage() {
                   <span style={{ color: 'var(--fg-2)' }}>Archive</span>
                 </span>
                 <h1
+                  /* 29-1P5c, idea 57: shrinks and fades as the page scrolls. */
+                  className="ag-tuck-title"
                   style={{
                     font: 'var(--type-display)', fontSize: 'var(--text-2xl)',
                     letterSpacing: 'var(--tracking-title)', color: 'var(--fg-1)', margin: 0,
@@ -344,7 +354,7 @@ export default function ArchivePage() {
                 </p>
               </div>
               {entries.length > 0 && (
-                <SegmentedControl size="sm" options={MODES} value={mode} onChange={(v) => setMode(v as ShelfMode)} />
+                <SegmentedControl look="soft" size="sm" options={MODES} value={mode} onChange={(v) => setMode(v as ShelfMode)} />
               )}
             </header>
 
@@ -389,10 +399,14 @@ export default function ArchivePage() {
                 <EmptyShelf />
               ) : shelves.length === 0 ? (
                 <div style={{ display: 'grid', justifyItems: 'center', gap: 'var(--sp-3)', padding: 'var(--sp-10) 0', textAlign: 'center' }}>
-                  <span style={{ font: 'var(--type-label)', color: 'var(--fg-2)' }}>Nothing on the shelf matches that.</span>
-                  <span style={{ font: 'var(--type-caption)', color: 'var(--fg-4)' }}>Try a project name or a month.</span>
+                  <LitLine
+                    text={`Nothing on the shelf matches ${query.trim() === '' ? 'that' : `**“${litSafe(query.trim())}”**`}. Try **a project name** or **a month**.`}
+                    style={{ font: 'var(--type-label)', color: 'var(--fg-3)', maxWidth: '42ch' }}
+                  />
                 </div>
               ) : (
+                <BlurAcross value={mode} index={MODES.findIndex((one) => one.value === mode)}>
+                  {/* 29-1P5c, idea 60: By when / By project blurs across. */}
                 <div style={{ display: 'grid', gap: 'var(--sp-11)' }}>
                   {shelves.map((shelf) => (
                     <section key={shelf.key} aria-label={shelf.label} style={{ display: 'grid', gap: 'var(--sp-5)' }}>
@@ -429,6 +443,7 @@ export default function ArchivePage() {
                     </section>
                   ))}
                 </div>
+                </BlurAcross>
               )}
             </div>
           </div>
@@ -465,7 +480,7 @@ export default function ArchivePage() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}

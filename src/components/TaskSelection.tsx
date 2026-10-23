@@ -11,14 +11,14 @@
  * The mockup opens by stating it: *"The queue carries a TIME BUDGET, which the
  * old screen did not. A list of three tasks is not a plan; three tasks against
  * four hours is. Smart Start fills against it, and the bar goes amber the
- * moment the queue over-commits the day."*
+ * moment the queue over-commits the day."* (Coral here since 29-1P2c2.)
  *
  * **The budget already existed in the store and this screen had never shown
  * it.** `sessionDuration` defaults to 14400s — four hours, which is the
  * mockup's own `BUDGET = 240` minutes — and Set Deadlines has drawn a bar
  * against it since UI-27. Step 1 was picking tasks blind and step 2 was where
  * you found out they did not fit. "Today" now carries the same reading:
- * committed against the window, what is left, and the trough that goes amber
+ * committed against the window, what is left, and the trough that goes coral
  * the moment the plan outruns the day. The bar itself is `session/BudgetTrack`,
  * shared with Set Deadlines — one field, one drawing.
  *
@@ -120,21 +120,27 @@ import { motion, AnimatePresence } from 'framer-motion';
 import TaskDetailPanel from './TaskDetailPanel';
 import { PortalDropdown } from './PortalDropdown';
 import { SortableList, SortableRow } from './SortableList';
+import { useRevealOnScroll } from '../lib/useRevealOnScroll';
 import TaskRow from './session/TaskRow';
 import QueueSubtaskTree from './session/QueueSubtaskTree';
 import NewListForm from './session/NewListForm';
 import AddTaskForm from './session/AddTaskForm';
 import { PickerEmpty, PickerHeading, PickerList, PickerOption } from './pickers';
 import {
-  Button, Chip, Icon, IconButton, Input, MetaKicker, MiniNav, Stepper, Toast, useMedia, WIDE,
+  Chip, GelButton, Icon, Input, Lit, LitLine, litSafe, MetaKicker, MiniNav, SoftButton, SoftIconButton, SoftToggle,
+  Stepper, Toast, useMedia, WIDE,
 } from '../ui';
 import { RailMark } from './BrandMark';
 import { BudgetTrack } from './session/BudgetTrack';
 import { buildSmartQueue } from '../lib/smartStart';
 import { usePriorityScores } from '../store/usePriorityScores';
-import { formatSpan } from '../lib/timeSpan';
+import { formatSpan, formatSpanSpoken } from '../lib/timeSpan';
 import { useNavModel } from './navModel';
 import { Z } from '../lib/zLayers';
+import { cue } from '../lib/sound';
+import { cheerTick } from '../lib/tickCheer';
+import { startTaskTomorrow } from '../lib/startTomorrow';
+import { doneSide, tomorrowSide } from './task-fields/swipeSides';
 
 /**
  * Both panels' shell — the mockup's `paneStyle`, and the same one Set
@@ -165,13 +171,33 @@ const PANEL_TITLE = {
 const TOAST_MS = 2600;
 
 /**
+ * What Smart start would add from `queue` within `budgetLeft` seconds: its
+ * picks in order, dropping one that does not fit (see `handleSmartStart`).
+ * The title line (29-1P14c) reads the same answer, so "12 tasks that fit" is
+ * exactly what the button would add.
+ */
+function fitInBudget(queue: Task[], budgetLeft: number): Task[] {
+  const fits: Task[] = [];
+  let spent = 0;
+  for (const task of queue) {
+    const cost = task.allocatedTime ?? 0;
+    if (spent + cost > budgetLeft) continue;
+    fits.push(task);
+    spent += cost;
+  }
+  return fits;
+}
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+/**
  * A panel's scroller. `ag-scroll` hides the track for the same reason the
  * subtask drawer does — a scrollbar inside a pane of glass reads as browser
- * chrome resting on the surface — and `scroll-fade-y` masks both ends so rows
- * dissolve into the toolbar above and the pane's own edge below instead of
- * being sliced off square by either.
+ * chrome resting on the surface — and `ag-fade` (OPT-10, `ui/screens.css`)
+ * fades whichever end has rows past it, so they dissolve into the toolbar
+ * above and the pane's own edge below instead of being sliced off square.
  */
-const SCROLLER = 'ag-scroll scroll-fade-y';
+const SCROLLER = 'ag-scroll ag-fade';
 const SCROLLER_STYLE = {
   flex: 1,
   minHeight: 0,
@@ -193,18 +219,58 @@ const SCROLLER_STYLE = {
  * here*; this list is not a slot you add to, and the mockup only dashes the
  * queue's empty state.
  */
-function EmptyAvailable({ filtered }: { filtered: boolean }) {
+function EmptyAvailable({ filtered, typed }: { filtered: boolean; typed: string }) {
+  /* 29-1P14c: his approved words, lit. A list filter with nothing typed has
+     no "x" to quote, so it says "here". */
+  const text = !filtered
+    ? '**Every task** is already in **today**.'
+    : `Nothing ${typed === '' ? 'here' : `matches **“${litSafe(typed)}”**`}. **Clear the filter**, or **add a task**.`;
   return (
     <div style={{ display: 'grid', gap: 'var(--sp-4)', justifyItems: 'start', padding: 'var(--sp-9) var(--sp-6)' }}>
       <MetaKicker icon="inbox" tone="var(--fg-4)">Nothing here</MetaKicker>
-      <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)', textWrap: 'pretty' }}>
-        {filtered
-          ? 'No available task matches. Clear the filter, or add one.'
-          : 'Every task is committed to today.'}
-      </span>
+      <LitLine text={text} style={{ font: 'var(--type-body)', fontSize: 'var(--text-sm)', color: 'var(--fg-3)' }} />
     </div>
   );
 }
+
+/**
+ * The head of the closed "Ignored" section (BIG-3). His call, 2026-09-29:
+ * ignored work is never in the list the app ranks for him, but he can still
+ * open this and hand-pick one himself. Its rows are built only once it is
+ * opened, so a whole ignored mega project costs this screen nothing.
+ */
+function IgnoredHeader({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--sp-3)',
+        width: '100%',
+        margin: 'var(--sp-6) 0 var(--sp-3)',
+        padding: 'var(--sp-5) var(--sp-2) var(--sp-2)',
+        background: 'transparent',
+        border: 0,
+        borderTop: '1px solid var(--line-faint)',
+        cursor: 'pointer',
+        color: 'var(--fg-4)',
+        textAlign: 'left',
+      }}
+    >
+      <MetaKicker icon="moon" tone="var(--fg-4)">Ignored · {count}</MetaKicker>
+      <span style={{ flex: 1 }} />
+      <span style={{ font: 'var(--type-body)', fontSize: 'var(--text-xs)', color: 'var(--fg-4)' }}>
+        {open ? 'Hide' : 'Never offered — open to pick one yourself'}
+      </span>
+      <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} />
+    </button>
+  );
+}
+
+type AvailableItem = { kind: 'task'; task: Task } | { kind: 'ignored-header' };
 
 export default function TaskSelection() {
   const navigate = useNavigate();
@@ -270,10 +336,11 @@ export default function TaskSelection() {
    * free — and a button that silently does nothing is the hazard
    * `lib/smartStart.ts` names in its own header.
    */
-  const [toast, setToast] = useState<{ title: string; detail: string } | null>(null);
+  /* One lit sentence since 29-1P14c (`**` lights words, `LitLine`). */
+  const [toast, setToast] = useState<{ text: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const say = useCallback((title: string, detail: string) => {
-    setToast({ title, detail });
+  const say = useCallback((text: string) => {
+    setToast({ text });
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
@@ -316,6 +383,23 @@ export default function TaskSelection() {
   );
   const freeSeconds = sessionDuration - committedSeconds;
   const overCommitted = freeSeconds < 0;
+
+  /*
+   * THE TITLE LINE (29-1P14c, idea 87's own example, his approved words).
+   * Before he picks: the day's hours, how many tasks Smart start would add,
+   * and which it would put first — the same `fitInBudget` the button runs, so
+   * the line never promises what the button would not do. Once he has picked:
+   * how many, and the head of his own queue.
+   */
+  const titleLine = useMemo(() => {
+    if (selectedTasks.length > 0) {
+      return `**${plural(selectedTasks.length, 'task')}** chosen. Start with **${litSafe(selectedTasks[0].title)}**.`;
+    }
+    const { queue } = buildSmartQueue(sessionDuration / 3600, availableTasks, { scores, ignored: scores.ignored.ids });
+    const fits = fitInBudget(queue, sessionDuration);
+    const start = fits.length > 0 ? ` Start with **${litSafe(fits[0].title)}**.` : '';
+    return `You have **${formatSpanSpoken(sessionDuration)}** and **${plural(fits.length, 'task')}** that fit.${start}`;
+  }, [availableTasks, scores, selectedTasks, sessionDuration]);
 
   const handleEditTask = (taskId: string) => {
     if (!editTaskTitle.trim()) { setEditingTaskId(null); return; }
@@ -416,6 +500,36 @@ export default function TaskSelection() {
     setSelectedTasks(selectedTasks.filter((t) => t.id !== taskId));
   };
 
+  /*
+   * 29-1P6b (17), his calls: a row swiped right is DONE, left STARTS IT
+   * TOMORROW (its start date; it stays in its list). Either way it is off
+   * today's plan, so a queued row also leaves the queue — in the same press,
+   * so one undo puts both back. The queue is read fresh from the store, not
+   * this render's copy: the tick has just mirrored into it (the trap
+   * `handleDeleteTask` notes). A subtask dragged in on its own has no task of
+   * its own to finish or date, and a row already done offers nothing.
+   */
+  const swipeFor = (task: Task, queued: boolean) => {
+    if (task.isSubtaskProxy) return undefined;
+    const real = backlogTasks.find((t) => t.id === task.id);
+    if (!real || real.status === 'completed') return undefined;
+    const takeOut = () => {
+      if (queued) setSelectedTasks(useStore.getState().tasks.filter((t) => t.id !== task.id));
+    };
+    return {
+      right: doneSide(false, taskLockReason(backlogTasks, task) !== undefined, (row) => {
+        cue('tick');
+        cheerTick(row);
+        updateBacklogTask(task.id, { status: 'completed', completedAt: Date.now() });
+        takeOut();
+      }),
+      left: tomorrowSide(false, () => {
+        startTaskTomorrow(task.id, task.title);
+        takeOut();
+      }),
+    };
+  };
+
   // Drop a single dragged subtask into "Selected for Today" — creates a
   // lightweight proxy Task (same id as the subtask) instead of the whole
   // parent task, so edits made from Set Deadlines / Focus Mode write
@@ -464,7 +578,7 @@ export default function TaskSelection() {
    */
   const handleSmartStart = useCallback(() => {
     const budgetLeft = Math.max(0, sessionDuration - committedSeconds);
-    const { queue } = buildSmartQueue(budgetLeft / 3600, availableTasks, { scores });
+    const { queue } = buildSmartQueue(budgetLeft / 3600, availableTasks, { scores, ignored: scores.ignored.ids });
     /*
      * `buildSmartQueue` guarantees a non-empty COLD start — it takes the
      * highest-ranked schedulable task even when nothing fit — which is right
@@ -472,26 +586,17 @@ export default function TaskSelection() {
      * screen and the user is watching it. A pick that does not fit what is
      * free is dropped, and if that leaves nothing the toast says so.
      */
-    const fits: Task[] = [];
-    let spent = 0;
-    for (const task of queue) {
-      const cost = task.allocatedTime ?? 0;
-      if (spent + cost > budgetLeft) continue;
-      fits.push(task);
-      spent += cost;
-    }
+    const fits = fitInBudget(queue, budgetLeft);
     if (fits.length === 0) {
-      say('Nothing fits.', `${formatSpan(budgetLeft)} left in the day.`);
+      say(`Nothing fits in **the ${formatSpan(budgetLeft)} left**.`);
       return;
     }
+    const spent = fits.reduce((sum, task) => sum + (task.allocatedTime ?? 0), 0);
     setSelectedTasks([...selectedTasks, ...fits]);
-    say(
-      fits.length === 1 ? '1 task added.' : `${fits.length} tasks added.`,
-      `${formatSpan(committedSeconds + spent)} committed`,
-    );
+    say(`**${plural(fits.length, 'task')}** added. **${formatSpan(committedSeconds + spent)}** planned.`);
   }, [availableTasks, committedSeconds, say, scores, selectedTasks, sessionDuration, setSelectedTasks]);
 
-  const displayTasks = availableTasks.filter((task) => {
+  const matchesView = (task: Task) => {
     const matchesSearch =
       task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (task.subtasks?.some((st) => st.title.toLowerCase().includes(searchQuery.toLowerCase())) ?? false);
@@ -500,7 +605,22 @@ export default function TaskSelection() {
       task.listId === activeFilterId ||
       (task.sharedListIds?.includes(activeFilterId) ?? false);
     return matchesSearch && matchesList;
-  });
+  };
+  // Ignored work (BIG-3) is never in the list the app offers; it waits in its
+  // own closed section at the bottom, under the same search and filter.
+  const displayTasks = availableTasks.filter((task) => !scores.ignored.has(task) && matchesView(task));
+  const displayIgnored = availableTasks.filter((task) => scores.ignored.has(task) && matchesView(task));
+  const [showIgnored, setShowIgnored] = useState(false);
+  const availableItems: AvailableItem[] = [
+    ...displayTasks.map((task): AvailableItem => ({ kind: 'task', task })),
+    ...(displayIgnored.length > 0 ? [{ kind: 'ignored-header' } as const] : []),
+    ...(showIgnored ? displayIgnored.map((task): AvailableItem => ({ kind: 'task', task })) : []),
+  ];
+
+  /* Only what is near the screen is drawn; the rest arrives as the list
+     scrolls towards it. See `useRevealOnScroll` for the measurement. */
+  const availableScrollerRef = useRef<HTMLDivElement | null>(null);
+  const { count: drawnCount, sentinelRef } = useRevealOnScroll(availableItems.length, availableScrollerRef);
 
   /** Task counts per list, shown next to each option in the filter popover. */
   const listCounts = useMemo(() => {
@@ -524,7 +644,7 @@ export default function TaskSelection() {
     <div className="ag-page" style={{ height: '100dvh', display: 'flex', overflow: 'hidden' }}>
       {wide && (
         <div style={{ flex: '0 0 auto', padding: 'var(--sp-9) 0 var(--sp-9) var(--sp-7)' }}>
-          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} lead={<RailMark />} />
+          <MiniNav orientation="vertical" items={nav.items} value={nav.current} onChange={nav.go} screenLit lead={<RailMark />} />
         </div>
       )}
 
@@ -565,7 +685,8 @@ export default function TaskSelection() {
               flex: '0 0 auto',
               display: 'flex', alignItems: 'center', gap: 'var(--sp-6)', flexWrap: 'wrap',
               padding: 'var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4)',
-              borderRadius: 'var(--r-pill)',
+              /* A rounded rectangle like every other top bar (his BASE list). */
+              borderRadius: 'var(--r-md)',
               backgroundImage: 'var(--glass-fill-2)',
               WebkitBackdropFilter: 'var(--glass-bd-lg)',
               backdropFilter: 'var(--glass-bd-lg)',
@@ -573,9 +694,9 @@ export default function TaskSelection() {
               animation: 'var(--kf-condense) var(--dur-base) var(--ease-glass) both',
             }}
           >
-            <IconButton label="Back to Home" onClick={() => navigate('/')}>
+            <SoftIconButton label="Back to Home" onClick={() => navigate('/')}>
               <Icon name="arrow-left" size={18} />
-            </IconButton>
+            </SoftIconButton>
             <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
               <h1
                 style={{
@@ -585,9 +706,8 @@ export default function TaskSelection() {
               >
                 New Session
               </h1>
-              <p style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }}>
-                Curate today's queue. One task at a time comes later.
-              </p>
+              {/* 29-1P14c, idea 87's own example: a live line, his approved words. */}
+              <LitLine as="p" text={titleLine} style={{ font: 'var(--type-caption)', color: 'var(--fg-3)' }} />
             </div>
             <span style={{ flex: 1, minWidth: 'var(--sp-8)' }} />
             {wide && (
@@ -655,58 +775,63 @@ export default function TaskSelection() {
                 <span style={{ flex: 1 }} />
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-                  <IconButton
+                  <SoftToggle
+                    round
                     size="sm"
-                    label="Search tasks"
+                    aria-label="Search tasks"
                     title="Search"
-                    active={showSearch}
+                    pressed={showSearch}
                     onClick={() => (showSearch ? closeSearch() : setShowSearch(true))}
                   >
                     <Icon name="search" size={16} />
-                  </IconButton>
+                  </SoftToggle>
 
                   {/* The <span> is the popover's anchor — see the ref comment above. */}
                   <span ref={filterTriggerRef} style={{ display: 'inline-flex' }}>
                     {activeFilterId !== 'all' ? (
-                      <Button
+                      <SoftToggle
                         size="sm"
+                        pressed
                         title="Filter by list"
                         onClick={() => setIsFilterOpen((v) => !v)}
-                        iconLeft={<Icon name="filter" size={14} />}
+                        icon={<Icon name="filter" size={14} />}
                         style={{ maxWidth: 190 }}
                       >
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {activeFilterLabel}
                         </span>
-                      </Button>
+                      </SoftToggle>
                     ) : (
-                      <IconButton
+                      <SoftToggle
+                        round
                         size="sm"
-                        label="Filter by list"
+                        aria-label="Filter by list"
                         title="Filter by list"
-                        active={isFilterOpen}
+                        pressed={isFilterOpen}
                         onClick={() => setIsFilterOpen((v) => !v)}
                       >
                         <Icon name="filter" size={16} />
-                      </IconButton>
+                      </SoftToggle>
                     )}
                   </span>
 
-                  <Button
+                  <SoftToggle
                     size="sm"
+                    pressed={isAddingList}
                     onClick={() => setIsAddingList((v) => !v)}
-                    iconLeft={<Icon name="folder-plus" size={15} />}
+                    icon={<Icon name="folder-plus" size={15} />}
                   >
                     New list
-                  </Button>
+                  </SoftToggle>
 
-                  <Button
+                  <SoftToggle
                     size="sm"
+                    pressed={isAdding}
                     onClick={() => setIsAdding(!isAdding)}
-                    iconLeft={<Icon name="plus" size={15} />}
+                    icon={<Icon name="plus" size={15} />}
                   >
                     Add task
-                  </Button>
+                  </SoftToggle>
                 </div>
               </div>
 
@@ -754,6 +879,7 @@ export default function TaskSelection() {
               <PortalDropdown
                 isOpen={isFilterOpen}
                 onClose={() => setIsFilterOpen(false)}
+                onOpen={() => setIsFilterOpen(true)}
                 triggerRef={filterTriggerRef}
                 width={300}
               >
@@ -777,7 +903,7 @@ export default function TaskSelection() {
                     </PickerOption>
                   ))}
                   {taskLists.length === 0 && (
-                    <PickerEmpty>No lists yet — create one with “New list”.</PickerEmpty>
+                    <PickerEmpty>No lists yet. Make one with **New list**.</PickerEmpty>
                   )}
                 </PickerList>
               </PortalDropdown>
@@ -806,9 +932,20 @@ export default function TaskSelection() {
               />
 
               {/* ── The list ─────────────────────────────────────────────── */}
-              <div className={SCROLLER} style={{ ...SCROLLER_STYLE, marginTop: 'var(--sp-5)' }}>
+              <div ref={availableScrollerRef} className={SCROLLER} style={{ ...SCROLLER_STYLE, marginTop: 'var(--sp-5)' }}>
                 <AnimatePresence>
-                  {displayTasks.map((task) => {
+                  {availableItems.slice(0, drawnCount).map((item) => {
+                    if (item.kind === 'ignored-header') {
+                      return (
+                        <IgnoredHeader
+                          key="ignored-header"
+                          count={displayIgnored.length}
+                          open={showIgnored}
+                          onToggle={() => setShowIgnored((open) => !open)}
+                        />
+                      );
+                    }
+                    const task = item.task;
                     const isAddingToThisTask =
                       addingSubtaskContext?.rootTaskId === task.id &&
                       addingSubtaskContext.parentId === task.id;
@@ -845,6 +982,7 @@ export default function TaskSelection() {
                         onRemove={() => handleDeleteTask(task.id)}
                         expanded={expanded}
                         onToggleExpand={subtasks.length > 0 ? () => toggleExpand(task.id) : undefined}
+                        swipe={swipeFor(task, false)}
                       >
                         {subtasks.length > 0 && (
                           <QueueSubtaskTree
@@ -853,22 +991,24 @@ export default function TaskSelection() {
                             listId={task.listId ?? ''}
                             depth={0}
                             expandedIds={expandedIds}
-                            addingContext={addingSubtaskContext}
-                            newSubtaskTitle={newSubtaskTitle}
-                            onAddClick={(subtaskId, rId, lId) => {
-                              setAddingSubtaskContext({
-                                rootTaskId: rId,
-                                parentId: subtaskId,
-                                isNested: true,
-                                listId: lId,
-                              });
-                              setExpandedIds((prev) => new Set(prev).add(subtaskId));
-                              setNewSubtaskTitle('');
-                            }}
                             onToggle={toggleExpand}
-                            onTitleChange={setNewSubtaskTitle}
-                            onConfirm={handleAddSubtask}
-                            onCancel={() => { setAddingSubtaskContext(null); setNewSubtaskTitle(''); }}
+                            adding={{
+                              context: addingSubtaskContext,
+                              title: newSubtaskTitle,
+                              onAddClick: (subtaskId, rId, lId) => {
+                                setAddingSubtaskContext({
+                                  rootTaskId: rId,
+                                  parentId: subtaskId,
+                                  isNested: true,
+                                  listId: lId,
+                                });
+                                setExpandedIds((prev) => new Set(prev).add(subtaskId));
+                                setNewSubtaskTitle('');
+                              },
+                              onTitleChange: setNewSubtaskTitle,
+                              onConfirm: handleAddSubtask,
+                              onCancel: () => { setAddingSubtaskContext(null); setNewSubtaskTitle(''); },
+                            }}
                             onDragStartSub={setDraggedSubtaskId}
                             onDragEndSub={() => setDraggedSubtaskId(null)}
                             draggedSubtaskId={draggedSubtaskId}
@@ -931,9 +1071,10 @@ export default function TaskSelection() {
                   })}
 
                   {displayTasks.length === 0 && !isAdding && (
-                    <EmptyAvailable filtered={!!searchQuery.trim() || activeFilterId !== 'all'} />
+                    <EmptyAvailable filtered={!!searchQuery.trim() || activeFilterId !== 'all'} typed={searchQuery.trim()} />
                   )}
                 </AnimatePresence>
+                {drawnCount < availableItems.length && <div ref={sentinelRef} aria-hidden="true" style={{ height: 1, flex: '0 0 auto' }} />}
               </div>
             </section>
 
@@ -1022,53 +1163,52 @@ export default function TaskSelection() {
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
                     {/*
-                      Both of these are plain glass. Neither is the loudest
-                      thing in this pane — the budget bar under them is
-                      genuinely emerald and the footer is `frost` — and
-                      `Button.prompt.md` allows exactly one primary per view.
+                      Soft raised, second actions (29-1P2). Neither is the
+                      loudest thing in this pane — the footer's gel is — and
+                      the design system allows exactly one lit button per view.
                     */}
-                    <Button
+                    <SoftButton
                       size="sm"
                       onClick={handleSmartStart}
                       title="Fill the rest of the day, best score first"
-                      iconLeft={<Icon name="zap" size={15} />}
+                      icon={<Icon name="zap" size={15} />}
                     >
                       Smart start
-                    </Button>
-                    <Button
+                    </SoftButton>
+                    <SoftButton
                       size="sm"
                       onClick={handleSmartSort}
                       disabled={selectedTasks.length < 2}
                       title="Sort by priority score"
-                      iconLeft={<Icon name="arrow-down-up" size={15} />}
+                      icon={<Icon name="arrow-down-up" size={15} />}
                     >
                       Smart sort
-                    </Button>
-                    <IconButton
+                    </SoftButton>
+                    <SoftIconButton
                       size="sm"
                       label="Review tasks that need attention"
                       title="Review tasks that need attention"
                       onClick={() => navigate('/scoring')}
                     >
                       <Icon name="award" size={16} />
-                    </IconButton>
+                    </SoftIconButton>
                   </div>
                 </div>
 
                 {/*
                   THE BUDGET. A queue without one is a wish list — the mockup's
                   own line, and the reading Set Deadlines has always shown one
-                  step too late. Amber the moment the plan outruns the day.
+                  step too late. Coral the moment the plan outruns the day (29-1P2c2).
                 */}
                 <div style={{ flex: '0 0 auto', display: 'grid', gap: 'var(--sp-3)', marginTop: 'var(--sp-5)' }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-                    <MetaKicker icon="timer" tone={overCommitted ? 'var(--hue-amber)' : 'var(--fg-3)'}>
+                    <MetaKicker icon="timer" tone={overCommitted ? 'var(--status-overrun)' : 'var(--fg-3)'}>
                       Committed
                     </MetaKicker>
                     <span
                       style={{
                         font: 'var(--type-numeric)', fontSize: 'var(--text-lg)', fontVariantNumeric: 'tabular-nums',
-                        color: overCommitted ? 'var(--hue-amber)' : 'var(--fg-1)',
+                        color: overCommitted ? 'var(--status-overrun)' : 'var(--fg-1)',
                       }}
                     >
                       {formatSpan(committedSeconds)}
@@ -1077,7 +1217,7 @@ export default function TaskSelection() {
                       of a {formatSpan(sessionDuration)} day
                     </span>
                     <span style={{ flex: 1 }} />
-                    <span style={{ font: 'var(--type-caption)', color: overCommitted ? 'oklch(0.95 0.07 82)' : 'var(--fg-4)' }}>
+                    <span style={{ font: 'var(--type-caption)', color: overCommitted ? 'var(--job-coral-text)' : 'var(--fg-4)' }}>
                       {overCommitted
                         ? `${formatSpan(-freeSeconds)} over the day`
                         : `${formatSpan(freeSeconds)} free`}
@@ -1130,6 +1270,7 @@ export default function TaskSelection() {
                               onRemove={() => handleRemoveTask(task.id)}
                               expanded={expanded}
                               onToggleExpand={subtasks.length > 0 ? () => toggleExpand(task.id) : undefined}
+                              swipe={swipeFor(task, true)}
                             >
                               {subtasks.length > 0 && (
                                 <QueueSubtaskTree
@@ -1138,13 +1279,7 @@ export default function TaskSelection() {
                                   listId={task.listId ?? ''}
                                   depth={0}
                                   expandedIds={expandedIds}
-                                  addingContext={null}
-                                  newSubtaskTitle=""
-                                  onAddClick={() => {}}
                                   onToggle={toggleExpand}
-                                  onTitleChange={() => {}}
-                                  onConfirm={() => {}}
-                                  onCancel={() => {}}
                                 />
                               )}
                             </TaskRow>
@@ -1170,17 +1305,18 @@ export default function TaskSelection() {
                         }}
                       >
                         <MetaKicker icon="inbox" tone="var(--fg-4)">Queue empty</MetaKicker>
-                        <span
+                        <LitLine
                           style={{
                             font: 'var(--type-body)', fontSize: 'var(--text-sm)',
-                            color: 'var(--fg-3)', textWrap: 'pretty', maxWidth: '34ch',
+                            color: 'var(--fg-3)', maxWidth: '34ch',
                           }}
                         >
-                          Select tasks on the left, or let Smart start fill {formatSpan(sessionDuration)} for you.
-                        </span>
-                        <Button onClick={handleSmartStart} iconLeft={<Icon name="zap" size={16} />}>
+                          You have <Lit>{formatSpanSpoken(sessionDuration)}</Lit>. Pick tasks on the left, or let <Lit>Smart start</Lit> fill them.
+                        </LitLine>
+                        {/* With nothing picked this is the way forward: a plain orange gel (29-1P2). */}
+                        <GelButton colour="orange" tile={false} size="md" onClick={handleSmartStart} icon={<Icon name="zap" size={16} />}>
                           Smart start
-                        </Button>
+                        </GelButton>
                       </div>
                     )}
                   </AnimatePresence>
@@ -1189,21 +1325,21 @@ export default function TaskSelection() {
                 {/* The step forward. A footer inside the pane, not a slab
                     floating over the list — the list no longer needs 160px of
                     dead space under it to scroll clear of this.
-                    `frost` is `Button.prompt.md`'s answer to the loudest action
-                    on a busy backdrop, and this pane now has a live emerald bar
-                    that a default glass button was competing with. */}
+                    The screen's one lit button: a plain orange gel since 29-1P2
+                    (go — the step towards starting), no tile, since the tile is
+                    for the Start itself on Set Deadlines. */}
                 <div style={{ flex: '0 0 auto', paddingTop: 'var(--sp-5)' }}>
-                  <Button
+                  <GelButton
                     block
-                    size="lg"
-                    variant="gel"
+                    colour="orange"
+                    tile={false}
                     onClick={() => navigate('/deadlines')}
                     disabled={selectedTasks.length === 0}
                     title={selectedTasks.length === 0 ? 'Pick at least one task first' : 'Allocate time for these tasks'}
-                    iconRight={<Icon name="arrow-right" size={18} />}
                   >
                     Next: Set Deadlines
-                  </Button>
+                    <Icon name="arrow-right" size={18} />
+                  </GelButton>
                 </div>
               </section>
             </div>
@@ -1220,7 +1356,7 @@ export default function TaskSelection() {
           }}
         >
           <span style={{ pointerEvents: 'auto' }}>
-            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} />
+            <MiniNav items={nav.items} value={nav.current} onChange={nav.go} screenLit />
           </span>
         </div>
       )}
@@ -1244,8 +1380,7 @@ export default function TaskSelection() {
           >
             <Toast
               icon={<Icon name="check" size={16} />}
-              title={toast.title}
-              detail={toast.detail}
+              title={<LitLine text={toast.text} style={{ color: 'var(--fg-3)' }} />}
               onDismiss={() => setToast(null)}
             />
           </motion.div>

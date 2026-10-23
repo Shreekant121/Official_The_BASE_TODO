@@ -10,8 +10,9 @@
  * and the ramp says 'more of the same thing'"* — is as true of this one. Same
  * well, same stops, same `compact` sheet geometry, same ends-only labels.
  *
- * **The hue is rose where Importance is amber, and that is the only thing that
- * differs.** `colors.css` spends amber on a judgement someone has to make and
+ * **The hue is coral where Importance is amber, and that is the only thing
+ * that differs.** (It was rose, hue 20, until 29-1P2c2 made urgent coral's job;
+ * rose is his routine now.) `colors.css` spends amber on a judgement someone has to make and
  * rose on danger, and this control is both at once — but what it *claims* is
  * danger. Reading down the sheet's first column, the amber trough is "how much
  * does this matter to me" and the rose one is "this is on fire", and the two
@@ -45,13 +46,13 @@ import { EMERGENCY_MAX } from '../../store/useStore';
 
 const STEPS = Array.from({ length: EMERGENCY_MAX + 1 }, (_, n) => n);
 
-/** `HumanOverridePicker`'s ramp in rose: one hue, more of it each step. */
-const HEAT = (n: number) => `oklch(0.70 0.15 20 / ${0.05 + (n / EMERGENCY_MAX) * 0.175})`;
+/** `HumanOverridePicker`'s ramp in coral: one hue, more of it each step. */
+const HEAT = (n: number) => `oklch(0.7 0.19 28 / ${0.05 + (n / EMERGENCY_MAX) * 0.175})`;
 
-/** The lit stop's three-stop rose tint, and the ink that reads on it. */
+/** The lit stop's three-stop coral tint, and the ink that reads on it. */
 const ON_TINT =
-  'linear-gradient(155deg, oklch(0.70 0.15 20 / 0.34) 0%, oklch(0.70 0.15 20 / 0.12) 55%, oklch(0.70 0.15 20 / 0.22) 100%)';
-const ON_INK = 'oklch(0.94 0.07 20)';
+  'linear-gradient(155deg, oklch(0.7 0.19 28 / 0.34) 0%, oklch(0.7 0.19 28 / 0.12) 55%, oklch(0.7 0.19 28 / 0.22) 100%)';
+const ON_INK = 'var(--job-coral-text)';
 
 /** The ends, and nothing between them. The scale is in the position. */
 const ENDS = ['None', 'Drop everything'] as const;
@@ -100,7 +101,7 @@ export default function EmergencyPicker({ value, onChange, compact = false, disa
                 padding: 0, borderRadius: 'var(--r-pill)',
                 backgroundImage: on ? ON_TINT : `linear-gradient(155deg, ${HEAT(n)}, ${HEAT(n)})`,
                 boxShadow: on
-                  ? 'var(--glass-rim-2), 0 0 0 1px oklch(0.70 0.15 20 / 0.45), 0 0 24px -6px oklch(0.70 0.15 20 / 0.6)'
+                  ? 'var(--glass-rim-2), 0 0 0 1px oklch(0.7 0.19 28 / 0.45), 0 0 24px -6px oklch(0.7 0.19 28 / 0.6)'
                   : 'none',
                 color: on ? ON_INK : 'var(--fg-1)',
                 font: 'var(--type-numeric)',

@@ -3,7 +3,7 @@
  *
  * Shreekant, 2026-09-22: Focus scrolled on the tablet held sideways, and he
  * does not want it to. Of the three answers he was offered he chose **two
- * columns in landscape** — the task on the left, its subtasks and notes on the
+ * columns in landscape** — the task on the left, its subtasks and details on the
  * right — and, for when even that overflows, **show less**: the description
  * collapses and **the subtasks stay visible**, because they are what he
  * touches mid-session while the description is read once at the start. On
@@ -55,6 +55,9 @@ export interface FocusSideColumnProps {
   onEdit?: () => void;
   /** Tighter insets on a short window. */
   compact: boolean;
+  /** Pure focus's toggles (`FocusMode`): either pane can be hidden on its own. */
+  showSubtasks: boolean;
+  showDetails: boolean;
 }
 
 function paneStyle(compact: boolean): CSSProperties {
@@ -64,7 +67,8 @@ function paneStyle(compact: boolean): CSSProperties {
     gap: compact ? 'var(--sp-4)' : 'var(--sp-5)',
     minHeight: 0,
     padding: compact ? 'var(--sp-5) var(--sp-6)' : 'var(--pad-card)',
-    borderRadius: 'var(--r-card-lg)',
+    // A rounded rectangle like the top bar, not a big curve — his call, 2026-09-30.
+    borderRadius: 'var(--r-md)',
     backgroundImage: 'var(--glass-fill-2)',
     backdropFilter: 'var(--glass-bd-md)',
     WebkitBackdropFilter: 'var(--glass-bd-md)',
@@ -90,7 +94,6 @@ function PaneTitle({ id, children }: { id: string; children: ReactNode }) {
 function detailsSummary(task: Task, parent?: Task | null): string {
   const parts: string[] = [];
   if (task.description?.trim() || parent?.description?.trim()) parts.push('description');
-  if (task.notes?.trim() || parent?.notes?.trim()) parts.push('notes');
   const links = (task.links?.length ?? 0) + (parent?.links?.length ?? 0);
   if (links > 0) parts.push(links === 1 ? '1 link' : `${links} links`);
   if (task.imageUrl || parent?.imageUrl) parts.push('cover');
@@ -100,7 +103,7 @@ function detailsSummary(task: Task, parent?: Task | null): string {
 }
 
 export default function FocusSideColumn({
-  task, detailsTask, parentTask, onToggle, editable, onEdit, compact,
+  task, detailsTask, parentTask, onToggle, editable, onEdit, compact, showSubtasks, showDetails,
 }: FocusSideColumnProps) {
   const columnRef = useRef<HTMLElement>(null);
   const subsPaneRef = useRef<HTMLElement>(null);
@@ -126,10 +129,11 @@ export default function FocusSideColumn({
          swapped for the body's full one. A folded body also gives back the
          gap above it (see its negative margin), so that is added back too —
          without it, folding would shrink the sum by one gap and a column
-         within 16px of fitting would fold and unfold for ever. */
-      let need = PANE_GAP;
+         within 16px of fitting would fold and unfold for ever. A pane pure
+         focus has hidden is not in the sum, and neither is the gap it had. */
+      let need = showSubtasks && showDetails ? PANE_GAP : 0;
       for (const [pane, scroll] of panes) {
-        if (!pane || !scroll) return;
+        if (!pane || !scroll) continue;
         const folded = scroll.clientHeight === 0 && scroll.scrollHeight > 0;
         const gap = folded ? parseFloat(getComputedStyle(pane).rowGap) || 0 : 0;
         need += pane.offsetHeight - scroll.clientHeight + scroll.scrollHeight + gap;
@@ -145,7 +149,7 @@ export default function FocusSideColumn({
       if (content) observer.observe(content);
     }
     return () => observer.disconnect();
-  }, []);
+  }, [showSubtasks, showDetails]);
 
   const scrollStyle: CSSProperties = {
     minHeight: 0,
@@ -171,21 +175,24 @@ export default function FocusSideColumn({
       }}
     >
       {/* Subtasks: natural height, and the one that keeps its room. */}
+      {showSubtasks && (
       <section
         ref={subsPaneRef}
         aria-labelledby="focus-side-subtasks"
         style={{ ...paneStyle(compact), flex: '0 1 auto' }}
       >
         <PaneTitle id="focus-side-subtasks">Subtasks</PaneTitle>
-        <div ref={subsScrollRef} style={scrollStyle}>
+        <div ref={subsScrollRef} className="ag-scroll ag-fade" style={scrollStyle}>
           <div style={{ display: 'grid', gap: compact ? 'var(--sp-4)' : 'var(--sp-6)' }}>
             <FocusSubtasksBody task={task} onToggle={onToggle} editable={editable} />
           </div>
         </div>
       </section>
+      )}
 
       {/* Details: gives way first — it shrinks four times as fast, and folds
           to one line when the two will not fit together. */}
+      {showDetails && (
       <section
         ref={detailsPaneRef}
         aria-labelledby="focus-side-details"
@@ -195,7 +202,7 @@ export default function FocusSideColumn({
           type="button"
           onClick={() => setChosen(!detailsOpen)}
           aria-expanded={detailsOpen}
-          title={detailsOpen ? 'Fold the details away' : 'Show the description, notes and links'}
+          title={detailsOpen ? 'Fold the details away' : 'Show the description and links'}
           style={{
             display: 'flex', alignItems: 'center', gap: 'var(--sp-4)',
             width: '100%', padding: 0, border: 0, background: 'transparent',
@@ -219,6 +226,7 @@ export default function FocusSideColumn({
         <div
           ref={detailsScrollRef}
           aria-hidden={!detailsOpen}
+          className="ag-scroll ag-fade"
           style={
             detailsOpen
               ? scrollStyle
@@ -243,6 +251,7 @@ export default function FocusSideColumn({
           </div>
         </div>
       </section>
+      )}
     </aside>
   );
 }
